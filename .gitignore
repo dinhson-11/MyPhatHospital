@@ -1,0 +1,55 @@
+# === IDE ===
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+
+# === Java / Maven ===
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+venv/
+.venv/
+env/
+
+# === Node / Frontend ===
+node_modules/
+build/
+dist/
+
+# === Environment & Secrets ===
+.env
+.env.*
+!.env.example
+*.env.local
+*.env.production
+application-prod.yml
+
+# === Logs ===
+*.log
+logs/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Docker ===
+docker-compose.override.yml
+
+# === Claude ===
+# .claude/ is intentionally tracked for team-shared skills/rules

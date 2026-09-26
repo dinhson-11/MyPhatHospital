@@ -2,13 +2,13 @@
 
 Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học phần: Chọn đề tài → Xác định yêu cầu → Phân tích thiết kế → Triển khai → Kiểm thử → Báo cáo.
 
-## Sprint 0 (Tuần 1) – Khởi tạo
-- [ ] Khởi tạo repo Git (backend, ai-service, frontend – 3 thư mục hoặc 3 repo).
-- [ ] Setup Spring Boot project (Spring Initializr: Web, JPA, Security, Validation, MySQL Driver, Lombok).
-- [ ] Setup MySQL, tạo schema từ `03_DB_Design.md` (dùng Flyway/Liquibase để quản lý migration).
-- [ ] Setup FastAPI project rỗng cho AI Service, healthcheck endpoint.
-- [ ] Cấu hình Swagger, cấu hình CORS, cấu hình application.yml (profile dev/prod).
-- [ ] Viết README mô tả cách chạy dự án.
+## Sprint 0 (Tuần 1) – Khởi tạo ✅
+- [x] Khởi tạo repo Git (backend, ai-service, frontend – 3 thư mục hoặc 3 repo).
+- [x] Setup Spring Boot project (Spring Initializr: Web, JPA, Security, Validation, MySQL Driver, Lombok).
+- [x] Setup MySQL, tạo schema từ `03_DB_Design.md` (dùng Flyway/Liquibase để quản lý migration).
+- [x] Setup FastAPI project rỗng cho AI Service, healthcheck endpoint.
+- [x] Cấu hình Swagger, cấu hình CORS, cấu hình application.yml (profile dev/prod).
+- [x] Viết README mô tả cách chạy dự án.
 
 ## Sprint 1 (Tuần 2) – Auth & phân quyền
 - [ ] Entity: `User, Role, UserRole, Department, StaffProfile`.
