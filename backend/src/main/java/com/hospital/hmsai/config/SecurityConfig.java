@@ -75,10 +75,7 @@ public class SecurityConfig {
     @Bean
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
         var configuration = new org.springframework.web.cors.CorsConfiguration();
-        configuration.setAllowedOrigins(java.util.List.of(
-            "http://localhost:3000",   // React dev
-            "http://localhost:5173"    // Vite dev
-        ));
+        configuration.setAllowedOriginPatterns(java.util.List.of("*"));
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(java.util.List.of("*"));
         configuration.setAllowCredentials(true);

@@ -30,6 +30,14 @@ public class JwtService {
     private long refreshTokenExpiration;
 
     /**
+     * Lấy thời gian sống của access token (milliseconds).
+     */
+    public long getAccessTokenExpiration() {
+        return accessTokenExpiration;
+    }
+
+
+    /**
      * Extract username from JWT token.
      */
     public String extractUsername(String token) {

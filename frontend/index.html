@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bệnh viện Thanh Sơn - MedCare AI (Hệ thống Quản lý Y tế Thông minh)</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CSS CDN with Custom Medical Theme Config -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#005440",
+              "primary-container": "#0f6e56",
+              "primary-fixed": "#a0f3d4",
+              "primary-fixed-dim": "#84d6b9",
+              "on-primary": "#ffffff",
+              "on-primary-container": "#9aedcf",
+              "secondary": "#1960a6",
+              "secondary-container": "#7ab3ff",
+              "secondary-fixed": "#d4e3ff",
+              "on-secondary": "#ffffff",
+              "tertiary": "#344e46",
+              "tertiary-fixed": "#cce9de",
+              "surface": "#ebfef6",
+              "surface-bright": "#ebfef6",
+              "surface-dim": "#ccded7",
+              "surface-container-lowest": "#ffffff",
+              "surface-container-low": "#e5f8f0",
+              "surface-container": "#dff2ea",
+              "surface-container-high": "#daece5",
+              "surface-container-highest": "#d4e7df",
+              "on-surface": "#0f1e1a",
+              "on-surface-variant": "#3f4944",
+              "outline": "#6f7a74",
+              "outline-variant": "#bec9c3",
+              "error": "#ba1a1a",
+              "error-container": "#ffdad6",
+              "inverse-surface": "#24342f",
+              "inverse-on-surface": "#e2f5ed"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans", "sans-serif"],
+              "body": ["Plus Jakarta Sans", "sans-serif"],
+              "label": ["Inter", "sans-serif"]
+            }
+          }
+        }
+      };
+    </script>
+    <style>
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #e5f8f0;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #84d6b9;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #0f6e56;
+      }
+    </style>
+  </head>
+  <body class="bg-surface text-on-surface antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
