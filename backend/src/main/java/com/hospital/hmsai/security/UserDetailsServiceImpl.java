@@ -5,7 +5,6 @@ import com.hospital.hmsai.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -41,12 +40,13 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
         boolean isActive = user.getStatus() == UserStatus.ACTIVE;
 
-        return User.builder()
-                .username(user.getUsername())
-                .password(user.getPasswordHash())
-                .authorities(authorities)
-                .accountLocked(!isActive)
-                .disabled(false)
-                .build();
+        return new CustomUserDetails(
+                user.getId(),
+                user.getUsername(),
+                user.getPasswordHash(),
+                true,           // enabled
+                isActive,       // accountNonLocked
+                authorities
+        );
     }
 }
