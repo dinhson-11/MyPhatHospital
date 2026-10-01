@@ -49,18 +49,20 @@ Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học ph
 
 ---
 
-## Sprint 3 (Tuần 4) – Đặt lịch khám ✅ (Frontend hoàn chỉnh)
-- [ ] Entity: `Appointment`.
-- [ ] API đặt/hủy/xác nhận lịch, kiểm tra trùng lịch bác sĩ (unique constraint + logic service).
-- [ ] API lấy khung giờ trống theo bác sĩ/ngày.
-- **Frontend** ✅ (Đã hoàn thành sớm trong Sprint 1 Frontend):
+## Sprint 3 (Tuần 4) – Đặt lịch khám ✅ (Hoàn thành Fullstack Backend + Frontend)
+- [x] Entity: `Appointment`, `AppointmentStatus`, `AppointmentSource`, Flyway migration `V11__add_appointment_symptom_notes.sql`.
+- [x] API đặt/hủy/xác nhận/hoàn tất lịch, kiểm tra trùng lịch bác sĩ (unique query + logic service).
+- [x] API lấy khung giờ trống theo bác sĩ/ngày (`/api/v1/appointments/available-slots`).
+- [x] Backend Controller: `AppointmentController` phân quyền theo Role (`PATIENT`, `RECEPTIONIST`, `DOCTOR`, `ADMIN`).
+- [x] Unit test Backend: `AppointmentServiceImplTest` (14/14 tests pass).
+- **Frontend** ✅ (Hoàn thành và tích hợp):
   - [x] **appointmentService.js**: Đặt lịch, sinh mã vé `HMS-2026-XXXX`, hủy lịch, lấy danh sách. Tự động fallback LocalStorage khi Backend offline.
   - [x] **BookingModal.jsx**: Chọn chuyên khoa (10 khoa), tự động lọc bác sĩ tương ứng (6 bác sĩ), chọn ngày & khung giờ, điền triệu chứng. Hiển thị **Phiếu Khám Điện Tử** mã vạch sau khi đặt thành công.
   - [x] **MyAppointmentsModal.jsx**: Danh sách lịch hẹn, xem chi tiết phiếu khám, in phiếu, hủy lịch.
   - [x] **AllDepartmentsModal.jsx**: Danh bạ 10 chuyên khoa với thanh tìm kiếm realtime, 1-click đặt khám từng khoa.
   - [x] **DepartmentsSection.jsx**: 6 thẻ chuyên khoa nổi bật trên trang chủ, mỗi thẻ có nút "Đặt khám" & "Xem thông tin".
   - [x] **Kiểm thử** (`booking.test.jsx`): 4 tests – tạo lịch & sinh ticketCode, hủy lịch, kiểm tra lỗi ID không hợp lệ, lấy danh sách.
-  - [ ] **Backend integration**: Khi API `POST /api/v1/appointments` chính thức sẵn sàng → cập nhật `appointmentService.js` bỏ fallback, dùng API thực.
+  - [x] **Backend integration**: Đã tích hợp gọi `POST /api/v1/appointments`, `GET /api/v1/appointments/me`, `PATCH /api/v1/appointments/{id}/cancel`, `GET /api/v1/appointments/available-slots`.
 
 ---
 
