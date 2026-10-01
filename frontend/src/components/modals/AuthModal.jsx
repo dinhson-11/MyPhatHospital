@@ -193,7 +193,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
                 <p className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wider">
                   Tài khoản dùng thử (Sprint 1):
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     id="btn-demo-patient"
@@ -201,7 +201,17 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
                     className="p-2 text-xs text-left bg-emerald-50 hover:bg-emerald-100 text-primary-dark rounded-lg border border-emerald-200 transition-colors"
                   >
                     <span className="font-bold block">👤 Bệnh nhân</span>
-                    <span className="text-[10px] text-slate-500">benhnhan / Password@123</span>
+                    <span className="text-[10px] text-slate-500">benhnhan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-demo-doctor"
+                    onClick={() => fillDemoAccount('bacsi', 'Doctor@123')}
+                    className="p-2 text-xs text-left bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-lg border border-teal-200 transition-colors"
+                  >
+                    <span className="font-bold block">🩺 Bác sĩ</span>
+                    <span className="text-[10px] text-slate-500">bacsi</span>
                   </button>
 
                   <button
@@ -210,8 +220,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
                     onClick={() => fillDemoAccount('admin', 'Admin@123')}
                     className="p-2 text-xs text-left bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-200 transition-colors"
                   >
-                    <span className="font-bold block">🛡️ Quản trị viên</span>
-                    <span className="text-[10px] text-slate-500">admin / Admin@123</span>
+                    <span className="font-bold block">🛡️ Quản trị</span>
+                    <span className="text-[10px] text-slate-500">admin</span>
                   </button>
                 </div>
               </div>

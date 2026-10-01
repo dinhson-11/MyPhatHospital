@@ -5,6 +5,7 @@ Hệ thống Quản lý Bệnh viện tích hợp AI – Đồ án học phần 
 ## 📋 Tổng quan
 
 Hệ thống hỗ trợ quản lý toàn bộ quy trình khám chữa bệnh tại cơ sở y tế, tích hợp AI:
+
 - **AI Chatbot**: tư vấn bệnh nhân, gợi ý chuyên khoa theo triệu chứng
 - **AI Cảnh báo lâm sàng**: cảnh báo tương tác thuốc, gợi ý chẩn đoán tham khảo
 
@@ -26,7 +27,7 @@ Hệ thống hỗ trợ quản lý toàn bộ quy trình khám chữa bệnh t�
 ## 🛠️ Tech Stack
 
 | Thành phần | Công nghệ |
-|---|---|
+| --- | --- |
 | Backend | Java 17, Spring Boot 3.3, Spring Security, Spring Data JPA |
 | CSDL | MySQL 8 |
 | Migration | Flyway |
@@ -62,12 +63,14 @@ docker-compose down
 ### Cách 2: Chạy riêng từng service
 
 #### 1. MySQL
+
 ```bash
 # Tạo database
 mysql -u root -p -e "CREATE DATABASE hmsai_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
 #### 2. Backend (Spring Boot)
+
 ```bash
 cd backend
 
@@ -80,6 +83,7 @@ java -jar target/hmsai-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
 #### 3. AI Service (FastAPI)
+
 ```bash
 cd ai-service
 
@@ -96,6 +100,7 @@ uvicorn main:app --reload --port 8000
 ```
 
 #### 4. Frontend (React)
+
 ```bash
 cd frontend
 npm install
@@ -105,9 +110,10 @@ npm run dev
 ## 📖 API Documentation
 
 Sau khi chạy backend, truy cập:
-- **Swagger UI**: http://localhost:8080/swagger-ui.html
-- **OpenAPI JSON**: http://localhost:8080/v3/api-docs
-- **AI Service Docs**: http://localhost:8000/docs
+
+- **Swagger UI**: <http://localhost:8080/swagger-ui.html>
+- **OpenAPI JSON**: <http://localhost:8080/v3/api-docs>
+- **AI Service Docs**: <http://localhost:8000/docs>
 
 ## 🔐 Tài khoản mặc định
 
@@ -148,7 +154,7 @@ thanhSonHospital/
 ## 📅 Lộ trình phát triển
 
 | Sprint | Tuần | Nội dung |
-|---|---|---|
+| --- | --- | --- |
 | 0 | 1 | ✅ Khởi tạo project, DB schema, config |
 | 1 | 2 | Auth & phân quyền (JWT/RBAC) |
 | 2 | 3 | Bệnh nhân & EMR |

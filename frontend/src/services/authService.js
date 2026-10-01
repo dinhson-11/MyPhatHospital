@@ -22,6 +22,15 @@ const DEFAULT_SEEDS = [
     email: 'minh.tran@gmail.com',
     phone: '0912345678',
     roles: ['PATIENT']
+  },
+  {
+    id: 3,
+    username: 'bacsi',
+    password: 'Doctor@123',
+    fullName: 'TS. BS. Nguyễn Văn Hùng',
+    email: 'hung.nguyen@hospital.com',
+    phone: '0988776655',
+    roles: ['DOCTOR']
   }
 ];
 

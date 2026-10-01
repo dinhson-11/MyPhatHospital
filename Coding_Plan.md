@@ -66,18 +66,21 @@ Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học ph
 
 ---
 
-## Sprint 4 (Tuần 5-6) – Khám bệnh, kê đơn, cận lâm sàng
-- [ ] Entity: `Visit, Prescription, PrescriptionItem, LabOrder, LabResult, Drug`.
-- [ ] API bắt đầu/hoàn tất lượt khám, ghi chẩn đoán.
-- [ ] API tạo đơn thuốc, chỉ định/nhập kết quả CLS.
-- [ ] Seed dữ liệu mẫu: danh mục thuốc, bảng `drug_interactions`.
-- **Frontend**:
-  - [ ] **VisitDashboard.jsx**: Màn hình khám bệnh dành cho bác sĩ – xem thông tin bệnh nhân, điền chẩn đoán ICD-10, mạch/nhiệt độ/huyết áp.
-  - [ ] **PrescriptionForm.jsx**: Form kê đơn thuốc – tìm kiếm thuốc theo tên, điền liều dùng/cách dùng/số ngày.
-  - [ ] **LabOrderPanel.jsx**: Chỉ định xét nghiệm cận lâm sàng, nhập kết quả phòng lab.
-  - [ ] **visitService.js**: Gọi API `POST /api/v1/visits`, `POST /api/v1/prescriptions`, `POST /api/v1/lab-orders`.
-  - [ ] **Kiểm thử**: `visit.test.jsx` – tạo visit, kê đơn, chỉ định xét nghiệm, validate liều dùng.
-- **Điểm mốc**: đủ dữ liệu để bắt đầu tích hợp AI cảnh báo.
+## Sprint 4 (Tuần 5-6) – Khám bệnh, kê đơn, cận lâm sàng ✅ (Hoàn thành Fullstack Backend + Frontend)
+- [x] Entity Backend: `Visit`, `VisitStatus`, `Prescription`, `PrescriptionItem`, `LabOrder`, `LabOrderStatus`, `LabResult`, `Drug`, `DrugInteraction`, `InteractionSeverity`.
+- [x] API bắt đầu/hoàn tất lượt khám, ghi chẩn đoán ICD-10, cập nhật sinh hiệu (`/api/v1/visits`).
+- [x] API tạo đơn thuốc, danh mục thuốc (`/api/v1/drugs`, `/api/v1/visits/{id}/prescriptions`).
+- [x] API chỉ định cận lâm sàng và cập nhật kết quả phòng Lab (`/api/v1/visits/{id}/lab-orders`, `/api/v1/lab-orders/{id}/result`).
+- [x] Flyway migration `V12__seed_drugs_interactions.sql`: 15 danh mục thuốc thiết yếu và 6 cặp tương tác thuốc kinh điển.
+- [x] Backend Unit Tests: `VisitServiceImplTest` (10 tests pass), `DrugServiceImplTest` (5 tests pass) -> Tổng Backend: 53/53 tests pass.
+- **Frontend** ✅:
+  - [x] **visitService.js**: Kết nối toàn bộ REST API ca khám, đơn thuốc, cận lâm sàng, tra cứu tương tác thuốc và fallback offline LocalStorage.
+  - [x] **VisitDashboard.jsx**: Phòng khám bác sĩ chuyên sâu – hàng đợi bệnh nhân, theo dõi sinh hiệu đổi màu cảnh báo (mạch, HA, nhiệt độ, SpO2, nhịp thở, tự động tính BMI), chẩn đoán ICD-10 nhanh, in phiếu khám EMR.
+  - [x] **PrescriptionForm.jsx**: Kê đơn thuốc điện tử động, tìm kiếm thuốc realtime, tính tổng tiền tự động, cảnh báo tương tác thuốc tức thì.
+  - [x] **LabOrderPanel.jsx**: Chỉ định cận lâm sàng với 9 nhóm xét nghiệm tiêu chuẩn, nhập kết quả xét nghiệm và đính kèm tài liệu.
+  - [x] **Tích hợp Auth & Navigation**: Bổ sung tài khoản dùng thử Bác sĩ (`bacsi` / `Doctor@123` - CKII Nguyễn Văn Hùng), menu truy cập nhanh phòng khám trên Navbar.
+  - [x] **Kiểm thử**: `visit.test.jsx` (8 tests pass) -> Tổng Frontend: 33/33 tests pass, production bundle build thành công (126.96 kB gzip).
+- **Điểm mốc**: Sẵn sàng đầy đủ dữ liệu lâm sàng và tương tác thuốc để bước vào Sprint 5 tích hợp AI cảnh báo lâm sàng.
 
 ---
 
@@ -171,8 +174,8 @@ Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học ph
 | Sprint 0 | Khởi tạo Vite, cấu hình Vitest, thiết kế CSS/Fonts | ✅ Hoàn thành |
 | Sprint 1 | Auth Modal, Navbar, Axios Interceptors, AuthContext, Toast, API Tests | ✅ Hoàn thành (25/25 tests pass) |
 | Sprint 3 | Booking Modal, Appointment Service, My Appointments, Departments, AI Triage | ✅ Hoàn thành sớm |
+| Sprint 4 | Visit Dashboard, Kê đơn điện tử, Chỉ định cận lâm sàng, Tương tác thuốc | ✅ Hoàn thành (33/33 tests pass) |
 | Sprint 2 | Hồ sơ bệnh nhân, Dị ứng, patientService | 🔲 Chờ Backend Sprint 2 |
-| Sprint 4 | Visit Dashboard, Kê đơn, Lab Orders | 🔲 Chờ Backend Sprint 4 |
 | Sprint 5 | Drug Interaction Alert, AI Alert Service | 🔲 Chờ AI Service Sprint 5 |
 | Sprint 6 | Diagnosis Suggest Box | 🔲 Chờ AI Service Sprint 6 |
 | Sprint 7 | Chat Widget, Chat History, WebSocket | 🔲 Chờ AI Service Sprint 7 |

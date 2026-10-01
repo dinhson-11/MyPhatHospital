@@ -9,9 +9,11 @@ export const Navbar = ({
   onOpenProfile,
   onOpenAdmin,
   onOpenAbout,
-  onOpenContact
+  onOpenContact,
+  onOpenClinical
 }) => {
   const { user, isAuthenticated, isAdmin, logout } = useAuth();
+  const isDoctor = user?.roles?.includes('DOCTOR') || user?.roles?.includes('ROLE_DOCTOR') || isAdmin;
   const { showToast } = useToast();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -173,6 +175,20 @@ export const Navbar = ({
                       </span>
                       <span>Thông tin tài khoản</span>
                     </button>
+                    {isDoctor && (
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          if (onOpenClinical) onOpenClinical();
+                        }}
+                        className="w-full px-4 py-2 text-left font-body text-sm text-primary font-semibold hover:bg-surface-container-low flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-primary text-[18px]">
+                          stethoscope
+                        </span>
+                        <span>Phòng khám Bác sĩ (Clinical)</span>
+                      </button>
+                    )}
                     {isAdmin && (
                       <button
                         onClick={() => {
@@ -209,6 +225,17 @@ export const Navbar = ({
               className="px-4 py-2.5 rounded-lg border border-primary-container text-primary-container font-label text-sm font-semibold hover:bg-surface-container-low transition-colors duration-150 cursor-pointer"
             >
               Đăng nhập
+            </button>
+          )}
+
+          {isDoctor && (
+            <button
+              id="headerClinicalBtn"
+              onClick={() => onOpenClinical && onOpenClinical()}
+              className="hidden md:inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-primary/40 bg-primary/10 text-primary font-label text-sm font-semibold hover:bg-primary/20 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">stethoscope</span>
+              <span>Phòng khám Bác sĩ</span>
             </button>
           )}
 
@@ -278,6 +305,18 @@ export const Navbar = ({
           >
             Liên hệ
           </button>
+          {isDoctor && (
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (onOpenClinical) onOpenClinical();
+              }}
+              className="w-full py-2.5 rounded-xl border border-primary/40 bg-primary/10 text-primary font-label text-sm font-semibold flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">stethoscope</span>
+              <span>Phòng khám Bác sĩ</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setMobileMenuOpen(false);

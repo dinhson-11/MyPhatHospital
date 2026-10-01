@@ -20,6 +20,7 @@ import AboutModal from './components/modals/AboutModal';
 import ContactModal from './components/modals/ContactModal';
 import UserProfileModal from './components/modals/UserProfileModal';
 import AdminPanelModal from './components/modals/AdminPanelModal';
+import VisitDashboard from './components/clinical/VisitDashboard';
 
 function MainApp() {
   // Modal states
@@ -31,6 +32,7 @@ function MainApp() {
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [clinicalModalOpen, setClinicalModalOpen] = useState(false);
 
   // Handlers
   const handleOpenAuth = (tab = 'login') => {
@@ -64,6 +66,7 @@ function MainApp() {
         onOpenAdmin={() => setAdminModalOpen(true)}
         onOpenAbout={() => setAboutModalOpen(true)}
         onOpenContact={() => setContactModalOpen(true)}
+        onOpenClinical={() => setClinicalModalOpen(true)}
       />
 
       {/* Main Content */}
@@ -152,6 +155,11 @@ function MainApp() {
       <AdminPanelModal
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
+      />
+
+      <VisitDashboard
+        isOpen={clinicalModalOpen}
+        onClose={() => setClinicalModalOpen(false)}
       />
     </div>
   );
