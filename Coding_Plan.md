@@ -84,15 +84,20 @@ Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học ph
 
 ---
 
-## Sprint 5 (Tuần 7) – AI Service: Cảnh báo tương tác thuốc & dị ứng (FR-11.1, 11.2)
-- [ ] AI Service: endpoint `/check-interaction`, `/check-allergy` (rule-based, tra cứu dữ liệu `drug_interactions`/`patient_allergies` được backend gửi kèm hoặc AI Service tự query DB).
-- [ ] Backend: `AiClientService` gọi AI Service khi bác sĩ lưu đơn thuốc; hiển thị cảnh báo ở response tạo đơn.
-- [ ] Lưu log vào `ai_clinical_suggestions`.
-- [ ] Test case: đơn có/không có tương tác, có/không có dị ứng.
-- **Frontend**:
-  - [ ] **DrugInteractionAlert.jsx**: Banner cảnh báo nổi bật màu đỏ/cam hiển thị ngay trong `PrescriptionForm` khi AI phát hiện tương tác thuốc hoặc dị ứng.
-  - [ ] **aiAlertService.js**: Gọi `POST /api/v1/prescriptions` và xử lý mảng `warnings` trong response, classify `CRITICAL` / `WARNING` / `INFO`.
-  - [ ] Kiểm thử: `drugAlert.test.jsx` – render alert khi có cảnh báo, không render khi đơn thuốc an toàn.
+## Sprint 5 (Tuần 7) – AI Service: Cảnh báo tương tác thuốc & dị ứng (FR-11.1, 11.2) ✅ (Hoàn thành Fullstack AI + Backend + Frontend)
+- [x] AI Service (FastAPI): Endpoint `/api/v1/ai/clinical/check-interaction`, `/check-allergy`, `/check-prescription-safety` (phân tích tương tác thuốc mở rộng, dị ứng trực tiếp & phản ứng chéo họ Beta-lactam/NSAID/Quinolone/Macrolide, kèm disclaimer y tế bắt buộc theo NFR-8).
+- [x] Unit test AI Service: `test_clinical_service.py` (6/6 tests pass).
+- [x] Backend (Spring Boot 3): `AiClinicalService` gọi REST sang FastAPI AI Service với timeout 3s (NFR-3); tự động fallback an toàn sang DB local khi AI Service offline.
+- [x] Bảng log audit: Entity & Repository `AiClinicalSuggestion` map bảng `ai_clinical_suggestions` (NFR-8), tự động lưu trữ vết dữ liệu `input_snapshot`, `output_content`, `confidence_score`.
+- [x] Backend REST Controller: `AiClinicalController` (`POST /check-interaction`, `POST /check-allergy`, `POST /visits/{id}/check-safety`, `GET /visits/{id}/suggestions`).
+- [x] Tích hợp `VisitServiceImpl.createPrescription`: Tự động phân tích an toàn lâm sàng và trả về các trường `hasWarning`, `interactionWarnings`, `allergyAlerts`, `aiDisclaimer` trong `PrescriptionResponse`.
+- [x] Backend Unit Tests: `AiClinicalServiceImplTest` (5 tests pass), `VisitServiceImplTest` (11 tests pass) -> Tổng Backend: 59/59 tests pass (100%).
+- **Frontend** ✅:
+  - [x] **aiAlertService.js**: Client service gọi API kiểm tra tương tác thuốc, dị ứng và lấy lịch sử audit log AI; tích hợp knowledge base fallback khi offline.
+  - [x] **DrugInteractionAlert.jsx**: Banner cảnh báo trực quan đa cấp độ CRITICAL / WARNING / INFO / SAFE; hiển thị tên thuốc, cơ chế dược lý, hậu quả, khuyến cáo lâm sàng và Disclaimer y tế bắt buộc theo NFR-8.
+  - [x] **PrescriptionForm.jsx**: Tích hợp nút "Kiểm tra an toàn (AI)", tự động phân tích an toàn thuốc realtime (debounce 350ms), hiển thị banner cảnh báo và lưu cảnh báo vào đơn thuốc.
+  - [x] **VisitDashboard.jsx**: Bổ sung Tab 5 "Lịch sử AI Audit (NFR-8)" truy vết toàn bộ dữ liệu phân tích AI của ca khám.
+  - [x] **Kiểm thử**: `drugAlert.test.jsx` (12 tests pass) -> Tổng Frontend: 45/45 tests pass (100%), production bundle build thành công (132.52 kB gzip).
 
 ---
 
@@ -176,7 +181,7 @@ Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học ph
 | Sprint 3 | Booking Modal, Appointment Service, My Appointments, Departments, AI Triage | ✅ Hoàn thành sớm |
 | Sprint 4 | Visit Dashboard, Kê đơn điện tử, Chỉ định cận lâm sàng, Tương tác thuốc | ✅ Hoàn thành (33/33 tests pass) |
 | Sprint 2 | Hồ sơ bệnh nhân, Dị ứng, patientService | 🔲 Chờ Backend Sprint 2 |
-| Sprint 5 | Drug Interaction Alert, AI Alert Service | 🔲 Chờ AI Service Sprint 5 |
+| Sprint 5 | Drug Interaction Alert, AI Alert Service, Tab AI Audit Log | ✅ Hoàn thành (45/45 tests pass) |
 | Sprint 6 | Diagnosis Suggest Box | 🔲 Chờ AI Service Sprint 6 |
 | Sprint 7 | Chat Widget, Chat History, WebSocket | 🔲 Chờ AI Service Sprint 7 |
 | Sprint 8 | Pharmacy, Invoice, Staff Schedule | 🔲 Chờ Backend Sprint 8 |

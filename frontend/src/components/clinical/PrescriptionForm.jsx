@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { visitService, SEED_DRUGS } from '../../services/visitService';
+import { aiAlertService } from '../../services/aiAlertService';
 import { useToast } from '../../context/ToastContext';
+import DrugInteractionAlert from './DrugInteractionAlert';
 
 export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
   const { showToast } = useToast();
@@ -11,16 +13,32 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // AI Safety Analysis State (Sprint 5)
+  const [safetyAnalysis, setSafetyAnalysis] = useState(null);
+  const [isCheckingSafety, setIsCheckingSafety] = useState(false);
+  const [hasManualChecked, setHasManualChecked] = useState(false);
+
   // Lọc danh sách thuốc cho ô tìm kiếm
   const filteredDrugs = useMemo(() => {
     return visitService.getDrugs(searchTerm);
   }, [searchTerm]);
 
-  // Kiểm tra tương tác thuốc giữa các thuốc đang chọn trong đơn
-  const selectedDrugIds = items.map(it => Number(it.drugId)).filter(Boolean);
-  const detectedInteractions = useMemo(() => {
-    return visitService.checkDrugInteractions(selectedDrugIds);
-  }, [selectedDrugIds]);
+  // Danh sách các thuốc đang chọn trong đơn (kèm tên và thông tin đầy đủ)
+  const selectedDrugs = useMemo(() => {
+    return items
+      .map(it => {
+        if (!it.drugId) return null;
+        const found = SEED_DRUGS.find(d => d.id === Number(it.drugId));
+        return {
+          id: Number(it.drugId),
+          drugId: Number(it.drugId),
+          code: found ? found.code : '',
+          name: found ? found.name : `Thuốc #${it.drugId}`,
+          dosage: it.dosage
+        };
+      })
+      .filter(Boolean);
+  }, [items]);
 
   // Tính tổng tiền thuốc dự kiến
   const estimatedTotal = useMemo(() => {
@@ -31,6 +49,57 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
       return sum + (drug.price * (Number(item.quantity) || 1));
     }, 0);
   }, [items]);
+
+  // Tự động kiểm tra an toàn lâm sàng bằng AI khi danh sách thuốc thay đổi
+  useEffect(() => {
+    if (selectedDrugs.length === 0) {
+      setSafetyAnalysis(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsCheckingSafety(true);
+        const allergies = visit?.patient?.allergies || [];
+        const result = await aiAlertService.checkPrescriptionSafety(visit?.id, selectedDrugs, allergies);
+        setSafetyAnalysis(result);
+      } catch (err) {
+        console.error('Lỗi tự động kiểm tra an toàn AI:', err);
+      } finally {
+        setIsCheckingSafety(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [selectedDrugs, visit?.id, visit?.patient?.allergies]);
+
+  const handleManualSafetyCheck = async () => {
+    if (selectedDrugs.length === 0) {
+      showToast('Vui lòng chọn ít nhất 1 loại thuốc để kiểm tra an toàn', 'warning');
+      return;
+    }
+
+    try {
+      setIsCheckingSafety(true);
+      setHasManualChecked(true);
+      const allergies = visit?.patient?.allergies || [];
+      const result = await aiAlertService.checkPrescriptionSafety(visit?.id, selectedDrugs, allergies);
+      setSafetyAnalysis(result);
+
+      if (result.has_warning) {
+        showToast(
+          `AI phát hiện ${result.interaction_count} tương tác thuốc và ${result.allergy_count} nguy cơ dị ứng!`,
+          'warning'
+        );
+      } else {
+        showToast('Đơn thuốc an toàn! AI không phát hiện tương tác hoặc dị ứng nguy hiểm.', 'success');
+      }
+    } catch (err) {
+      showToast('Lỗi khi kiểm tra an toàn AI: ' + err.message, 'error');
+    } finally {
+      setIsCheckingSafety(false);
+    }
+  };
 
   const handleItemChange = (index, field, value) => {
     setItems(prev => {
@@ -75,12 +144,24 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
     try {
       setIsSubmitting(true);
       const res = await visitService.createPrescription(visit.id, { items });
-      showToast('Đã kê và lưu đơn thuốc điện tử thành công!', 'success');
+
+      if (res && res.hasWarning) {
+        showToast(
+          'Đã lưu đơn thuốc, nhưng AI ghi nhận cảnh báo tương tác thuốc/dị ứng cần lưu ý!',
+          'warning'
+        );
+      } else {
+        showToast('Đã kê và lưu đơn thuốc điện tử thành công!', 'success');
+      }
+
       if (onPrescriptionAdded) {
         onPrescriptionAdded(res);
       }
+
       // Reset form
       setItems([{ drugId: '', dosage: '500mg', quantity: 10, instruction: 'Uống sau bữa ăn' }]);
+      setSafetyAnalysis(null);
+      setHasManualChecked(false);
     } catch (err) {
       showToast(err.message || 'Không thể lưu đơn thuốc', 'error');
     } finally {
@@ -107,9 +188,18 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
             {visit.prescriptions.map((pres, pIdx) => (
               <div key={pres.id || pIdx} className="bg-white rounded-xl p-4 border border-outline-variant/20 shadow-xs space-y-3">
                 <div className="flex items-center justify-between text-xs text-on-surface-variant border-b border-surface-variant/20 pb-2">
-                  <span className="font-bold text-primary">Đơn #{pres.id || pIdx + 1}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-primary">Đơn #{pres.id || pIdx + 1}</span>
+                    {pres.hasWarning && (
+                      <span className="px-2 py-0.5 rounded-full bg-error-container text-error text-[10px] font-bold flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px]">warning</span>
+                        <span>Có cảnh báo AI</span>
+                      </span>
+                    )}
+                  </div>
                   <span>{new Date(pres.createdAt || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</span>
                 </div>
+
                 <div className="divide-y divide-surface-variant/10 text-sm">
                   {pres.items && pres.items.map((it, iIdx) => (
                     <div key={it.id || iIdx} className="py-2 flex items-start justify-between">
@@ -135,6 +225,16 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
                     </div>
                   ))}
                 </div>
+
+                {/* Hiển thị cảnh báo AI đã ghi nhận trong đơn thuốc nếu có */}
+                {pres.hasWarning && (pres.interactionWarnings?.length > 0 || pres.allergyAlerts?.length > 0) && (
+                  <DrugInteractionAlert
+                    interactions={pres.interactionWarnings}
+                    allergyAlerts={pres.allergyAlerts}
+                    disclaimer={pres.aiDisclaimer}
+                  />
+                )}
+
                 {pres.estimatedTotalAmount > 0 && (
                   <div className="text-right pt-2 border-t border-surface-variant/20 text-xs">
                     <span className="text-on-surface-variant">Tổng tiền thuốc: </span>
@@ -149,42 +249,43 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
 
       {/* New Prescription Form */}
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-xs space-y-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[22px]">medication</span>
-            <h4 className="font-headline text-base font-bold text-on-surface">Kê đơn thuốc mới</h4>
+            <h4 className="font-headline text-base font-bold text-on-surface">Kê đơn thuốc điện tử</h4>
           </div>
-          <button
-            type="button"
-            onClick={handleAddRow}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 font-label text-xs font-semibold transition-colors cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[16px]">add</span>
-            <span>Thêm loại thuốc</span>
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleManualSafetyCheck}
+              disabled={isCheckingSafety || selectedDrugs.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary-container/80 text-on-secondary-container hover:bg-secondary-container font-label text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
+              title="Phân tích tương tác thuốc & dị ứng bệnh nhân"
+            >
+              <span className={`material-symbols-outlined text-[16px] ${isCheckingSafety ? 'animate-spin' : ''}`}>
+                {isCheckingSafety ? 'progress_activity' : 'smart_toy'}
+              </span>
+              <span>{isCheckingSafety ? 'AI đang phân tích...' : 'Kiểm tra an toàn (AI)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleAddRow}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 font-label text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              <span>Thêm loại thuốc</span>
+            </button>
+          </div>
         </div>
 
-        {/* Cảnh báo tương tác thuốc nổi bật */}
-        {detectedInteractions.length > 0 && (
-          <div className="p-4 rounded-xl bg-error-container/20 border border-error/30 space-y-2 animate-fade-in">
-            <div className="flex items-center gap-2 text-error font-bold text-sm">
-              <span className="material-symbols-outlined text-[20px]">warning</span>
-              <span>Cảnh báo tương tác thuốc nghiêm trọng ({detectedInteractions.length})</span>
-            </div>
-            <div className="space-y-1.5 text-xs text-on-surface">
-              {detectedInteractions.map((inter, idx) => (
-                <div key={idx} className="p-2 rounded bg-white/80 border border-error/20 flex flex-col gap-0.5">
-                  <div className="font-semibold text-error flex items-center justify-between">
-                    <span>{inter.drugAName} ↔ {inter.drugBName}</span>
-                    <span className="px-1.5 py-0.2 rounded bg-error text-white text-[10px] font-bold">
-                      {inter.severity}
-                    </span>
-                  </div>
-                  <div className="text-on-surface-variant">{inter.description}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* AI CLINICAL SAFETY ALERT BANNER (Sprint 5) */}
+        {safetyAnalysis && (
+          <DrugInteractionAlert
+            safetyData={safetyAnalysis}
+            showSafeStatus={hasManualChecked || selectedDrugs.length >= 2}
+          />
         )}
 
         {/* Prescription Items List */}
@@ -219,22 +320,16 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
                       className="w-full px-3 py-2 text-sm rounded-lg border border-outline-variant/50 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       required
                     >
-                      <option value="">-- Chọn thuốc từ danh mục ({SEED_DRUGS.length} loại) --</option>
-                      {SEED_DRUGS.map(d => (
+                      <option value="">-- Chọn danh mục thuốc --</option>
+                      {SEED_DRUGS.map((d) => (
                         <option key={d.id} value={d.id}>
-                          {d.name} ({d.code}) - Tồn: {d.stockQuantity} {d.unit}
+                          {d.name} ({d.code}) - {d.price.toLocaleString('vi-VN')} đ/{d.unit}
                         </option>
                       ))}
                     </select>
-                    {selectedDrug && (
-                      <div className="text-[11px] text-primary flex items-center justify-between px-1">
-                        <span>Đơn giá: {selectedDrug.price.toLocaleString('vi-VN')} đ/{selectedDrug.unit}</span>
-                        <span>HSD: {selectedDrug.expiryDate}</span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Liều dùng */}
+                  {/* Liều lượng */}
                   <div className="md:col-span-3 space-y-1">
                     <label className="block text-xs font-medium text-on-surface-variant">
                       Liều dùng *
@@ -243,7 +338,7 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
                       type="text"
                       value={item.dosage}
                       onChange={(e) => handleItemChange(index, 'dosage', e.target.value)}
-                      placeholder="vd: 500mg"
+                      placeholder="vd: 500mg, 1 viên"
                       className="w-full px-3 py-2 text-sm rounded-lg border border-outline-variant/50 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       required
                     />
@@ -252,19 +347,20 @@ export default function PrescriptionForm({ visit, onPrescriptionAdded }) {
                   {/* Số lượng */}
                   <div className="md:col-span-3 space-y-1">
                     <label className="block text-xs font-medium text-on-surface-variant">
-                      Số lượng ({selectedDrug?.unit || 'Viên'}) *
+                      Số lượng ({selectedDrug?.unit || 'viên'}) *
                     </label>
                     <input
                       type="number"
                       min="1"
+                      max="500"
                       value={item.quantity}
-                      onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                       className="w-full px-3 py-2 text-sm rounded-lg border border-outline-variant/50 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       required
                     />
                   </div>
 
-                  {/* Cách dùng / Hướng dẫn */}
+                  {/* Hướng dẫn sử dụng */}
                   <div className="md:col-span-12 space-y-1">
                     <label className="block text-xs font-medium text-on-surface-variant">
                       Hướng dẫn sử dụng & đường dùng

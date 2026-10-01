@@ -75,6 +75,9 @@ class VisitServiceImplTest {
     @Mock
     private MedicalRecordRepository medicalRecordRepository;
 
+    @Mock
+    private com.hospital.hmsai.ai.service.AiClinicalService aiClinicalService;
+
     @InjectMocks
     private VisitServiceImpl visitService;
 
@@ -321,5 +324,55 @@ class VisitServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         assertEquals(50L, result.getContent().get(0).getId());
+    }
+
+    @Test
+    @DisplayName("Kê đơn thuốc có cảnh báo tương tác thuốc và dị ứng AI (Sprint 5)")
+    void testCreatePrescription_WithAiSafetyWarnings() {
+        CreatePrescriptionRequest request = CreatePrescriptionRequest.builder()
+                .items(List.of(
+                        PrescriptionItemRequest.builder().drugId(1L).dosage("500mg").quantity(10).build()
+                ))
+                .build();
+
+        when(visitRepository.findById(50L)).thenReturn(Optional.of(testVisit));
+        when(drugRepository.findById(1L)).thenReturn(Optional.of(testDrug));
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(inv -> {
+            Prescription p = inv.getArgument(0);
+            p.setId(205L);
+            return p;
+        });
+
+        com.hospital.hmsai.ai.dto.PrescriptionSafetyResponse mockSafety =
+                com.hospital.hmsai.ai.dto.PrescriptionSafetyResponse.builder()
+                        .isSafe(false)
+                        .hasWarning(true)
+                        .hasCritical(true)
+                        .interactionCount(1)
+                        .allergyCount(0)
+                        .interactions(List.of(
+                                com.hospital.hmsai.ai.dto.DrugInteractionWarningDto.builder()
+                                        .drugAName("Aspirin")
+                                        .drugBName("Warfarin")
+                                        .severity("CRITICAL")
+                                        .description("Nguy cơ xuất huyết tiêu hóa nặng")
+                                        .recommendation("Tránh phối hợp")
+                                        .build()
+                        ))
+                        .disclaimer("Kết quả do AI phân tích chỉ mang tính tham khảo, không thay thế phán đoán lâm sàng của bác sĩ.")
+                        .build();
+
+        when(aiClinicalService.checkAndAuditPrescriptionSafety(eq(50L), anyList())).thenReturn(mockSafety);
+
+        PrescriptionResponse response = visitService.createPrescription(50L, request);
+
+        assertNotNull(response);
+        assertEquals(205L, response.getId());
+        assertTrue(response.getHasWarning());
+        assertEquals(1, response.getInteractionWarnings().size());
+        assertEquals("CRITICAL", response.getInteractionWarnings().get(0).getSeverity());
+        assertNotNull(response.getAiDisclaimer());
+        assertTrue(response.getAiDisclaimer().contains("tham khảo"));
+        verify(aiClinicalService).checkAndAuditPrescriptionSafety(eq(50L), anyList());
     }
 }

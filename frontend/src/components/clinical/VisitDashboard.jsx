@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import PrescriptionForm from './PrescriptionForm';
 import LabOrderPanel from './LabOrderPanel';
+import { aiAlertService, AI_DISCLAIMER_TEXT } from '../../services/aiAlertService';
 
 export default function VisitDashboard({ isOpen, onClose }) {
   const { user } = useAuth();
@@ -11,10 +12,12 @@ export default function VisitDashboard({ isOpen, onClose }) {
 
   const [visits, setVisits] = useState([]);
   const [activeVisitId, setActiveVisitId] = useState(null);
-  const [activeTab, setActiveTab] = useState('clinical'); // 'clinical' | 'prescription' | 'lab' | 'summary'
+  const [activeTab, setActiveTab] = useState('clinical'); // 'clinical' | 'prescription' | 'lab' | 'summary' | 'ai_audit'
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
   // Form states for active visit
   const [chiefComplaint, setChiefComplaint] = useState('');
@@ -58,6 +61,23 @@ export default function VisitDashboard({ isOpen, onClose }) {
       loadVisits();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (activeVisitId && activeTab === 'ai_audit') {
+      const fetchLogs = async () => {
+        setIsLoadingLogs(true);
+        try {
+          const data = await aiAlertService.getVisitAuditLogs(activeVisitId);
+          setAuditLogs(data || []);
+        } catch (err) {
+          console.error('Không thể tải audit log AI:', err);
+        } finally {
+          setIsLoadingLogs(false);
+        }
+      };
+      fetchLogs();
+    }
+  }, [activeVisitId, activeTab]);
 
   const activeVisit = useMemo(() => {
     return visits.find(v => v.id === activeVisitId) || null;
@@ -419,6 +439,19 @@ export default function VisitDashboard({ isOpen, onClose }) {
                   <span className="material-symbols-outlined text-[18px]">description</span>
                   <span>Phiếu khám tổng hợp (EMR)</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ai_audit')}
+                  className={`py-3 font-label font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+                    activeTab === 'ai_audit'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">smart_toy</span>
+                  <span>Lịch sử AI Audit (NFR-8)</span>
+                </button>
               </div>
 
               {/* Tab Contents */}
@@ -724,6 +757,89 @@ export default function VisitDashboard({ isOpen, onClose }) {
                         <span className="material-symbols-outlined text-[18px]">print</span>
                         <span>In phiếu khám EMR</span>
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 5: AI CLINICAL AUDIT LOG (NFR-8) */}
+                {activeTab === 'ai_audit' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-xs space-y-4">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <h4 className="font-headline text-base font-bold text-on-surface flex items-center gap-2">
+                            <span className="material-symbols-outlined text-primary text-[22px]">history_edu</span>
+                            <span>Nhật ký truy vết lâm sàng AI (Audit Log)</span>
+                          </h4>
+                          <p className="text-xs text-on-surface-variant mt-1">
+                            Tuân thủ NFR-8: Toàn bộ gợi ý, phân tích và cảnh báo lâm sàng từ AI Service đều được ghi vết lưu trữ tự động.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setIsLoadingLogs(true);
+                            const data = await aiAlertService.getVisitAuditLogs(activeVisit.id);
+                            setAuditLogs(data || []);
+                            setIsLoadingLogs(false);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-semibold flex items-center gap-1.5 hover:bg-surface-container cursor-pointer"
+                        >
+                          <span className={`material-symbols-outlined text-[16px] ${isLoadingLogs ? 'animate-spin' : ''}`}>
+                            refresh
+                          </span>
+                          <span>Làm mới</span>
+                        </button>
+                      </div>
+
+                      {isLoadingLogs ? (
+                        <div className="py-12 text-center text-xs text-on-surface-variant">
+                          <span className="material-symbols-outlined animate-spin text-[28px] text-primary block mb-2">
+                            progress_activity
+                          </span>
+                          <span>Đang tải lịch sử audit AI...</span>
+                        </div>
+                      ) : auditLogs.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-on-surface-variant bg-surface-container-low rounded-xl border border-dashed border-outline-variant/50 space-y-2">
+                          <span className="material-symbols-outlined text-[36px] text-outline">verified</span>
+                          <p className="font-medium text-on-surface">Chưa có bản ghi phân tích an toàn AI nào cho ca khám này.</p>
+                          <p className="text-[11px]">Bản ghi sẽ tự động được tạo khi bác sĩ thực hiện kê đơn hoặc kiểm tra tương tác thuốc.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {auditLogs.map((logItem, idx) => (
+                            <div key={logItem.id || idx} className="p-4 rounded-xl border border-outline-variant/30 bg-slate-50 space-y-2">
+                              <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                                    logItem.suggestionType === 'DRUG_INTERACTION'
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : 'bg-purple-100 text-purple-900 border border-purple-300'
+                                  }`}>
+                                    {logItem.suggestionType}
+                                  </span>
+                                  <span className="font-bold text-on-surface">Bản ghi #{logItem.id}</span>
+                                </div>
+                                <div className="text-on-surface-variant text-[11px] flex items-center gap-2">
+                                  <span>Độ tin cậy: <strong className="text-primary font-bold">{Math.round((logItem.confidenceScore || 0.95) * 100)}%</strong></span>
+                                  <span>•</span>
+                                  <span>{new Date(logItem.createdAt || Date.now()).toLocaleString('vi-VN')}</span>
+                                </div>
+                              </div>
+
+                              <div className="text-xs bg-white rounded-lg p-3 border border-outline-variant/20 font-mono text-[11px] overflow-x-auto text-on-surface">
+                                <div className="font-bold font-sans text-on-surface-variant mb-1">Chi tiết phân tích AI (JSON Output):</div>
+                                <pre className="whitespace-pre-wrap">{logItem.outputContent}</pre>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="pt-3 border-t border-surface-variant/20 flex items-center gap-2 text-[11px] text-on-surface-variant italic">
+                        <span className="material-symbols-outlined text-[16px] text-outline">verified_user</span>
+                        <span>{AI_DISCLAIMER_TEXT}</span>
+                      </div>
                     </div>
                   </div>
                 )}

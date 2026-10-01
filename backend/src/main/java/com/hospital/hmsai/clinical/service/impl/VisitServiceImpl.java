@@ -2,6 +2,9 @@ package com.hospital.hmsai.clinical.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hospital.hmsai.ai.dto.DrugItemDto;
+import com.hospital.hmsai.ai.dto.PrescriptionSafetyResponse;
+import com.hospital.hmsai.ai.service.AiClinicalService;
 import com.hospital.hmsai.appointment.entity.Appointment;
 import com.hospital.hmsai.appointment.entity.AppointmentStatus;
 import com.hospital.hmsai.appointment.repository.AppointmentRepository;
@@ -49,6 +52,7 @@ public class VisitServiceImpl implements VisitService {
     private final LabOrderRepository labOrderRepository;
     private final DrugRepository drugRepository;
     private final MedicalRecordRepository medicalRecordRepository;
+    private final AiClinicalService aiClinicalService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -222,7 +226,39 @@ public class VisitServiceImpl implements VisitService {
 
         Prescription saved = prescriptionRepository.save(prescription);
         log.info("Đã lưu đơn thuốc ID: {} cho lượt khám ID: {}", saved.getId(), visitId);
-        return PrescriptionResponse.fromEntity(saved);
+
+        PrescriptionResponse response = PrescriptionResponse.fromEntity(saved);
+
+        // Tích hợp AI Safety Check & Audit Log (FR-11.1, FR-11.2, NFR-8)
+        try {
+            List<DrugItemDto> drugDtos = new ArrayList<>();
+            for (PrescriptionItem it : saved.getItems()) {
+                Drug d = it.getDrug();
+                drugDtos.add(DrugItemDto.builder()
+                        .id(d.getId())
+                        .code(d.getCode())
+                        .name(d.getName())
+                        .dosage(it.getDosage())
+                        .build());
+            }
+
+            PrescriptionSafetyResponse safety = aiClinicalService.checkAndAuditPrescriptionSafety(visitId, drugDtos);
+            if (safety != null) {
+                response.setInteractionWarnings(safety.getInteractions());
+                response.setAllergyAlerts(safety.getAllergyAlerts());
+                response.setHasWarning(safety.getHasWarning());
+                response.setAiDisclaimer(safety.getDisclaimer());
+
+                if (Boolean.TRUE.equals(safety.getHasWarning())) {
+                    log.warn("Đơn thuốc ID: {} chứa cảnh báo an toàn lâm sàng (tương tác: {}, dị ứng: {})",
+                            saved.getId(), safety.getInteractionCount(), safety.getAllergyCount());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Lỗi khi kiểm tra an toàn lâm sàng AI cho đơn thuốc ID {}: {}", saved.getId(), e.getMessage());
+        }
+
+        return response;
     }
 
     @Override

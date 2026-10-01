@@ -1,5 +1,7 @@
 package com.hospital.hmsai.clinical.dto;
 
+import com.hospital.hmsai.ai.dto.AllergyWarningDto;
+import com.hospital.hmsai.ai.dto.DrugInteractionWarningDto;
 import com.hospital.hmsai.clinical.entity.Prescription;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -23,6 +26,18 @@ public class PrescriptionResponse {
     private BigDecimal estimatedTotalAmount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // AI Clinical Warnings (FR-11.1, FR-11.2, NFR-8)
+    @Builder.Default
+    private List<DrugInteractionWarningDto> interactionWarnings = new ArrayList<>();
+
+    @Builder.Default
+    private List<AllergyWarningDto> allergyAlerts = new ArrayList<>();
+
+    @Builder.Default
+    private Boolean hasWarning = false;
+
+    private String aiDisclaimer;
 
     public static PrescriptionResponse fromEntity(Prescription prescription) {
         if (prescription == null) return null;
@@ -45,6 +60,9 @@ public class PrescriptionResponse {
                 .estimatedTotalAmount(total)
                 .createdAt(prescription.getCreatedAt())
                 .updatedAt(prescription.getUpdatedAt())
+                .interactionWarnings(new ArrayList<>())
+                .allergyAlerts(new ArrayList<>())
+                .hasWarning(false)
                 .build();
     }
 }
