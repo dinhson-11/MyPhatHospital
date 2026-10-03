@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import PrescriptionForm from './PrescriptionForm';
 import LabOrderPanel from './LabOrderPanel';
+import DiagnosisSuggestBox from './DiagnosisSuggestBox';
 import { aiAlertService, AI_DISCLAIMER_TEXT } from '../../services/aiAlertService';
 
 export default function VisitDashboard({ isOpen, onClose }) {
@@ -601,6 +602,15 @@ export default function VisitDashboard({ isOpen, onClose }) {
                           className="w-full px-4 py-2.5 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         />
                       </div>
+
+                      {/* Gợi ý chẩn đoán AI (Sprint 6 - FR-11.3) */}
+                      <DiagnosisSuggestBox
+                        symptomsText={chiefComplaint}
+                        onSelectDiagnosis={(code, name) => {
+                          setDiagnosisCode(code);
+                          showToast(`Đã áp dụng mã ICD-10 gợi ý từ AI: ${code} - ${name}`, 'success');
+                        }}
+                      />
 
                       {/* Mã chẩn đoán ICD-10 */}
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">

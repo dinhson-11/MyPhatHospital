@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
-export default function UserProfileModal({ isOpen, onClose, onOpenAppointments }) {
+export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, onOpenPatientProfile }) {
   const { user, logout } = useAuth();
   const { showToast } = useToast();
 
@@ -86,9 +86,21 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments }
               type="button"
               onClick={() => {
                 onClose();
+                if (onOpenPatientProfile) onOpenPatientProfile();
+              }}
+              className="w-full py-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-base">medical_information</span>
+              Hồ Sơ Sức Khỏe & Tiền Sử Dị Ứng
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
                 if (onOpenAppointments) onOpenAppointments();
               }}
-              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
             >
               <span className="material-symbols-outlined text-base">receipt_long</span>
               Xem Lịch Khám Của Tôi

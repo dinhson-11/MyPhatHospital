@@ -1,4 +1,5 @@
 import React from 'react';
+import logoHospital from '../../assets/LogoBV.png';
 
 export default function AboutModal({ isOpen, onClose }) {
   if (!isOpen) return null;
@@ -12,12 +13,19 @@ export default function AboutModal({ isOpen, onClose }) {
         {/* Header */}
         <div className="p-6 pb-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">local_hospital</span>
+            <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shadow-xs shrink-0">
+              <img
+                src={logoHospital}
+                alt="Logo Bệnh viện Thanh Sơn"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.src = '/logo.png';
+                }}
+              />
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900">Về Bệnh Viện Đa Khoa Thanh Sơn</h3>
-              <p className="text-xs text-slate-500">Bệnh viện Đa khoa hạng I - Phú Thọ</p>
+              <p className="text-xs text-slate-500 font-medium">Bệnh viện Đa khoa hạng I - Phú Thọ</p>
             </div>
           </div>
           <button

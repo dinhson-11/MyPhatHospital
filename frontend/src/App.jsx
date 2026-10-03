@@ -19,8 +19,10 @@ import AllDepartmentsModal from './components/modals/AllDepartmentsModal';
 import AboutModal from './components/modals/AboutModal';
 import ContactModal from './components/modals/ContactModal';
 import UserProfileModal from './components/modals/UserProfileModal';
+import PatientProfileModal from './components/modals/PatientProfileModal';
 import AdminPanelModal from './components/modals/AdminPanelModal';
 import VisitDashboard from './components/clinical/VisitDashboard';
+import ChatWidget from './components/chat/ChatWidget';
 
 function MainApp() {
   // Modal states
@@ -31,6 +33,7 @@ function MainApp() {
   const [aboutModalOpen, setAboutModalOpen] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [patientProfileModalOpen, setPatientProfileModalOpen] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [clinicalModalOpen, setClinicalModalOpen] = useState(false);
 
@@ -63,6 +66,7 @@ function MainApp() {
         onOpenBooking={() => handleOpenBooking()}
         onOpenMyAppointments={() => setAppointmentsModalOpen(true)}
         onOpenProfile={() => setProfileModalOpen(true)}
+        onOpenPatientProfile={() => setPatientProfileModalOpen(true)}
         onOpenAdmin={() => setAdminModalOpen(true)}
         onOpenAbout={() => setAboutModalOpen(true)}
         onOpenContact={() => setContactModalOpen(true)}
@@ -70,10 +74,11 @@ function MainApp() {
       />
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main className="flex-1 pt-20 w-full">
         <HeroSection
           onOpenBooking={handleOpenBooking}
           onOpenAllDepartments={() => setDepartmentsModalOpen(true)}
+          onScrollToAI={handleOpenAITriage}
         />
 
         <FeaturesSection
@@ -150,6 +155,12 @@ function MainApp() {
         isOpen={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         onOpenAppointments={() => setAppointmentsModalOpen(true)}
+        onOpenPatientProfile={() => setPatientProfileModalOpen(true)}
+      />
+
+      <PatientProfileModal
+        isOpen={patientProfileModalOpen}
+        onClose={() => setPatientProfileModalOpen(false)}
       />
 
       <AdminPanelModal
@@ -161,6 +172,9 @@ function MainApp() {
         isOpen={clinicalModalOpen}
         onClose={() => setClinicalModalOpen(false)}
       />
+
+      {/* Floating 24/7 AI Medical Chat Assistant */}
+      <ChatWidget onOpenBooking={handleOpenBooking} />
     </div>
   );
 }

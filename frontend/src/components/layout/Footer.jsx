@@ -1,5 +1,6 @@
 import React from 'react';
 import { useToast } from '../../context/ToastContext';
+import logoHospital from '../../assets/LogoBV.png';
 
 export const Footer = ({
   onOpenAbout,
@@ -12,23 +13,28 @@ export const Footer = ({
   const { showToast } = useToast();
 
   return (
-    <footer className="w-full bg-inverse-surface text-surface-container-highest pt-16 pb-10">
-      <div className="max-w-[1280px] mx-auto px-6">
+    <footer className="w-full bg-slate-900 text-slate-300 pt-16 pb-10 border-t border-slate-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mb-12">
           {/* Col 1: Brand & Certification */}
           <div className="flex flex-col space-y-3">
             <div className="flex items-center gap-3 mb-2">
-              <img
-                alt="MedCare AI Logo"
-                className="h-8 w-auto object-contain brightness-0 invert"
-                src="https://lh3.googleusercontent.com/aida/AEtjO1UiRWu2wLJay3lT_fWD9uSnZwpyzXsqXTN23B5n65vVxCCKFWO0uY_aHFTZ3q8Zb0t9OMuCKJk1BULORIm00sbTn12gVTVFaupVh2ejX4LidWdE9kHz7uchf5izU4WJtjC1U6HzFjdnrrg9O60URWslQRlB3JFYILY9lig9lF5a1ZJM_s4W0YBcvag2CaJpZWJJ9CPjYjecLH3sNLqPlYolUiuvdwpNPXZKfYagNZdMk-ZNzRVf99q0aWak"
-              />
+              <div className="bg-white p-1.5 rounded-xl shadow-md flex items-center justify-center">
+                <img
+                  alt="Logo Bệnh viện Thanh Sơn"
+                  className="h-9 w-auto object-contain"
+                  src={logoHospital}
+                  onError={(e) => {
+                    e.currentTarget.src = '/logo.png';
+                  }}
+                />
+              </div>
               <div className="flex flex-col">
                 <span className="font-headline text-lg font-bold text-white tracking-tight">
-                  MedCare AI
-                </span>
-                <span className="font-label text-xs text-surface-variant font-medium">
                   Bệnh viện Thanh Sơn
+                </span>
+                <span className="font-label text-xs text-slate-400 font-medium">
+                  Bệnh viện Đa khoa Thanh Sơn
                 </span>
               </div>
             </div>
@@ -173,15 +179,15 @@ export const Footer = ({
               </div>
               <div className="flex items-start gap-2.5 text-xs text-surface-variant">
                 <span className="material-symbols-outlined text-primary-fixed text-base mt-0.5">location_on</span>
-                <span>128 Đường Thanh Sơn, Quận Hoàn Kiếm, Hà Nội</span>
+                <span>Khu Tân Tiến, Thị trấn Thanh Sơn, Huyện Thanh Sơn, Tỉnh Phú Thọ</span>
               </div>
               <div className="flex items-center gap-2.5 text-xs text-surface-variant">
                 <span className="material-symbols-outlined text-primary-fixed text-base">mail</span>
                 <a
                   className="hover:text-white transition-colors"
-                  href="mailto:lienhe@medcareai-thanhson.vn"
+                  href="mailto:lienhe@bvthanhson.vn"
                 >
-                  lienhe@medcareai-thanhson.vn
+                  lienhe@bvthanhson.vn
                 </a>
               </div>
             </div>
@@ -190,7 +196,7 @@ export const Footer = ({
 
         {/* Bottom copyright & Socials */}
         <div className="pt-6 border-t border-surface-variant/20 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-surface-variant">
-          <p>© 2025 Bệnh viện Thanh Sơn - MedCare AI. Giấy phép hoạt động khám chữa bệnh số 188/BYT-GPHĐ. Bảo lưu mọi quyền.</p>
+          <p>© 2025 Bệnh viện Thanh Sơn. Giấy phép hoạt động khám chữa bệnh số 188/BYT-GPHĐ. Bảo lưu mọi quyền.</p>
           <div className="flex items-center gap-3">
             <button
               aria-label="Facebook"
@@ -201,7 +207,7 @@ export const Footer = ({
             </button>
             <button
               aria-label="Zalo"
-              onClick={() => showToast('Mở Zalo OA: 024 3888 9999', 'info')}
+              onClick={() => showToast('Mở Zalo OA: 0210 3873 115', 'info')}
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">chat</span>
@@ -215,7 +221,7 @@ export const Footer = ({
             </button>
             <button
               aria-label="LinkedIn"
-              onClick={() => showToast('Mở LinkedIn MedCare AI', 'info')}
+              onClick={() => showToast('Mở LinkedIn Bệnh viện Thanh Sơn', 'info')}
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">groups</span>

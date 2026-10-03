@@ -72,8 +72,11 @@ export default function DoctorsSection({ onOpenBooking }) {
                     <img
                       src={doc.avatar}
                       alt={doc.name}
-                      className="w-20 h-20 rounded-2xl object-cover border-2 border-white shadow-md group-hover:scale-105 transition-transform duration-300"
+                      className="w-20 h-20 rounded-2xl object-cover border-2 border-white shadow-md group-hover:scale-105 transition-transform duration-300 bg-slate-100"
                       loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(doc.name)}&background=005440&color=fff&size=128`;
+                      }}
                     />
                     <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
                   </div>

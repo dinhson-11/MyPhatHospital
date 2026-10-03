@@ -1,4 +1,4 @@
-# MedCare AI - Cổng Thông Tin Bệnh Viện Đa Khoa Thanh Sơn (Frontend React / Vite)
+# Cổng Thông Tin Bệnh Viện Đa Khoa Thanh Sơn (Frontend React / Vite)
 
 Hệ thống Frontend chuẩn doanh nghiệp ứng dụng **React 18 + Vite**, kiến trúc phân tầng Service / Context / Component hiện đại, tích hợp giao diện y tế cao cấp, trợ lý AI Triage lâm sàng và hệ sinh thái đặt lịch khám thông minh.
 

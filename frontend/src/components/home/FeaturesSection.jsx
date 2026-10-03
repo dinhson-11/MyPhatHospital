@@ -34,14 +34,14 @@ export const FeaturesSection = () => {
 
   return (
     <section className="w-full py-16 bg-surface-container-low">
-      <div className="max-w-[1280px] mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="flex flex-col items-center text-center max-w-2xl mx-auto mb-12">
           <span className="font-label text-xs font-bold text-primary tracking-wider uppercase mb-2">
             CÔNG NGHỆ & TẬN TÂM
           </span>
           <h2 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface mb-3 tracking-tight">
-            Vì sao chọn MedCare AI?
+            Vì sao chọn Bệnh viện Thanh Sơn?
           </h2>
           <p className="font-body text-sm text-on-surface-variant leading-relaxed">
             Sự kết hợp hoàn hảo giữa năng lực chuyên môn của y bác sĩ giàu kinh nghiệm và hệ thống hỗ trợ số hóa hiện đại hàng đầu.

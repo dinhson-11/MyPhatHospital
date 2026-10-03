@@ -3,6 +3,7 @@ import { DEPARTMENTS, DOCTORS, TIME_SLOTS } from '../../services/dataService';
 import { appointmentService } from '../../services/appointmentService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import logoHospital from '../../assets/LogoBV.png';
 
 export default function BookingModal({
   isOpen,
@@ -119,13 +120,18 @@ export default function BookingModal({
         {/* Header */}
         <div className="p-6 pb-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">
-                {ticket ? 'confirmation_number' : 'edit_calendar'}
-              </span>
+            <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shadow-xs shrink-0">
+              <img
+                src={logoHospital}
+                alt="Logo Bệnh viện Thanh Sơn"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.src = '/logo.png';
+                }}
+              />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className="text-lg font-bold text-slate-900 leading-snug">
                 {ticket ? 'Phiếu Khám Bệnh Điện Tử' : 'Đăng Ký Đặt Lịch Khám'}
               </h3>
               <p className="text-xs text-slate-500">
@@ -246,7 +252,7 @@ export default function BookingModal({
           </div>
         ) : (
           /* BOOKING FORM */
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">

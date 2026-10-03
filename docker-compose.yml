@@ -50,6 +50,16 @@ services:
     networks:
       - hmsai-network
 
+  frontend:
+    build: ./frontend
+    container_name: hmsai-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - hmsai-network
+
 volumes:
   mysql_data:
 

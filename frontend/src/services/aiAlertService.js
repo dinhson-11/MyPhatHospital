@@ -331,5 +331,130 @@ export const aiAlertService = {
       }
     }
     return alerts;
+  },
+
+  // =========================================================================
+  // DIAGNOSIS SUGGESTION (FR-11.3 – Sprint 6)
+  // =========================================================================
+
+  /**
+   * Gợi ý chẩn đoán ICD-10 từ triệu chứng (gọi API hoặc fallback local)
+   * @param {string} symptoms - Mô tả triệu chứng bệnh nhân
+   * @param {Object} options - Tùy chọn: patientAge, patientGender, medicalHistory, visitId
+   * @returns {Promise<{suggestions: Array, total_suggestions: number, disclaimer: string}>}
+   */
+  async suggestDiagnosis(symptoms, options = {}) {
+    if (!symptoms || symptoms.trim().length < 3) {
+      return {
+        suggestions: [],
+        total_suggestions: 0,
+        confidence_score: 0,
+        disclaimer: AI_DISCLAIMER_TEXT
+      };
+    }
+
+    const payload = {
+      symptoms: symptoms.trim(),
+      ...(options.patientAge && { patient_age: options.patientAge }),
+      ...(options.patientGender && { patient_gender: options.patientGender }),
+      ...(options.medicalHistory && { medical_history: options.medicalHistory })
+    };
+
+    try {
+      // 1. Thử gọi endpoint gợi ý chẩn đoán theo ca khám (có audit log NFR-8)
+      if (options.visitId) {
+        const res = await apiClient.post(`/ai/clinical/visits/${options.visitId}/suggest-diagnosis`, payload);
+        if (res && res.data) return res.data;
+      }
+
+      // 2. Thử gọi endpoint gợi ý chẩn đoán độc lập
+      const res = await apiClient.post('/ai/clinical/suggest-diagnosis', payload);
+      if (res && res.data) return res.data;
+    } catch (err) {
+      console.warn('API AI suggest-diagnosis không khả dụng, kích hoạt fallback cục bộ:', err.message);
+    }
+
+    // 3. Fallback cục bộ
+    return this.fallbackSuggestDiagnosis(symptoms);
+  },
+
+  /**
+   * Fallback gợi ý chẩn đoán cục bộ khi Backend / AI Service offline.
+   */
+  fallbackSuggestDiagnosis(symptoms) {
+    const lower = symptoms.toLowerCase();
+
+    const FALLBACK_DIAGNOSIS_KB = [
+      {
+        keywords: ['đau ngực', 'tức ngực', 'khó thở', 'huyết áp', 'hoa mắt', 'chóng mặt'],
+        suggestions: [
+          { code: 'I10', name: 'Tăng huyết áp vô căn (nguyên phát)', confidence: 94, reason: 'Triệu chứng đau tức ngực, chóng mặt phù hợp với biến thiên huyết áp cao' },
+          { code: 'I20.9', name: 'Cơn đau thắt ngực, không đặc hiệu', confidence: 85, reason: 'Cần theo dõi điện tim và men tim Troponin' },
+          { code: 'I25.1', name: 'Bệnh tim thiếu máu cục bộ xơ vữa', confidence: 78, reason: 'Nguy cơ bệnh mạch vành mạn tính' }
+        ]
+      },
+      {
+        keywords: ['ho', 'sốt', 'đờm', 'rát họng', 'viêm họng', 'khàn tiếng'],
+        suggestions: [
+          { code: 'J00', name: 'Viêm mũi họng cấp (Cảm lạnh)', confidence: 96, reason: 'Hội chứng viêm long đường hô hấp trên cấp tính' },
+          { code: 'J02.9', name: 'Viêm họng cấp, không đặc hiệu', confidence: 88, reason: 'Đau rát họng tăng khi nuốt kèm sung huyết niêm mạc' },
+          { code: 'J20.9', name: 'Viêm phế quản cấp, không đặc hiệu', confidence: 82, reason: 'Ho khan chuyển ho đờm kèm sốt nhẹ' }
+        ]
+      },
+      {
+        keywords: ['đau bụng', 'dạ dày', 'ợ chua', 'buồn nôn', 'thượng vị', 'tiêu chảy'],
+        suggestions: [
+          { code: 'K29.7', name: 'Viêm dạ dày, không đặc hiệu', confidence: 95, reason: 'Đau quặn vùng thượng vị, ợ hơi ợ chua sau ăn' },
+          { code: 'K21.9', name: 'Bệnh trào ngược dạ dày - thực quản (GERD)', confidence: 89, reason: 'Ợ nóng rát sau xương ức và đắng miệng' },
+          { code: 'K58.9', name: 'Hội chứng ruột kích thích (IBS)', confidence: 76, reason: 'Rối loạn tiêu hóa mạn tính liên quan stress' }
+        ]
+      },
+      {
+        keywords: ['đái tháo đường', 'tiểu đường', 'khát nước', 'sụt cân', 'tiểu nhiều'],
+        suggestions: [
+          { code: 'E11.9', name: 'Đái tháo đường typ 2 không biến chứng', confidence: 93, reason: 'Bộ ba: ăn nhiều, uống nhiều, tiểu nhiều kèm sụt cân' },
+          { code: 'E14.9', name: 'Đái tháo đường không đặc hiệu', confidence: 84, reason: 'Cần xét nghiệm HbA1c và đường huyết lúc đói' }
+        ]
+      },
+      {
+        keywords: ['vai gáy', 'cột sống', 'đau lưng', 'thoái hóa', 'tê bì'],
+        suggestions: [
+          { code: 'M54.2', name: 'Đau cổ gáy (Cervicalgia)', confidence: 92, reason: 'Co cứng cơ cạnh cột sống cổ và đau mỏi vai gáy' },
+          { code: 'M47.8', name: 'Thoái hóa cột sống khác', confidence: 86, reason: 'Đau âm ỉ cột sống tăng khi vận động' },
+          { code: 'M54.5', name: 'Đau thắt lưng (Low back pain)', confidence: 80, reason: 'Hạn chế tầm vận động thắt lưng' }
+        ]
+      },
+      {
+        keywords: ['đau đầu', 'nhức đầu', 'mất ngủ', 'chóng mặt', 'co giật'],
+        suggestions: [
+          { code: 'G43.9', name: 'Đau nửa đầu (Migraine)', confidence: 91, reason: 'Đau nửa đầu từng cơn theo nhịp mạch đập, buồn nôn' },
+          { code: 'G47.0', name: 'Rối loạn giấc ngủ (Mất ngủ)', confidence: 85, reason: 'Khó vào giấc, ngủ không sâu, mệt mỏi ban ngày' },
+          { code: 'R51', name: 'Đau đầu, không đặc hiệu', confidence: 79, reason: 'Cần phân biệt nguyên phát và thứ phát' }
+        ]
+      }
+    ];
+
+    for (const group of FALLBACK_DIAGNOSIS_KB) {
+      if (group.keywords.some(kw => lower.includes(kw))) {
+        return {
+          suggestions: group.suggestions.slice(0, 3),
+          total_suggestions: Math.min(group.suggestions.length, 3),
+          confidence_score: 0.90,
+          disclaimer: AI_DISCLAIMER_TEXT
+        };
+      }
+    }
+
+    // Default
+    return {
+      suggestions: [
+        { code: 'R69', name: 'Nguyên nhân gây bệnh chưa xác định', confidence: 70, reason: 'Cần khai thác thêm bệnh sử và chỉ định cận lâm sàng' },
+        { code: 'Z00.0', name: 'Khám sức khỏe tổng quát định kỳ', confidence: 65, reason: 'Tầm soát đánh giá chức năng các cơ quan' }
+      ],
+      total_suggestions: 2,
+      confidence_score: 0.70,
+      disclaimer: AI_DISCLAIMER_TEXT
+    };
   }
 };
+

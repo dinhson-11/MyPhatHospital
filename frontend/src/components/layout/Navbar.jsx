@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import logoHospital from '../../assets/LogoBV.png';
 
 export const Navbar = ({
   onOpenAuth,
   onOpenBooking,
   onOpenMyAppointments,
   onOpenProfile,
+  onOpenPatientProfile,
   onOpenAdmin,
   onOpenAbout,
   onOpenContact,
@@ -46,9 +48,9 @@ export const Navbar = ({
   };
 
   return (
-    <header className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(15,41,34,0.04)] border-b border-surface-container-high/40">
-      <div className="h-20 max-w-[1280px] mx-auto px-6 flex items-center justify-between">
-        {/* Logo */}
+    <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 backdrop-blur-xl shadow-[0_1px_10px_rgba(15,41,34,0.06)] border-b border-slate-200/80">
+      <div className="h-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        {/* Logo & Hospital Brand */}
         <div className="flex items-center gap-3">
           <a
             href="#top"
@@ -56,26 +58,34 @@ export const Navbar = ({
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="flex items-center gap-3 group"
+            className="flex items-center gap-3 group focus:outline-none"
           >
             <img
-              alt="MedCare AI Logo"
-              className="h-8 w-auto object-contain"
-              src="https://lh3.googleusercontent.com/aida/AEtjO1UiRWu2wLJay3lT_fWD9uSnZwpyzXsqXTN23B5n65vVxCCKFWO0uY_aHFTZ3q8Zb0t9OMuCKJk1BULORIm00sbTn12gVTVFaupVh2ejX4LidWdE9kHz7uchf5izU4WJtjC1U6HzFjdnrrg9O60URWslQRlB3JFYILY9lig9lF5a1ZJM_s4W0YBcvag2CaJpZWJJ9CPjYjecLH3sNLqPlYolUiuvdwpNPXZKfYagNZdMk-ZNzRVf99q0aWak"
+              alt="Logo Bệnh viện Thanh Sơn"
+              className="h-11 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105 drop-shadow-sm"
+              src={logoHospital}
+              onError={(e) => {
+                e.currentTarget.src = '/logo.png';
+              }}
             />
             <div className="flex flex-col">
-              <span className="font-headline text-lg font-bold text-primary tracking-tight">
-                MedCare AI
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-headline text-base sm:text-lg font-extrabold text-primary tracking-tight">
+                  BỆNH VIỆN THANH SƠN
+                </span>
+                <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase">
+                  Bệnh viện thông minh
+                </span>
+              </div>
               <span className="font-label text-xs text-on-surface-variant font-medium">
-                Bệnh viện Thanh Sơn
+                Bệnh viện Đa khoa Thanh Sơn
               </span>
             </div>
           </a>
         </div>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden xl:flex items-center gap-6">
+        <nav className="hidden lg:flex items-center gap-4 xl:gap-6">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="font-label text-sm text-on-surface-variant hover:text-primary transition-colors py-2 cursor-pointer font-medium"
@@ -175,6 +185,18 @@ export const Navbar = ({
                       </span>
                       <span>Thông tin tài khoản</span>
                     </button>
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        if (onOpenPatientProfile) onOpenPatientProfile();
+                      }}
+                      className="w-full px-4 py-2 text-left font-body text-sm text-on-surface hover:bg-surface-container-low flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-primary text-[18px]">
+                        medical_information
+                      </span>
+                      <span>Hồ sơ sức khỏe & Dị ứng</span>
+                    </button>
                     {isDoctor && (
                       <button
                         onClick={() => {
@@ -251,7 +273,7 @@ export const Navbar = ({
           {/* Mobile hamburger toggle */}
           <button
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="xl:hidden w-9 h-9 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface transition-colors cursor-pointer"
+            className="lg:hidden w-10 h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center text-on-surface transition-colors cursor-pointer border border-slate-200/80"
             aria-label="Menu"
           >
             <span className="material-symbols-outlined text-[24px]">
@@ -263,7 +285,7 @@ export const Navbar = ({
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="xl:hidden bg-white border-b border-surface-container-high px-6 py-4 space-y-3 animate-fade-in">
+        <div className="lg:hidden bg-white/98 backdrop-blur-md border-b border-slate-200 shadow-xl px-6 py-4 space-y-3 animate-fade-in">
           <button
             onClick={() => {
               setMobileMenuOpen(false);

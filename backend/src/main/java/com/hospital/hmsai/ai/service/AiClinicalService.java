@@ -36,4 +36,14 @@ public interface AiClinicalService {
      * Lấy danh sách lịch sử gợi ý/cảnh báo AI của một lượt khám.
      */
     List<AiAuditLogResponse> getAuditLogsByVisitId(Long visitId);
+
+    /**
+     * Gợi ý chẩn đoán ICD-10 từ triệu chứng (FR-11.3 – Sprint 6).
+     */
+    DiagnosisSuggestionResponse suggestDiagnosis(DiagnosisSuggestionRequest request);
+
+    /**
+     * Gợi ý chẩn đoán ICD-10 theo ca khám cụ thể và tự động ghi audit log (NFR-8).
+     */
+    DiagnosisSuggestionResponse suggestAndAuditDiagnosis(Long visitId, DiagnosisSuggestionRequest request);
 }

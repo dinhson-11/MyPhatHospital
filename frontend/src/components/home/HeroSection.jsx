@@ -1,13 +1,14 @@
 import React from 'react';
+import heroImg from '../../assets/image.png';
 
 export const HeroSection = ({ onOpenBooking, onScrollToAI }) => {
   return (
-    <section className="relative w-full max-w-[1280px] mx-auto px-6 py-12 md:py-16 overflow-hidden">
+    <section className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 overflow-hidden">
       {/* Ambient background glows */}
       <div className="absolute -top-24 left-1/4 w-96 h-96 rounded-full bg-primary-fixed/25 blur-3xl pointer-events-none -z-10" />
       <div className="absolute top-1/2 right-10 w-[500px] h-[500px] rounded-full bg-secondary-fixed/20 blur-3xl pointer-events-none -z-10" />
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-center">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
         {/* Left Column: Content */}
         <div className="xl:col-span-7 flex flex-col items-start pr-0 xl:pr-6">
           {/* Top Pill Badge */}
@@ -41,7 +42,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI }) => {
 
           {/* Subheading */}
           <p className="font-body text-base text-on-surface-variant max-w-2xl mb-8 leading-relaxed">
-            Bệnh viện Thanh Sơn ứng dụng công nghệ MedCare AI hỗ trợ sàng lọc triệu chứng sớm, tối ưu hóa quy trình khám và đồng hành chăm sóc sức khỏe toàn diện cùng đội ngũ chuyên gia đầu ngành.
+            Bệnh viện Thanh Sơn ứng dụng công nghệ trí tuệ nhân tạo (AI) hỗ trợ sàng lọc triệu chứng sớm, tối ưu hóa quy trình khám và đồng hành chăm sóc sức khỏe toàn diện cùng đội ngũ chuyên gia đầu ngành.
           </p>
 
           {/* CTAs */}
@@ -86,19 +87,22 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI }) => {
                 <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
                 <span className="font-headline text-xl font-bold text-on-surface">24/7</span>
               </div>
-              <span className="font-label text-xs font-semibold text-on-surface">Hỗ trợ MedCare AI</span>
+              <span className="font-label text-xs font-semibold text-on-surface">Hỗ trợ AI Y tế 24/7</span>
               <span className="font-label text-xs text-on-surface-variant">Phân luồng tức thì</span>
             </div>
           </div>
         </div>
 
         {/* Right Column: Visual Showcase */}
-        <div className="xl:col-span-5 relative mt-8 xl:mt-0 flex justify-center">
+        <div className="lg:col-span-5 relative mt-8 lg:mt-0 flex justify-center">
           <div className="relative w-full max-w-lg aspect-[4/3] sm:aspect-square flex items-center justify-center rounded-2xl overflow-visible bg-surface-container-high shadow-xl p-3">
             <img
-              alt="Minh họa công nghệ MedCare AI Bệnh viện Thanh Sơn"
+              alt="Minh họa công nghệ AI Bệnh viện Thanh Sơn"
               className="w-full h-full object-cover rounded-xl shadow-inner"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYGK6iKZIyhegbmEaDIolibYVpAXgwKgD8o0qVMFDKhS7dnFYukTkIJVZs4AFwsSm3jiM4QXbnyhbC-xWXNlHqoczkkL1mMvuL--91HaMGYt9kGZeqsXWNp8pOiMzK1qKcAlRGFugHS9m934g0tI76j6RGgWLysMJW-mc_RFXpllFPecJfzqWt7rvYkiCXi7p6Hq2bw-p_qKJfxC-wGhBMlZXw63Y8NHQXQ2ekh0je7K-X9Da83XjQzw"
+              src={heroImg}
+              onError={(e) => {
+                e.currentTarget.src = "https://lh3.googleusercontent.com/aida-public/AB6AXuCYGK6iKZIyhegbmEaDIolibYVpAXgwKgD8o0qVMFDKhS7dnFYukTkIJVZs4AFwsSm3jiM4QXbnyhbC-xWXNlHqoczkkL1mMvuL--91HaMGYt9kGZeqsXWNp8pOiMzK1qKcAlRGFugHS9m934g0tI76j6RGgWLysMJW-mc_RFXpllFPecJfzqWt7rvYkiCXi7p6Hq2bw-p_qKJfxC-wGhBMlZXw63Y8NHQXQ2ekh0je7K-X9Da83XjQzw";
+              }}
             />
             {/* Floating Status Chip 1: Top Right */}
             <div className="absolute -top-4 -right-3 sm:-right-5 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-lg border border-surface-container-high/60 flex items-center gap-3">

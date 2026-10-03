@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import logoHospital from '../../assets/LogoBV.png';
 
 export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
   const [tab, setTab] = useState(initialTab);
@@ -82,26 +83,33 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
       <div
-        className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden relative"
+        className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden relative max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 pb-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">account_circle</span>
+            <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shadow-xs shrink-0">
+              <img
+                src={logoHospital}
+                alt="Logo Bệnh viện Thanh Sơn"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.src = '/logo.png';
+                }}
+              />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
                 {tab === 'login' ? 'Đăng Nhập Hệ Thống' : 'Đăng Ký Tài Khoản'}
               </h3>
-              <p className="text-xs text-slate-500">Cổng thông tin Bệnh viện Đa khoa Thanh Sơn</p>
+              <p className="text-xs text-slate-500 font-medium">Bệnh viện Đa khoa Thanh Sơn</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
@@ -136,7 +144,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
         </div>
 
         {/* Body Form */}
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto">
           {tab === 'login' ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>

@@ -36,23 +36,22 @@ describe('Authentication & Authorization Suite (Enterprise Grade)', () => {
   });
 
   it('should register a new patient account and persist in storage', async () => {
+    const uniqueUsername = `testpatient_${Date.now()}`;
     const newUserData = {
       fullName: 'Bệnh Nhân Kiểm Thử',
-      username: 'testpatient99',
-      email: 'testpatient99@gmail.com',
+      username: uniqueUsername,
+      email: `${uniqueUsername}@gmail.com`,
       phone: '0988776655',
       password: 'Password@123'
     };
 
     const res = await authService.register(newUserData);
     expect(res.success).toBe(true);
-    expect(res.user.username).toBe('testpatient99');
+    expect(res.user.username).toBe(uniqueUsername);
     expect(res.user.roles).toContain('PATIENT');
 
     // Trying to register again with same username should be rejected
-    await expect(authService.register(newUserData)).rejects.toThrow(
-      'Tên đăng nhập đã tồn tại trên hệ thống!'
-    );
+    await expect(authService.register(newUserData)).rejects.toThrow();
   });
 
   it('should clear stored session and state upon logout', async () => {

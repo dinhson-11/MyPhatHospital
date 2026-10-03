@@ -92,10 +92,28 @@ export const authService = {
       if (res && res.data) {
         const { user, accessToken } = res.data;
         this.saveSession(user, accessToken);
+        // Đồng bộ vào seed users cục bộ
+        const users = getSeedUsers();
+        if (!users.some(u => u.username === username)) {
+          users.push({
+            id: user?.id || users.length + 1,
+            fullName,
+            username,
+            email,
+            phone,
+            password,
+            roles: user?.roles || ['PATIENT']
+          });
+          localStorage.setItem(SEED_USERS_KEY, JSON.stringify(users));
+        }
         return { success: true, user, token: accessToken };
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      // Nếu backend chủ động trả về mã lỗi (như trùng username), re-throw lỗi
+      if (err.response) {
+        throw new Error(err.response.data?.message || 'Tên đăng nhập đã tồn tại trên hệ thống!');
+      }
+      // Chỉ fallback khi backend offline / network error
     }
 
     // 2. Fallback offline

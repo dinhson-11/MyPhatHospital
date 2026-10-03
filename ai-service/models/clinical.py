@@ -101,3 +101,31 @@ class PrescriptionSafetyResponse(BaseModel):
     allergy_alerts: List[AllergyAlertDetail] = Field(default_factory=list)
     confidence_score: float = 0.95
     disclaimer: str = MEDICAL_AI_DISCLAIMER
+
+
+# ============================================================================
+# DIAGNOSIS SUGGESTION MODELS (FR-11.3 – Sprint 6)
+# ============================================================================
+
+class DiagnosisSuggestionRequest(BaseModel):
+    """Yêu cầu gợi ý chẩn đoán từ triệu chứng bệnh nhân."""
+    symptoms: str = Field(..., min_length=2, description="Mô tả triệu chứng bệnh nhân bằng ngôn ngữ tự nhiên")
+    patient_age: Optional[int] = Field(None, description="Tuổi bệnh nhân (hỗ trợ phân tích)")
+    patient_gender: Optional[str] = Field(None, description="Giới tính: MALE / FEMALE")
+    medical_history: Optional[List[str]] = Field(default_factory=list, description="Tiền sử bệnh lý đã biết")
+
+
+class DiagnosisSuggestionItem(BaseModel):
+    """Một gợi ý chẩn đoán ICD-10."""
+    code: str = Field(..., description="Mã ICD-10 (vd: I10, J00, K29.7)")
+    name: str = Field(..., description="Tên bệnh tiếng Việt")
+    confidence: float = Field(..., ge=0, le=100, description="Độ tin cậy gợi ý (%)")
+    reason: str = Field(..., description="Lý do AI đề xuất chẩn đoán này")
+
+
+class DiagnosisSuggestionResponse(BaseModel):
+    """Kết quả gợi ý chẩn đoán phân biệt từ AI."""
+    suggestions: List[DiagnosisSuggestionItem] = Field(default_factory=list)
+    total_suggestions: int = 0
+    confidence_score: float = 0.90
+    disclaimer: str = MEDICAL_AI_DISCLAIMER

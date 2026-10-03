@@ -101,32 +101,33 @@ Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học ph
 
 ---
 
-## Sprint 6 (Tuần 8) – AI Service: Gợi ý chẩn đoán (FR-11.3)
-- [ ] Chuẩn bị tập dữ liệu mẫu (triệu chứng ↔ chẩn đoán) – có thể tự tạo bộ nhỏ cho demo.
-- [ ] Cài đặt rule-based scoring hoặc mô hình phân loại đơn giản (scikit-learn).
-- [ ] Endpoint `/suggest-diagnosis`, tích hợp vào màn hình khám bệnh của bác sĩ.
-- [ ] Gắn disclaimer + log vào `ai_clinical_suggestions`.
-- **Frontend**:
-  - [ ] **DiagnosisSuggestBox.jsx**: Ô nhập triệu chứng trong màn hình khám bệnh → gọi AI → trả về Top 3 ICD-10 gợi ý với % tin cậy. Bác sĩ click để tự động điền chẩn đoán.
-  - [ ] **diagnosisAiService.js**: Gọi `POST /api/v1/ai/suggest-diagnosis`, debounce 500ms tránh spam request.
-  - [ ] Disclaimer y tế nổi bật "AI chỉ hỗ trợ, không thay thế phán đoán lâm sàng của bác sĩ".
-  - [ ] Kiểm thử: `diagnosisSuggest.test.jsx` – render gợi ý đúng, xử lý khi không có gợi ý phù hợp, click chọn gợi ý.
+## Sprint 6 (Tuần 8) – AI Service: Gợi ý chẩn đoán (FR-11.3) ✅ (Hoàn thành Fullstack AI + Backend + Frontend)
+- [x] AI Service (FastAPI): Cơ sở tri thức 10 nhóm bệnh lý lâm sàng (Tim mạch, Hô hấp, Tiêu hóa, Nội tiết, Cơ xương khớp, Thần kinh, Tiết niệu, Da liễu, Mắt/TMH, Truyền nhiễm) với rule-based weighted keyword scoring.
+- [x] Endpoint `POST /api/v1/ai/clinical/suggest-diagnosis`: Nhận triệu chứng → trả Top 3 ICD-10 gợi ý sắp xếp theo confidence giảm dần, kèm disclaimer NFR-8.
+- [x] Unit test AI Service: `test_diagnosis_service.py` (8/8 tests pass).
+- [x] Backend (Spring Boot 3): `AiClinicalServiceImpl.suggestDiagnosis` gọi REST sang FastAPI AI Service; tự động fallback knowledge base cục bộ khi AI Service offline.
+- [x] Backend Controller: `POST /suggest-diagnosis` + `POST /visits/{visitId}/suggest-diagnosis` (kèm ghi audit log `DIAGNOSIS_SUGGESTION` vào bảng `ai_clinical_suggestions` – NFR-8).
+- [x] Gắn disclaimer y tế + log audit `DIAGNOSIS_SUGGESTION` vào `ai_clinical_suggestions`.
+- **Frontend** ✅:
+  - [x] **DiagnosisSuggestBox.jsx**: Nâng cấp với nút "Phân tích AI" trigger API, loading spinner, debounce 500ms, badge confidence đa màu, chỉ báo nguồn (AI Service / Local KB). Bác sĩ click thẻ để điền nhanh ICD-10.
+  - [x] **aiAlertService.js**: Thêm `suggestDiagnosis()` gọi `POST /api/v1/ai/clinical/suggest-diagnosis`, fallback cục bộ 6 nhóm bệnh lý.
+  - [x] Disclaimer y tế nổi bật "AI chỉ hỗ trợ, không thay thế phán đoán lâm sàng của bác sĩ" theo NFR-8.
+  - [x] **Kiểm thử**: `chatAndDiagnosis.test.jsx` (12 tests pass: 3 ChatWidget + 9 DiagnosisSuggestBox) → Tổng Frontend: 57/57 tests pass (100%).
 
 ---
 
-## Sprint 7 (Tuần 9) – AI Chatbot (FR-10)
-- [ ] Entity: `ChatSession, ChatMessage`.
-- [ ] AI Service: endpoint `/chat` — xác định intent (SYMPTOM_CHECK/BOOKING/FAQ), sinh phản hồi (rule-based cho FAQ, gợi ý chuyên khoa theo từ khóa triệu chứng, hoặc gọi LLM API nếu nhóm có key).
-- [ ] Backend: API tạo phiên chat, gửi/nhận tin nhắn, lưu lịch sử.
-- [ ] Xử lý case "vượt phạm vi tư vấn" → trả cảnh báo liên hệ y tế/cấp cứu.
-- [ ] Tích hợp chatbot UI (widget chat đơn giản) vào frontend bệnh nhân.
+## Sprint 7 (Tuần 9) – AI Chatbot (FR-10) ✅ (Hoàn thành Fullstack AI + Backend + Frontend)
+- [x] Entity: `ChatSession, ChatMessage` (Backend JPA + Flyway V9 schema).
+- [x] AI Service: endpoint `/api/v1/ai/chat/message` — intent routing (SYMPTOM_CHECK / BOOKING / FAQ / GREETING / OUT_OF_SCOPE / EMERGENCY), gợi ý 9 chuyên khoa, tri thức FAQ BHYT & lịch khám, cảnh báo vượt phạm vi → hotline 115. 14/14 tests pass.
+- [x] Backend: `ChatService`, `ChatController`, `ChatSessionRepository`, `ChatMessageRepository` — API tạo phiên, lưu lịch sử tin nhắn USER & AI, fallback rule-based khi AI offline. 13/13 tests pass.
+- [x] Xử lý case "vượt phạm vi tư vấn" → trả cảnh báo khẩn cấp + hotline cấp cứu 115.
+- [x] Tích hợp chatbot UI (Floating Action Button + chat window) vào frontend bệnh nhân.
 - **Frontend**:
-  - [ ] **ChatWidget.jsx**: Nút chat nổi góc phải màn hình (Floating Action Button), click mở cửa sổ chat. Hiển thị typing indicator khi AI đang trả lời.
-  - [ ] **ChatMessage.jsx**: Component render từng tin nhắn, phân biệt tin nhắn người dùng / AI, hỗ trợ rich-text và action buttons (Đặt lịch khám ngay).
-  - [ ] **ChatHistory.jsx**: Lịch sử hội thoại trước đó, phân chia theo phiên.
-  - [ ] **chatService.js**: Gọi `POST /api/v1/chat/message`, WebSocket hoặc polling để nhận phản hồi realtime.
-  - [ ] **AITriageSection** (đã có) → tích hợp seamless chuyển sang chat bot sau bước phân luồng.
-  - [ ] Kiểm thử: `chatbot.test.jsx` – gửi tin nhắn, nhận phản hồi, intent routing, hiển thị cảnh báo vượt phạm vi.
+  - [x] **ChatWidget.jsx**: FAB góc phải màn hình, mở popover chat 24/7, typing indicator, quản lý session ID, nút tạo phiên mới và xem lịch sử.
+  - [x] **ChatMessage.jsx**: Render bong bóng tin nhắn Người dùng / AI, format markdown, thẻ chuyên khoa khuyến nghị + nút "Đặt khám khoa này ngay", hộp cảnh báo khẩn cấp 115, disclaimer NFR-8.
+  - [x] **ChatHistory.jsx**: Danh sách phiên hội thoại trước đó, số lượng tin nhắn, preview nội dung, chuyển đổi phiên nhanh.
+  - [x] **chatService.js**: Kết nối `POST /api/v1/chat/message`, quản lý sessions, cơ chế fallback local tức thì.
+  - [x] **Kiểm thử**: `chatbot.test.jsx` (14/14 tests pass) + `chatAndDiagnosis.test.jsx` (12/12 tests pass) → Tổng Frontend: 71/71 tests pass (100%).
 
 ---
 
@@ -182,8 +183,8 @@ Giả định lộ trình ~10-12 tuần, khớp với các giai đoạn học ph
 | Sprint 4 | Visit Dashboard, Kê đơn điện tử, Chỉ định cận lâm sàng, Tương tác thuốc | ✅ Hoàn thành (33/33 tests pass) |
 | Sprint 2 | Hồ sơ bệnh nhân, Dị ứng, patientService | 🔲 Chờ Backend Sprint 2 |
 | Sprint 5 | Drug Interaction Alert, AI Alert Service, Tab AI Audit Log | ✅ Hoàn thành (45/45 tests pass) |
-| Sprint 6 | Diagnosis Suggest Box | 🔲 Chờ AI Service Sprint 6 |
-| Sprint 7 | Chat Widget, Chat History, WebSocket | 🔲 Chờ AI Service Sprint 7 |
+| Sprint 6 | Diagnosis Suggest Box, AI Suggest Service, Audit Log | ✅ Hoàn thành (57/57 tests pass) |
+| Sprint 7 | Chat Widget, Chat History, Chat Service, ChatMessage | ✅ Hoàn thành (71/71 tests pass) |
 | Sprint 8 | Pharmacy, Invoice, Staff Schedule | 🔲 Chờ Backend Sprint 8 |
 | Sprint 9 | Statistics Dashboard, Admin KPIs, E2E Tests | 🔲 Sprint 9 |
 | Sprint 10 | Production build, Dockerfile, Docker Compose | 🔲 Sprint 10 |
