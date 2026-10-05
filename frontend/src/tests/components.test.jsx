@@ -8,7 +8,7 @@ describe('UI & Component Integration Suite (Enterprise Grade)', () => {
     render(<App />);
 
     // Brand and hospital titles
-    expect(screen.getAllByText(/Thanh Sơn/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Mỹ Phát/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Đặt Lịch Khám/i).length).toBeGreaterThan(0);
   });
 
@@ -46,6 +46,6 @@ describe('UI & Component Integration Suite (Enterprise Grade)', () => {
 
     // Should display AI Clinical assessment result
     expect(await screen.findByText('Kết Quả Đánh Giá Lâm Sàng')).toBeInTheDocument();
-    expect(screen.getAllByText('Khoa Tim mạch').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Khoa Khám bệnh \/ Cấp cứu ban đầu/i).length).toBeGreaterThan(0);
   });
 });

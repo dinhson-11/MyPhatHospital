@@ -7,7 +7,6 @@ import com.hospital.hmsai.ai.entity.MessageSender;
 import com.hospital.hmsai.ai.repository.ChatMessageRepository;
 import com.hospital.hmsai.ai.repository.ChatSessionRepository;
 import com.hospital.hmsai.ai.service.impl.ChatServiceImpl;
-import com.hospital.hmsai.common.exception.ResourceNotFoundException;
 import com.hospital.hmsai.patient.entity.Patient;
 import com.hospital.hmsai.patient.repository.PatientRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +22,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -201,6 +199,66 @@ class ChatServiceImplTest {
         assertThat(response).isNotNull();
         assertThat(response.getSuggestedDepartment()).isNotNull();
         assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Khoa Nhi");
+    }
+
+    @Test
+    @DisplayName("Gửi tin nhắn – AI Service sập → Local Fallback dị ứng da mẩn ngứa ưu tiên Khoa Da liễu kể cả khi có từ 'bé'")
+    void sendMessage_aiServiceDown_allergySkinFallback_routesToDermatology() {
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(testSession));
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(AiChatbotResponse.class)))
+                .thenThrow(new RestClientException("Connection timeout"));
+
+        ChatMessage savedAiMessage = ChatMessage.builder()
+                .id(104L)
+                .session(testSession)
+                .sender(MessageSender.AI)
+                .message("Khoa Da liễu")
+                .intent("SYMPTOM_CHECK")
+                .createdAt(LocalDateTime.now())
+                .build();
+        when(messageRepository.save(any(ChatMessage.class))).thenReturn(savedAiMessage);
+
+        SendChatMessageRequest request = SendChatMessageRequest.builder()
+                .sessionId(10L)
+                .message("bé bị dị ứng, nổi mẩn da")
+                .build();
+
+        ChatMessageResponseDto response = chatService.sendMessage(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getSuggestedDepartment()).isNotNull();
+        assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(8);
+        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Khoa Da liễu");
+    }
+
+    @Test
+    @DisplayName("Gửi tin nhắn – AI Service sập → Local Fallback biến thể 'nổi mần da' vào Khoa Da liễu")
+    void sendMessage_aiServiceDown_noiManDaFallback_routesToDermatology() {
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(testSession));
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(AiChatbotResponse.class)))
+                .thenThrow(new RestClientException("Connection timeout"));
+
+        ChatMessage savedAiMessage = ChatMessage.builder()
+                .id(105L)
+                .session(testSession)
+                .sender(MessageSender.AI)
+                .message("Khoa Da liễu")
+                .intent("SYMPTOM_CHECK")
+                .createdAt(LocalDateTime.now())
+                .build();
+        when(messageRepository.save(any(ChatMessage.class))).thenReturn(savedAiMessage);
+
+        SendChatMessageRequest request = SendChatMessageRequest.builder()
+                .sessionId(10L)
+                .message("dị ứng, nổi mần da ngứa nhiều")
+                .build();
+
+        ChatMessageResponseDto response = chatService.sendMessage(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getSuggestedDepartment()).isNotNull();
+        assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(8);
+        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Khoa Da liễu");
     }
 
     @Test

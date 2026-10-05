@@ -6,15 +6,27 @@ import PrescriptionForm from './PrescriptionForm';
 import LabOrderPanel from './LabOrderPanel';
 import DiagnosisSuggestBox from './DiagnosisSuggestBox';
 import { aiAlertService, AI_DISCLAIMER_TEXT } from '../../services/aiAlertService';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
+import PatientSafetyBanner from '../common/PatientSafetyBanner';
+import SensitiveMask from '../common/SensitiveMask';
 
 export default function VisitDashboard({ isOpen, onClose }) {
   const { user } = useAuth();
   const { showToast } = useToast();
 
+  useEscapeKey(isOpen, () => {
+    if (showNewVisitModal) {
+      setShowNewVisitModal(false);
+    } else {
+      onClose();
+    }
+  });
+
   const [visits, setVisits] = useState([]);
   const [activeVisitId, setActiveVisitId] = useState(null);
   const [activeTab, setActiveTab] = useState('clinical'); // 'clinical' | 'prescription' | 'lab' | 'summary' | 'ai_audit'
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -213,11 +225,29 @@ export default function VisitDashboard({ isOpen, onClose }) {
     window.print();
   };
 
+  // Phím tắt lâm sàng F9 để lưu ca khám nhanh
+  useEffect(() => {
+    const handleClinicalShortcuts = (e) => {
+      if (e.key === 'F9') {
+        e.preventDefault();
+        handleSaveClinicalData();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleClinicalShortcuts);
+      return () => window.removeEventListener('keydown', handleClinicalShortcuts);
+    }
+  }, [isOpen, activeVisit, chiefComplaint, diagnosisCode, diagnosisNote, vitalSigns]);
+
   if (!isOpen) return null;
 
   const filteredVisits = visits.filter(v => {
-    if (filterStatus === 'ALL') return true;
-    return v.status === filterStatus;
+    const matchesStatus = filterStatus === 'ALL' || v.status === filterStatus;
+    const matchesSearch = !searchTerm.trim() ||
+      (v.patientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v.patientCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v.patientPhone || '').includes(searchTerm);
+    return matchesStatus && matchesSearch;
   });
 
   return (
@@ -233,7 +263,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-headline text-lg font-bold text-on-surface">
-                  Phòng Khám Bác Sĩ – Bệnh Viện Thanh Sơn
+                  Phòng Khám Bác Sĩ – Mỹ Phát Hospital
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
                   Sprint 4 Clinical
@@ -253,10 +283,13 @@ export default function VisitDashboard({ isOpen, onClose }) {
               <span className="material-symbols-outlined text-[18px]">person_add</span>
               <span>Tiếp nhận ca mới</span>
             </button>
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-500 border border-slate-300 rounded">
+              ESC
+            </span>
             <button
               onClick={onClose}
               className="w-9 h-9 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface transition-colors cursor-pointer"
-              title="Đóng phòng khám"
+              title="Đóng phòng khám (Esc)"
             >
               <span className="material-symbols-outlined text-[20px]">close</span>
             </button>
@@ -298,6 +331,20 @@ export default function VisitDashboard({ isOpen, onClose }) {
                 >
                   Đã hoàn tất
                 </button>
+              </div>
+
+              {/* Patient search filter */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Lọc BN theo tên, mã hồ sơ, SĐT..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-hidden focus:ring-1 focus:ring-primary"
+                />
+                <span className="material-symbols-outlined text-slate-400 text-sm absolute left-2.5 top-2 pointer-events-none">
+                  search
+                </span>
               </div>
             </div>
 
@@ -370,7 +417,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-on-surface-variant mt-0.5 font-label">
-                      <span>SĐT: <strong className="text-on-surface">{activeVisit.patientPhone || 'N/A'}</strong></span>
+                      <span>SĐT: <SensitiveMask value={activeVisit.patientPhone} type="phone" /></span>
                       <span>•</span>
                       <span>Giới tính: <strong className="text-on-surface">{activeVisit.patientGender === 'MALE' ? 'Nam' : 'Nữ'}</strong></span>
                       <span>•</span>
@@ -385,6 +432,14 @@ export default function VisitDashboard({ isOpen, onClose }) {
                     <span>Tiền sử: Dị ứng Penicillin</span>
                   </span>
                 </div>
+              </div>
+
+              {/* Patient Safety Banner: Ghim cảnh báo lâm sàng dị ứng & sinh hiệu */}
+              <div className="px-6 py-2.5 bg-slate-100/70 border-b border-surface-container">
+                <PatientSafetyBanner
+                  allergies={activeVisit.allergies || ['Penicillin']}
+                  vitalWarnings={vitalWarnings}
+                />
               </div>
 
               {/* Navigation Tabs */}
@@ -706,8 +761,8 @@ export default function VisitDashboard({ isOpen, onClose }) {
                 {activeTab === 'summary' && (
                   <div className="bg-white rounded-2xl p-8 border border-outline-variant/30 shadow-xs space-y-6 max-w-3xl mx-auto print:p-0 print:border-none">
                     <div className="text-center border-b border-surface-variant/30 pb-4">
-                      <h2 className="font-headline text-xl font-bold text-primary">BỆNH VIỆN ĐA KHOA THANH SƠN</h2>
-                      <p className="text-xs text-on-surface-variant">Địa chỉ: Thị trấn Thanh Sơn, Phú Thọ • Hotline: 1900 6868</p>
+                      <h2 className="font-headline text-xl font-bold text-primary">MỸ PHÁT HOSPITAL</h2>
+                      <p className="text-xs text-on-surface-variant">Địa chỉ: 1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang • Hotline: 0789 065 493</p>
                       <h3 className="font-headline text-lg font-bold text-on-surface mt-3">PHIẾU KHÁM BỆNH & TÓM TẮT ĐIỀU TRỊ</h3>
                       <p className="text-xs text-on-surface-variant font-label">Mã hồ sơ: #{activeVisit.id} • Ngày khám: {new Date(activeVisit.visitTime).toLocaleDateString('vi-VN')}</p>
                     </div>

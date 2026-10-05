@@ -30,4 +30,8 @@ public interface DrugRepository extends JpaRepository<Drug, Long> {
            "LOWER(d.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "LOWER(d.code) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     List<Drug> searchByKeywordList(@Param("keyword") String keyword);
+
+    List<Drug> findByStockQuantityLessThanEqualOrderByStockQuantityAsc(int threshold);
+
+    List<Drug> findByExpiryDateBetweenOrderByExpiryDateAsc(java.time.LocalDate startDate, java.time.LocalDate endDate);
 }

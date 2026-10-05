@@ -49,7 +49,25 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAuthenticated = Boolean(user && token);
-  const isAdmin = Boolean(user && user.roles && user.roles.includes('ADMIN'));
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+
+  const hasRole = useCallback(
+    (role) => userRoles.includes(role) || userRoles.includes(`ROLE_${role}`),
+    [userRoles]
+  );
+
+  const hasAnyRole = useCallback(
+    (...roles) => roles.some((r) => hasRole(r)),
+    [hasRole]
+  );
+
+  const isAdmin = hasRole('ADMIN');
+  const isDoctor = hasRole('DOCTOR') || isAdmin;
+  const isReceptionist = hasRole('RECEPTIONIST') || isAdmin;
+  const isNurse = hasRole('NURSE') || isAdmin;
+  const isPharmacist = hasRole('PHARMACIST') || isAdmin;
+  const isAccountant = hasRole('ACCOUNTANT') || isAdmin;
+  const isPatient = hasRole('PATIENT');
 
   return (
     <AuthContext.Provider
@@ -58,6 +76,14 @@ export const AuthProvider = ({ children }) => {
         token,
         isAuthenticated,
         isAdmin,
+        isDoctor,
+        isReceptionist,
+        isNurse,
+        isPharmacist,
+        isAccountant,
+        isPatient,
+        hasRole,
+        hasAnyRole,
         loading,
         login,
         register,

@@ -1,12 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { appointmentService } from '../../services/appointmentService';
 import { useToast } from '../../context/ToastContext';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const { showToast } = useToast();
+
+  const formatDateVN = (dateStr) => {
+    if (!dateStr) return '';
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
+  useEscapeKey(isOpen, () => {
+    if (selectedTicket) {
+      setSelectedTicket(null);
+    } else {
+      onClose();
+    }
+  });
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -63,13 +81,19 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
               <p className="text-xs text-slate-500">Tra cứu và quản lý các lịch hẹn đã đặt</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
+              ESC
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              title="Đóng (Esc)"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -121,8 +145,8 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
                     <p className="font-bold text-slate-800 text-sm">{selectedTicket.doctorName}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400">Ngày khám:</p>
-                    <p className="font-bold text-slate-800 text-sm">{selectedTicket.appointmentDate}</p>
+                    <p className="text-slate-400">Ngày khám (dd/mm/yyyy):</p>
+                    <p className="font-bold text-slate-800 text-sm">{formatDateVN(selectedTicket.appointmentDate)}</p>
                   </div>
                   <div>
                     <p className="text-slate-400">Khung giờ:</p>
@@ -172,7 +196,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
                   </div>
                   <h4 className="font-bold text-slate-800 text-base mb-1">Chưa có lịch hẹn nào</h4>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto mb-6">
-                    Quý khách chưa đặt lịch hẹn khám nào tại Bệnh viện Thanh Sơn. Đặt lịch ngay để được phục vụ ưu tiên!
+                    Quý khách chưa đặt lịch hẹn khám nào tại Mỹ Phát Hospital. Đặt lịch ngay để được phục vụ ưu tiên!
                   </p>
                   <button
                     type="button"
@@ -214,7 +238,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
                         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-1">
                           <span className="flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm text-primary">calendar_today</span>
-                            {apt.appointmentDate}
+                            {formatDateVN(apt.appointmentDate)}
                           </span>
                           <span className="flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm text-primary">schedule</span>

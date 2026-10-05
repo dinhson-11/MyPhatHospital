@@ -61,8 +61,10 @@ public class PatientController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'ADMIN', 'PATIENT')")
     @Operation(summary = "Xem chi tiết hồ sơ", description = "Xem thông tin bệnh nhân theo ID. PATIENT chỉ xem được hồ sơ của mình.")
-    public ResponseEntity<ApiResponse<PatientResponse>> getById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<PatientResponse>> getById(
+            @PathVariable Long id, Authentication authentication) {
         log.info("GET /api/v1/patients/{}", id);
+        assertSelfAccessIfPatient(authentication, id);
         PatientResponse response = patientService.getById(id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -107,36 +109,63 @@ public class PatientController {
     @GetMapping("/{id}/allergies")
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'PATIENT')")
     @Operation(summary = "Danh sách dị ứng", description = "Lấy danh sách dị ứng của bệnh nhân. PATIENT chỉ xem được của mình.")
-    public ResponseEntity<ApiResponse<List<AllergyResponse>>> getAllergies(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<AllergyResponse>>> getAllergies(
+            @PathVariable Long id, Authentication authentication) {
         log.info("GET /api/v1/patients/{}/allergies", id);
+        assertSelfAccessIfPatient(authentication, id);
         List<AllergyResponse> result = allergyService.getAllByPatientId(id);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     @PostMapping("/{id}/allergies")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE')")
-    @Operation(summary = "Thêm dị ứng", description = "Bác sĩ hoặc y tá thêm thông tin dị ứng cho bệnh nhân.")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'PATIENT')")
+    @Operation(summary = "Thêm dị ứng", description = "Bác sĩ/y tá thêm dị ứng cho bệnh nhân; PATIENT chỉ thêm được cho chính mình.")
     public ResponseEntity<ApiResponse<AllergyResponse>> addAllergy(
             @PathVariable Long id,
-            @Valid @RequestBody CreateAllergyRequest request) {
+            @Valid @RequestBody CreateAllergyRequest request,
+            Authentication authentication) {
         log.info("POST /api/v1/patients/{}/allergies – allergen: {}", id, request.getAllergen());
+        assertSelfAccessIfPatient(authentication, id);
         AllergyResponse response = allergyService.create(id, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Thêm dị ứng thành công"));
     }
 
     @DeleteMapping("/{id}/allergies/{allergyId}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE')")
-    @Operation(summary = "Xóa dị ứng", description = "Bác sĩ hoặc y tá xóa thông tin dị ứng.")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'PATIENT')")
+    @Operation(summary = "Xóa dị ứng", description = "Bác sĩ/y tá xóa dị ứng; PATIENT chỉ xóa được dị ứng của chính mình.")
     public ResponseEntity<ApiResponse<Void>> deleteAllergy(
             @PathVariable Long id,
-            @PathVariable Long allergyId) {
+            @PathVariable Long allergyId,
+            Authentication authentication) {
         log.info("DELETE /api/v1/patients/{}/allergies/{}", id, allergyId);
+        assertSelfAccessIfPatient(authentication, id);
         allergyService.delete(id, allergyId);
         return ResponseEntity.ok(ApiResponse.success(null, "Xóa dị ứng thành công"));
     }
 
     // ==================== Helper ====================
+
+    /**
+     * Nếu người gọi có role PATIENT (và không phải nhân viên) thì chỉ được truy cập hồ sơ của chính mình.
+     */
+    private void assertSelfAccessIfPatient(Authentication authentication, Long patientId) {
+        boolean isPatientOnly = authentication.getAuthorities().stream()
+                .map(a -> a.getAuthority())
+                .anyMatch("ROLE_PATIENT"::equals)
+                && authentication.getAuthorities().stream()
+                .map(a -> a.getAuthority())
+                .noneMatch(r -> r.equals("ROLE_DOCTOR") || r.equals("ROLE_NURSE")
+                        || r.equals("ROLE_RECEPTIONIST") || r.equals("ROLE_ADMIN"));
+        if (!isPatientOnly) {
+            return;
+        }
+        Long ownPatientId = patientService.getByUserId(extractUserId(authentication)).getId();
+        if (!ownPatientId.equals(patientId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Bạn chỉ có thể truy cập hồ sơ của chính mình");
+        }
+    }
 
     /**
      * Trích xuất userId từ Authentication principal.

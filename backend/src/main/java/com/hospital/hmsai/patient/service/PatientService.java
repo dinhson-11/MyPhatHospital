@@ -11,7 +11,7 @@ public interface PatientService {
 
     /**
      * Tạo hồ sơ bệnh nhân mới (lễ tân/admin tạo).
-     * Tự động sinh patient_code theo format: BN-YYMMDD-XXX.
+     * Tự động sinh patient_code theo format: BN-YYMMDD-NNN.
      */
     PatientResponse create(CreatePatientRequest request);
 

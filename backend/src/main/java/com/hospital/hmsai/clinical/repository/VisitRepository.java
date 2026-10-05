@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,4 +41,13 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
                             @Param("patientId") Long patientId,
                             @Param("status") VisitStatus status,
                             Pageable pageable);
+
+    List<Visit> findByVisitTimeBetween(LocalDateTime start, LocalDateTime end);
+
+    long countByVisitTimeBetween(LocalDateTime start, LocalDateTime end);
+
+    long countByStatus(VisitStatus status);
+
+    @Query("SELECT v FROM Visit v WHERE v.diagnosisCode IS NOT NULL AND v.diagnosisCode != ''")
+    List<Visit> findAllWithDiagnosis();
 }

@@ -74,7 +74,7 @@ Slide học phần Project 1 (Giới thiệu học phần, Xác định yêu c�
 
 ### 3.1 Quản lý tài khoản & phân quyền
 - FR-1.1: Đăng ký/đăng nhập (JWT), đổi mật khẩu, quên mật khẩu.
-- FR-1.2: Phân quyền theo vai trò: ADMIN, RECEPTIONIST, DOCTOR, NURSE, PHARMACIST, ACCOUNTANT, PATIENT.
+- FR-1.2: Phân quyền theo vai trò: ADMIN, RECEPTIONIST, DOCTOR, NURSE, PHARMACIST, ACCOUNTANT, PATIENT (Xem đặc tả và ma trận phân quyền chi tiết tại [05_RBAC_Role_Permissions_Plan.md](file:///d:/01_Work/Projects/thanhSonHospital/05_RBAC_Role_Permissions_Plan.md)).
 - FR-1.3: Quản trị viên quản lý người dùng, vai trò, khoa/phòng ban.
 
 ### 3.2 Quản lý bệnh nhân & EMR

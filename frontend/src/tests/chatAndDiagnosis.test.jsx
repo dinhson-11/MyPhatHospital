@@ -21,7 +21,7 @@ describe('AI Chatbot & Diagnosis Suggestion Suite', () => {
 
       expect(screen.getByTestId('ai-chat-window')).toBeInTheDocument();
       expect(screen.getByText(/Trợ Lý Y Tế AI 24\/7/i)).toBeInTheDocument();
-      expect(screen.getByText(/Tôi là Trợ lý AI Bệnh viện Thanh Sơn/i)).toBeInTheDocument();
+      expect(screen.getByText(/Tôi là Trợ lý AI Mỹ Phát Hospital/i)).toBeInTheDocument();
       expect(screen.getByText(/Trường hợp khẩn cấp gọi/i)).toBeInTheDocument();
     });
 

@@ -4,7 +4,7 @@
 - Kiến trúc REST, base path: `/api/v1`
 - Định dạng: JSON, `Content-Type: application/json`
 - Xác thực: `Authorization: Bearer <JWT>`
-- Phân quyền: mỗi endpoint gắn `@PreAuthorize("hasRole('...')")` theo role tương ứng
+- Phân quyền: mỗi endpoint gắn `@PreAuthorize` theo vai trò tương ứng và kiểm tra quyền sở hữu (self-access) chi tiết tại [05_RBAC_Role_Permissions_Plan.md](file:///d:/01_Work/Projects/thanhSonHospital/05_RBAC_Role_Permissions_Plan.md).
 - Response chuẩn:
 ```json
 { "success": true, "data": { }, "message": "OK" }

@@ -83,3 +83,33 @@ class TestDiagnosisSuggestionService:
         if len(result.suggestions) >= 2:
             for i in range(len(result.suggestions) - 1):
                 assert result.suggestions[i].confidence >= result.suggestions[i + 1].confidence
+
+    def test_allergy_and_skin_rash_suggests_urticaria_l50(self):
+        """Triệu chứng dị ứng, nổi mẩn da phải gợi ý mã L50.9 (Mề đay) hoặc L27/L30."""
+        result = DiagnosisSuggestionService.suggest_diagnosis(
+            symptoms="dị ứng, nổi mẩn da"
+        )
+        assert result.total_suggestions > 0
+        codes = [s.code for s in result.suggestions]
+        assert any(c in codes for c in ["L50.9", "L27.2", "L30.9"])
+        top_suggestion = result.suggestions[0]
+        assert top_suggestion.code in ["L50.9", "L27.2", "L30.9"]
+        assert top_suggestion.confidence >= 75
+
+    def test_dialect_noi_man_da_suggests_dermatology_icd10(self):
+        """Biến thể 'nổi mần da' hoặc 'dị ứng, nổi mần da' phải gợi ý mã ICD-10 Da liễu."""
+        result = DiagnosisSuggestionService.suggest_diagnosis(
+            symptoms="dị ứng, nổi mần da"
+        )
+        assert result.total_suggestions > 0
+        codes = [s.code for s in result.suggestions]
+        assert any(c in codes for c in ["L50.9", "L27.2", "L30.9"])
+
+    def test_child_with_skin_allergy_suggests_dermatology_icd10(self):
+        """Bé bị dị ứng nổi mẩn da phải gợi ý mã ICD-10 Da liễu."""
+        result = DiagnosisSuggestionService.suggest_diagnosis(
+            symptoms="bé bị dị ứng, nổi mẩn da"
+        )
+        assert result.total_suggestions > 0
+        codes = [s.code for s in result.suggestions]
+        assert any(c in codes for c in ["L50.9", "L27.2", "L30.9"])

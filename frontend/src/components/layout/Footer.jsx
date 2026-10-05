@@ -1,6 +1,6 @@
 import React from 'react';
 import { useToast } from '../../context/ToastContext';
-import logoHospital from '../../assets/LogoBV.png';
+import logoHospital from '../../assets/logo.png';
 
 export const Footer = ({
   onOpenAbout,
@@ -19,10 +19,10 @@ export const Footer = ({
           {/* Col 1: Brand & Certification */}
           <div className="flex flex-col space-y-3">
             <div className="flex items-center gap-3 mb-2">
-              <div className="bg-white p-1.5 rounded-xl shadow-md flex items-center justify-center">
+              <div className="bg-white p-1 rounded-xl shadow-md flex items-center justify-center border border-amber-200">
                 <img
-                  alt="Logo Bệnh viện Thanh Sơn"
-                  className="h-9 w-auto object-contain"
+                  alt="Logo Mỹ Phát Hospital"
+                  className="h-10 w-auto object-contain rounded-full"
                   src={logoHospital}
                   onError={(e) => {
                     e.currentTarget.src = '/logo.png';
@@ -31,15 +31,15 @@ export const Footer = ({
               </div>
               <div className="flex flex-col">
                 <span className="font-headline text-lg font-bold text-white tracking-tight">
-                  Bệnh viện Thanh Sơn
+                  Mỹ Phát Hospital
                 </span>
-                <span className="font-label text-xs text-slate-400 font-medium">
-                  Bệnh viện Đa khoa Thanh Sơn
+                <span className="font-label text-xs text-teal-400 font-medium">
+                  Sáng Y Đức – Vững Chuyên Môn
                 </span>
               </div>
             </div>
             <p className="font-body text-sm text-surface-variant leading-relaxed">
-              Bệnh viện Thanh Sơn tiên phong tích hợp trí tuệ nhân tạo (AI) trong chẩn đoán, điều trị và quản lý y tế thông minh tại Việt Nam.
+              Mỹ Phát Hospital tiên phong ứng dụng trí tuệ nhân tạo (AI) trong sàng lọc chẩn đoán, điều trị chuyên sâu và dịch vụ y tế chuẩn mực tại Lục Ngạn, Bắc Giang.
             </p>
             <div className="flex items-center gap-2 pt-2">
               <span className="material-symbols-outlined text-primary-fixed text-lg">verified_user</span>
@@ -161,33 +161,41 @@ export const Footer = ({
           <div className="flex flex-col space-y-3">
             <h3 className="font-headline text-base text-white font-semibold mb-1">Liên hệ & Cấp cứu</h3>
             <div className="flex flex-col space-y-3">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/10">
-                <span className="material-symbols-outlined text-error-container text-xl">emergency</span>
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-950/40 border border-rose-800/40">
+                <span className="material-symbols-outlined text-rose-400 text-xl animate-pulse">emergency</span>
                 <div>
-                  <div className="font-label text-xs text-surface-variant">Cấp cứu 24/7</div>
+                  <div className="font-label text-xs text-rose-300 font-semibold">Cấp cứu & Hotline 24/7</div>
                   <a
-                    className="font-headline text-lg font-bold text-white hover:text-error-container transition-colors"
-                    href="tel:19006868"
+                    className="font-headline text-lg font-bold text-white hover:text-rose-300 transition-colors"
+                    href="tel:0789065493"
                   >
-                    1900 6868
+                    0789 065 493
                   </a>
                 </div>
               </div>
               <div className="flex items-center gap-2.5 text-xs text-surface-variant">
                 <span className="material-symbols-outlined text-primary-fixed text-base">call</span>
-                <span>Hotline đặt khám: <strong className="text-white">024 3888 9999</strong></span>
+                <span>Hotline tư vấn: <a href="tel:0789065493" className="text-white font-bold hover:underline">0789 065 493</a></span>
               </div>
               <div className="flex items-start gap-2.5 text-xs text-surface-variant">
                 <span className="material-symbols-outlined text-primary-fixed text-base mt-0.5">location_on</span>
-                <span>Khu Tân Tiến, Thị trấn Thanh Sơn, Huyện Thanh Sơn, Tỉnh Phú Thọ</span>
+                <a
+                  href="https://maps.app.goo.gl/2vAWcXFcfgSGPS7H6"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors underline decoration-teal-500/40"
+                  title="Mở Google Maps chỉ đường"
+                >
+                  1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang (Xem Google Maps ↗)
+                </a>
               </div>
               <div className="flex items-center gap-2.5 text-xs text-surface-variant">
                 <span className="material-symbols-outlined text-primary-fixed text-base">mail</span>
                 <a
                   className="hover:text-white transition-colors"
-                  href="mailto:lienhe@bvthanhson.vn"
+                  href="mailto:myphathospital@gmail.com"
                 >
-                  lienhe@bvthanhson.vn
+                  myphathospital@gmail.com
                 </a>
               </div>
             </div>
@@ -196,32 +204,35 @@ export const Footer = ({
 
         {/* Bottom copyright & Socials */}
         <div className="pt-6 border-t border-surface-variant/20 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-surface-variant">
-          <p>© 2025 Bệnh viện Thanh Sơn. Giấy phép hoạt động khám chữa bệnh số 188/BYT-GPHĐ. Bảo lưu mọi quyền.</p>
+          <p>© 2026 Mỹ Phát Hospital. Giấy phép hoạt động KCB. Bảo lưu mọi quyền.</p>
           <div className="flex items-center gap-3">
-            <button
-              aria-label="Facebook"
-              onClick={() => showToast('Mở Facebook Bệnh viện Thanh Sơn', 'info')}
+            <a
+              aria-label="Facebook chính chủ Mỹ Phát Hospital"
+              href="https://www.facebook.com/MyPhatHospital"
+              target="_blank"
+              rel="noopener noreferrer"
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+              title="Fanpage Facebook chính chủ Mỹ Phát Hospital (https://www.facebook.com/MyPhatHospital)"
             >
               <span className="material-symbols-outlined text-[18px]">public</span>
-            </button>
+            </a>
             <button
               aria-label="Zalo"
-              onClick={() => showToast('Mở Zalo OA: 0210 3873 115', 'info')}
+              onClick={() => showToast('Mở Zalo OA: 0789 065 493', 'info')}
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">chat</span>
             </button>
             <button
               aria-label="YouTube"
-              onClick={() => showToast('Mở kênh YouTube Bệnh viện Thanh Sơn', 'info')}
+              onClick={() => showToast('Mở kênh YouTube Mỹ Phát Hospital', 'info')}
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">play_circle</span>
             </button>
             <button
               aria-label="LinkedIn"
-              onClick={() => showToast('Mở LinkedIn Bệnh viện Thanh Sơn', 'info')}
+              onClick={() => showToast('Mở trang thông tin Mỹ Phát Hospital', 'info')}
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">groups</span>

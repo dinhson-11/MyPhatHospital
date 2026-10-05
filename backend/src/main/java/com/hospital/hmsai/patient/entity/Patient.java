@@ -56,6 +56,9 @@ public class Patient {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    @Column(name = "blood_type", length = 5)
+    private String bloodType;
+
     @OneToMany(mappedBy = "patient", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<PatientAllergy> allergies = new ArrayList<>();

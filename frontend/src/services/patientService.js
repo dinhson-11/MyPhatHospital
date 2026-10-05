@@ -48,6 +48,39 @@ const getStoredAllergies = () => {
   try { return JSON.parse(raw); } catch { return [...DEFAULT_ALLERGIES]; }
 };
 
+// ==================== Validation ====================
+
+export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+/**
+ * Validate dữ liệu hồ sơ bệnh nhân (khớp ràng buộc Bean Validation phía Backend).
+ * @returns {Object} map field → thông báo lỗi (rỗng nếu hợp lệ)
+ */
+export const validatePatientProfile = (data = {}) => {
+  const errors = {};
+  if (!data.fullName || !data.fullName.trim()) {
+    errors.fullName = 'Họ tên không được để trống';
+  } else if (data.fullName.length > 150) {
+    errors.fullName = 'Họ tên tối đa 150 ký tự';
+  }
+  if (data.phone && !/^0[0-9]{9,10}$/.test(data.phone)) {
+    errors.phone = 'Số điện thoại không hợp lệ';
+  }
+  if (data.nationalId && data.nationalId.length > 20) {
+    errors.nationalId = 'CCCD/CMND tối đa 20 ký tự';
+  }
+  if (data.address && data.address.length > 255) {
+    errors.address = 'Địa chỉ tối đa 255 ký tự';
+  }
+  if (data.dob && new Date(data.dob) > new Date()) {
+    errors.dob = 'Ngày sinh không được ở tương lai';
+  }
+  if (data.bloodType && !BLOOD_TYPES.includes(data.bloodType)) {
+    errors.bloodType = 'Nhóm máu không hợp lệ';
+  }
+  return errors;
+};
+
 // ==================== Service API ====================
 
 export const patientService = {

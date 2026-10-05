@@ -3,23 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bệnh viện Thanh Sơn - Hệ thống Quản lý Y tế Thông minh</title>
+    <title>Mỹ Phát Hospital – Hệ thống Y tế & Quản lý Bệnh viện Thông minh</title>
+    <meta name="description" content="Mỹ Phát Hospital (1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang) – Đặt lịch khám trực tuyến, tư vấn triệu chứng AI 24/7, hotline liên hệ 0789 065 493." />
+    <meta name="theme-color" content="#0B5394" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
-    
-    <!-- Google Fonts -->
+
+    <!-- Typography: Be Vietnam Pro + Inter – optimized for Vietnamese -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..600,0..1,0&display=swap"
       rel="stylesheet"
     />
 
-    <!-- Tailwind CSS CDN with Custom Medical Theme Config -->
+    <!-- Tailwind CSS CDN – HMS Design System tokens -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script id="tailwind-config">
       tailwind.config = {
@@ -27,67 +29,99 @@
         theme: {
           extend: {
             colors: {
-              "primary": "#005440",
-              "primary-container": "#0f6e56",
-              "primary-fixed": "#a0f3d4",
-              "primary-fixed-dim": "#84d6b9",
+              /* Brand – Medical Navy Blue (#0B5394) & Hospital Teal (#2BA89B) */
+              "brand": {
+                50: "#f0f7ff",
+                100: "#e0effe",
+                200: "#bae0fd",
+                300: "#7cc7fb",
+                400: "#36aaf5",
+                500: "#0b8ee0",
+                600: "#0b5394",
+                700: "#0a457c",
+                800: "#0c3b66",
+                900: "#0f3254",
+                950: "#0a2038"
+              },
+              "primary": "#0B5394",
+              "primary-dark": "#083e70",
+              "primary-container": "#1565a8",
+              "primary-fixed": "#eef5fc",
+              "primary-fixed-dim": "#d2e4f7",
+              "teal": {
+                50: "#f0fdfa",
+                100: "#ccfbf1",
+                200: "#99f6e4",
+                300: "#5eead4",
+                400: "#2dd4bf",
+                500: "#2BA89B",
+                600: "#22867c",
+                700: "#1d6c64",
+                800: "#1c5651",
+                900: "#1b4743"
+              },
+              "secondary": "#2BA89B",
+              "secondary-dark": "#22867c",
+              "secondary-container": "#eaf7f5",
+              "secondary-fixed": "#eaf7f5",
               "on-primary": "#ffffff",
-              "on-primary-container": "#9aedcf",
-              "secondary": "#1960a6",
-              "secondary-container": "#7ab3ff",
-              "secondary-fixed": "#d4e3ff",
+              "on-primary-container": "#ffffff",
               "on-secondary": "#ffffff",
-              "tertiary": "#344e46",
-              "tertiary-fixed": "#cce9de",
-              "surface": "#ebfef6",
-              "surface-bright": "#ebfef6",
-              "surface-dim": "#ccded7",
+              "tertiary": "#2BA89B",
+              "tertiary-fixed": "#eaf7f5",
+              /* Surfaces & neutrals (slate based) */
+              "canvas": "#f6f8fa",
+              "surface": "#ffffff",
+              "surface-bright": "#ffffff",
+              "surface-dim": "#f1f5f9",
+              "surface-variant": "#94a3b8",
               "surface-container-lowest": "#ffffff",
-              "surface-container-low": "#e5f8f0",
-              "surface-container": "#dff2ea",
-              "surface-container-high": "#daece5",
-              "surface-container-highest": "#d4e7df",
-              "on-surface": "#0f1e1a",
-              "on-surface-variant": "#3f4944",
-              "outline": "#6f7a74",
-              "outline-variant": "#bec9c3",
-              "error": "#ba1a1a",
-              "error-container": "#ffdad6",
-              "inverse-surface": "#24342f",
-              "inverse-on-surface": "#e2f5ed"
+              "surface-container-low": "#f8fafc",
+              "surface-container": "#f1f5f9",
+              "surface-container-high": "#e2e8f0",
+              "surface-container-highest": "#cbd5e1",
+              "on-surface": "#0f172a",
+              "on-surface-variant": "#475569",
+              "outline": "#94a3b8",
+              "outline-variant": "#e2e8f0",
+              /* Semantic */
+              "success": "#107c41",
+              "success-container": "#edf7ed",
+              "warning": "#d83b01",
+              "warning-container": "#fff4ce",
+              "error": "#a80000",
+              "error-container": "#fde7e9",
+              "info": "#0078d4",
+              "info-container": "#eff6fc",
+              "inverse-surface": "#0f172a",
+              "inverse-on-surface": "#f8fafc"
             },
             fontFamily: {
-              "headline": ["'Plus Jakarta Sans'", "'Inter'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "sans-serif"],
-              "body": ["'Inter'", "'Plus Jakarta Sans'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "sans-serif"],
-              "label": ["'Inter'", "'Plus Jakarta Sans'", "sans-serif"],
-              "sans": ["'Inter'", "'Plus Jakarta Sans'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "sans-serif"]
+              "headline": ["'Be Vietnam Pro'", "'Plus Jakarta Sans'", "'Inter'", "sans-serif"],
+              "body": ["'Be Vietnam Pro'", "'Inter'", "system-ui", "-apple-system", "sans-serif"],
+              "label": ["'Be Vietnam Pro'", "'Inter'", "system-ui", "sans-serif"],
+              "sans": ["'Be Vietnam Pro'", "'Inter'", "system-ui", "-apple-system", "'Segoe UI'", "sans-serif"],
+              "serif": ["'Be Vietnam Pro'", "'Plus Jakarta Sans'", "'Inter'", "sans-serif"],
+              "logo": ["'Be Vietnam Pro'", "'Plus Jakarta Sans'", "sans-serif"],
+              "mono": ["'JetBrains Mono'", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"]
+            },
+            boxShadow: {
+              "xs": "0 1px 2px 0 rgb(15 23 42 / 0.05)",
+              "card": "0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)",
+              "card-hover": "0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05)",
+              "pop": "0 12px 32px -8px rgb(15 23 42 / 0.18), 0 4px 8px -4px rgb(15 23 42 / 0.08)",
+              "focus": "0 0 0 3px rgb(11 83 148 / 0.25)"
+            },
+            borderRadius: {
+              "card": "14px",
+              "control": "10px"
             }
           }
         }
       };
     </script>
-    <style>
-      body {
-        font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        letter-spacing: -0.011em;
-      }
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #e5f8f0;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #84d6b9;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #0f6e56;
-      }
-    </style>
   </head>
-  <body class="bg-surface text-on-surface antialiased">
+  <body class="bg-canvas text-on-surface antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -211,21 +211,31 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 8. DA LIỄU (Dermatology)
     {
         "group": "Da liễu",
-        "keywords": ["phát ban", "ngứa", "nổi mẩn", "mề đay", "chàm",
-                     "nấm da", "mụn", "vảy nến", "rụng tóc", "da khô",
-                     "sẩn ngứa", "nổi mề đay", "dị ứng da"],
+        "dept_id": 8,
+        "keywords": ["dị ứng, nổi mẩn da", "dị ứng, nổi mần da", "nổi mẩn da", "nổi mần da",
+                     "nổi mẩn", "nổi mần", "dị ứng", "mẩn ngứa", "mần ngứa", "mẩn đỏ",
+                     "phát ban", "ngứa", "mề đay", "mày đay", "chàm", "nấm da", "mụn",
+                     "vảy nến", "rụng tóc", "da khô", "sẩn ngứa", "nổi mề đay", "dị ứng da",
+                     "dị ứng thức ăn", "dị ứng thời tiết", "dị ứng hải sản", "viêm da dị ứng",
+                     "viêm da cơ địa", "viêm da"],
         "suggestions": [
             {
                 "code": "L50.9",
                 "name": "Mề đay (Urticaria), không đặc hiệu",
-                "base_confidence": 94,
-                "reason": "Phát ban sẩn phù ngứa dữ dội, nổi từng mảng rồi biến mất sau vài giờ. Cần tìm tác nhân gây dị ứng và dùng kháng histamine.",
+                "base_confidence": 95,
+                "reason": "Phát ban sẩn phù ngứa dữ dội, nổi mẩn/mần mảng đỏ sau dị ứng thời tiết hoặc thức ăn. Chỉ định kháng histamine H1 thế hệ 2.",
+            },
+            {
+                "code": "L27.2",
+                "name": "Viêm da do ăn phải thức ăn (Dị ứng thức ăn)",
+                "base_confidence": 90,
+                "reason": "Phát ban sẩn ngứa nổi mẩn đỏ trên da sau khi ăn hải sản, đồ lạ. Cần loại trừ sốc phản vệ và dùng thuốc chống dị ứng.",
             },
             {
                 "code": "L30.9",
                 "name": "Viêm da (Dermatitis), không đặc hiệu",
                 "base_confidence": 86,
-                "reason": "Vùng da đỏ, ngứa, bong vảy mạn tính. Phân biệt viêm da cơ địa, viêm da tiếp xúc và viêm da dị ứng.",
+                "reason": "Vùng da đỏ, nổi mẩn ngứa, bong vảy. Phân biệt viêm da cơ địa, viêm da tiếp xúc và viêm da dị ứng.",
             },
             {
                 "code": "B35.9",
@@ -334,21 +344,34 @@ class DiagnosisSuggestionService:
 
         symptoms_lower = symptoms.lower().strip()
 
+        # Dự đoán gợi ý chuyên khoa từ ML Model để định hướng nhóm chẩn đoán
+        ml_dept_id = None
+        try:
+            from services.ml_triage_service import predict_department
+            ml_pred = predict_department(symptoms_lower)
+            if ml_pred is not None:
+                ml_dept_id = ml_pred[0]
+        except Exception:
+            ml_dept_id = None
+
         # Tính điểm cho từng nhóm bệnh lý
         scored_groups: list[tuple[float, dict]] = []
 
         for group in DIAGNOSIS_KNOWLEDGE_BASE:
             match_count = 0
+            matched_len = 0
             total_keywords = len(group["keywords"])
 
             for keyword in group["keywords"]:
                 if keyword.lower() in symptoms_lower:
                     match_count += 1
+                    matched_len += len(keyword)
 
-            if match_count > 0:
-                # Tỷ lệ khớp từ khóa => ảnh hưởng confidence
-                match_ratio = match_count / total_keywords
-                score = match_ratio * match_count  # Weighted score: càng nhiều keyword match → score càng cao
+            if match_count > 0 or (ml_dept_id is not None and group.get("dept_id") == ml_dept_id):
+                # Điểm số kết hợp số từ khóa khớp và ưu tiên từ mô hình ML
+                score = match_count * 10.0 + (matched_len / 10.0)
+                if ml_dept_id is not None and group.get("dept_id") == ml_dept_id:
+                    score += 25.0
                 scored_groups.append((score, group))
 
         if not scored_groups:
@@ -378,7 +401,7 @@ class DiagnosisSuggestionService:
             1 for kw in best_group["keywords"] if kw.lower() in symptoms_lower
         )
         total_kw = len(best_group["keywords"])
-        match_ratio = match_count / total_kw
+        match_ratio = match_count / max(1, total_kw)
 
         suggestions: list[DiagnosisSuggestionItem] = []
         for idx, sug in enumerate(best_group["suggestions"][:3]):

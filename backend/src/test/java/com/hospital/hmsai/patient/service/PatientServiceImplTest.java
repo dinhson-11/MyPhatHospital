@@ -203,6 +203,7 @@ class PatientServiceImplTest {
         Page<PatientResponse> result = patientService.search("", pageable);
 
         // Then
+        assertNotNull(result);
         verify(patientRepository).findAll(pageable);
         verify(patientRepository, never()).searchByKeyword(anyString(), any());
     }
@@ -236,5 +237,37 @@ class PatientServiceImplTest {
 
         assertThrows(ResourceNotFoundException.class,
                 () -> patientService.getByUserId(999L));
+    }
+
+    // ==================== BLOOD TYPE ====================
+
+    @Test
+    @DisplayName("Tạo bệnh nhân kèm nhóm máu → lưu nhóm máu vào entity")
+    void createPatient_WithBloodType_Persisted() {
+        CreatePatientRequest request = CreatePatientRequest.builder()
+                .fullName("Phạm Văn E")
+                .bloodType("AB+")
+                .build();
+
+        when(patientRepository.existsByPatientCode(anyString())).thenReturn(false);
+        when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        PatientResponse result = patientService.create(request);
+
+        assertEquals("AB+", result.getBloodType());
+    }
+
+    @Test
+    @DisplayName("Cập nhật nhóm máu rỗng → xóa nhóm máu (null)")
+    void updatePatient_BlankBloodType_ClearsValue() {
+        Patient existing = Patient.builder().id(1L).fullName("Lê Văn F").bloodType("O+").build();
+        UpdatePatientRequest request = UpdatePatientRequest.builder().bloodType("").build();
+
+        when(patientRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(patientRepository.save(any(Patient.class))).thenReturn(existing);
+
+        patientService.update(1L, request);
+
+        assertNull(existing.getBloodType());
     }
 }

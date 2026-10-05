@@ -34,4 +34,7 @@ public class CreatePatientRequest {
 
     @Pattern(regexp = "^(0[0-9]{9,10})?$", message = "Số điện thoại không hợp lệ")
     private String phone;
+
+    @Pattern(regexp = "^((A|B|AB|O)[+-])?$", message = "Nhóm máu không hợp lệ (A+, A-, B+, B-, AB+, AB-, O+, O-)")
+    private String bloodType;
 }

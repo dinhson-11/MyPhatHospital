@@ -27,6 +27,7 @@ public class PatientResponse {
     private String nationalId;
     private String address;
     private String phone;
+    private String bloodType;
     private Long userId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

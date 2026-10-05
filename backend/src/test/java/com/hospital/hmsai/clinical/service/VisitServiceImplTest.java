@@ -9,7 +9,6 @@ import com.hospital.hmsai.clinical.entity.Prescription;
 import com.hospital.hmsai.clinical.entity.Visit;
 import com.hospital.hmsai.clinical.entity.VisitStatus;
 import com.hospital.hmsai.clinical.repository.LabOrderRepository;
-import com.hospital.hmsai.clinical.repository.PrescriptionItemRepository;
 import com.hospital.hmsai.clinical.repository.PrescriptionRepository;
 import com.hospital.hmsai.clinical.repository.VisitRepository;
 import com.hospital.hmsai.clinical.service.impl.VisitServiceImpl;
@@ -62,9 +61,6 @@ class VisitServiceImplTest {
 
     @Mock
     private PrescriptionRepository prescriptionRepository;
-
-    @Mock
-    private PrescriptionItemRepository prescriptionItemRepository;
 
     @Mock
     private LabOrderRepository labOrderRepository;

@@ -41,7 +41,7 @@ describe('Sprint 7 – AI Chatbot Suite (FR-10 & NFR-8)', () => {
       const res = chatService.processLocalFallback('Tôi bị đau ngực trái và hồi hộp tim');
       expect(res.intent).toBe('SYMPTOM_CHECK');
       expect(res.suggestedDept).not.toBeNull();
-      expect(res.suggestedDept.name).toContain('Tim mạch');
+      expect(res.suggestedDept.name).toContain('Cấp cứu ban đầu');
       expect(res.showBookingButton).toBe(true);
     });
 
@@ -161,7 +161,7 @@ describe('Sprint 7 – AI Chatbot Suite (FR-10 & NFR-8)', () => {
       fireEvent.click(fab);
       expect(screen.getByTestId('ai-chat-window')).toBeInTheDocument();
       expect(screen.getByText(/Trợ Lý Y Tế AI 24\/7/i)).toBeInTheDocument();
-      expect(screen.getByText(/Tôi là Trợ lý AI Bệnh viện Thanh Sơn/i)).toBeInTheDocument();
+      expect(screen.getByText(/Tôi là Trợ lý AI Mỹ Phát Hospital/i)).toBeInTheDocument();
     });
 
     it('sends message and updates conversation with AI response', async () => {

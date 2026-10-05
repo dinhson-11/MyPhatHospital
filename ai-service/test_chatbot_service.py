@@ -106,3 +106,27 @@ class TestChatbotService:
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
         assert result.show_booking_button is True
+
+    def test_allergy_and_skin_rash_routes_to_dermatology(self):
+        """Triệu chứng dị ứng, nổi mẩn da phải được điều hướng vào Khoa Da liễu."""
+        result = ChatbotService.process_message("dị ứng, nổi mẩn da")
+        assert result.intent == "SYMPTOM_CHECK"
+        assert result.suggested_department is not None
+        assert result.suggested_department.dept_id == 8
+        assert "Da liễu" in result.suggested_department.dept_name
+
+    def test_child_with_skin_allergy_routes_to_dermatology_not_pediatrics(self):
+        """Bé bị dị ứng, nổi mẩn da phải vào Khoa Da liễu thay vì Khoa Nhi."""
+        result = ChatbotService.process_message("bé bị dị ứng, nổi mẩn da")
+        assert result.intent == "SYMPTOM_CHECK"
+        assert result.suggested_department is not None
+        assert result.suggested_department.dept_id == 8
+        assert "Da liễu" in result.suggested_department.dept_name
+
+    def test_dialect_noi_man_da_routes_to_dermatology(self):
+        """Biến thể 'nổi mần da' hoặc 'dị ứng, nổi mần da' phải vào Khoa Da liễu."""
+        result = ChatbotService.process_message("dị ứng, nổi mần da")
+        assert result.intent == "SYMPTOM_CHECK"
+        assert result.suggested_department is not None
+        assert result.suggested_department.dept_id == 8
+        assert "Da liễu" in result.suggested_department.dept_name

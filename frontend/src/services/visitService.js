@@ -444,3 +444,5 @@ export const visitService = {
     );
   }
 };
+
+export default visitService;

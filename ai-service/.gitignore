@@ -1,0 +1,31 @@
+# === Python Cache ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# === Virtual Environments ===
+venv/
+.venv/
+env/
+
+# === Pytest ===
+.pytest_cache/
+.coverage
+htmlcov/
+
+# === Trained ML Models (large binary files – use git-lfs or store externally) ===
+models/*.joblib
+models/*.pkl
+models/*.h5
+models/*.pt
+models/*.pth
+
+# === Environment ===
+.env
+.env.*
+
+# === Distribution ===
+dist/
+build/
+*.egg-info/

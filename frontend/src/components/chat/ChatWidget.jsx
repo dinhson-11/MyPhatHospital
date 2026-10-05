@@ -21,7 +21,7 @@ export default function ChatWidget({ onOpenBooking }) {
     {
       id: 1,
       sender: 'ai',
-      text: 'Xin chào! Tôi là Trợ lý AI Bệnh viện Thanh Sơn. Tôi có thể hỗ trợ tư vấn sơ bộ triệu chứng, gợi ý chuyên khoa khám và giải đáp thắc mắc về dịch vụ y tế 24/7.',
+      text: 'Xin chào! Tôi là Trợ lý AI Mỹ Phát Hospital. Tôi có thể hỗ trợ tư vấn sơ bộ triệu chứng, gợi ý chuyên khoa khám và giải đáp thắc mắc về dịch vụ y tế 24/7.',
       timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       disclaimer: AI_DISCLAIMER_TEXT,
     },
@@ -109,7 +109,7 @@ export default function ChatWidget({ onOpenBooking }) {
           {
             id: Date.now() + 2,
             sender: 'ai',
-            text: 'Xin lỗi, hệ thống đang gặp trục trặc khi kết nối. Quý khách vui lòng thử lại sau hoặc liên hệ hotline Bệnh viện: 0210.3872.115.',
+            text: 'Xin lỗi, hệ thống đang gặp trục trặc khi kết nối. Quý khách vui lòng thử lại sau hoặc liên hệ hotline Mỹ Phát Hospital: 0789 065 493.',
             timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
             disclaimer: AI_DISCLAIMER_TEXT,
           },
@@ -177,7 +177,7 @@ export default function ChatWidget({ onOpenBooking }) {
                   <span>Trợ Lý Y Tế AI 24/7</span>
                   <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping"></span>
                 </h4>
-                <p className="text-[11px] text-emerald-100 font-label">Bệnh viện Đa khoa Thanh Sơn</p>
+                <p className="text-[11px] text-emerald-100 font-label">Mỹ Phát Hospital</p>
               </div>
             </div>
 
@@ -309,22 +309,39 @@ export default function ChatWidget({ onOpenBooking }) {
         </div>
       )}
 
-      {/* Floating Action Button (FAB) */}
-      <button
-        type="button"
-        id="fab-ai-chat"
-        onClick={() => setIsOpen(prev => !prev)}
-        className="group relative flex items-center gap-2.5 px-5 py-3.5 rounded-full bg-gradient-to-r from-emerald-600 via-primary to-teal-700 text-white font-label font-bold text-sm shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer border border-emerald-400/30"
-        aria-label="Mở Trợ lý AI Y tế"
-      >
-        <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-ping absolute -top-0.5 -right-0.5"></span>
-        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 absolute -top-0.5 -right-0.5"></span>
+      {/* Floating Action Button (FAB) – Redesigned with intuitive chat icon & soft glowing aura */}
+      <div className="relative group">
+        {/* Soft glowing ambient pulse aura */}
+        <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 opacity-60 blur-md group-hover:opacity-90 group-hover:blur-lg transition-all duration-300 animate-pulse pointer-events-none" />
 
-        <span className="material-symbols-outlined text-[22px] transition-transform group-hover:rotate-12">
-          smart_toy
-        </span>
-        <span className="hidden sm:inline">Hỏi AI Y tế 24/7</span>
-      </button>
+        <button
+          type="button"
+          id="fab-ai-chat"
+          onClick={() => setIsOpen(prev => !prev)}
+          className="relative flex items-center gap-2.5 px-4.5 sm:px-5 py-3.5 rounded-full bg-gradient-to-r from-teal-600 via-teal-500 to-cyan-600 hover:from-teal-500 hover:via-teal-400 hover:to-cyan-500 text-white font-label font-bold text-sm shadow-[0_4px_20px_rgba(13,148,136,0.35)] hover:shadow-[0_6px_28px_rgba(13,148,136,0.5)] hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer border border-white/40 ring-2 ring-white/60"
+          aria-label="Mở Trợ lý AI Y tế"
+        >
+          {/* Chat bubble icon with smart spark badge */}
+          <div className="relative flex items-center justify-center">
+            <span className="material-symbols-outlined text-[23px] transition-transform duration-200 group-hover:scale-110">
+              forum
+            </span>
+            <span className="material-symbols-outlined text-[13px] text-amber-300 absolute -top-1 -right-1.5 animate-pulse">
+              auto_awesome
+            </span>
+          </div>
+
+          <span className="hidden sm:inline tracking-wide font-semibold">
+            Hỏi AI Y tế 24/7
+          </span>
+
+          {/* Active online pulse dot */}
+          <span className="relative flex h-2.5 w-2.5 ml-0.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-300" />
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

@@ -17,19 +17,23 @@ CHATBOT_DISCLAIMER = (
     "Trợ lý AI chỉ hỗ trợ tư vấn sơ bộ, không thay thế thăm khám và chỉ định của bác sĩ."
 )
 
+from services.ml_triage_service import predict_department, DEPT_METADATA
+
 # ============================================================================
-# DEPARTMENT ROUTING KNOWLEDGE BASE
+# DEPARTMENT ROUTING KNOWLEDGE BASE (Rule-based Fallback & Knowledge Base)
 # ============================================================================
 DEPT_ROUTING: list[dict] = [
-    # Khoa Nhi – Đặt lên đầu vì có từ khóa riêng biệt cho trẻ em
+    # Khoa Da liễu – Ưu tiên cao cho các tổn thương da, dị ứng, nổi mẩn, nổi mần
     {
-        "dept_id": 4, "dept_name": "Khoa Nhi",
-        "keywords": ["trẻ em", "trẻ nhỏ", "bé bị", "bé nhà", "con bị",
-                     "trẻ sốt", "bé ho", "trẻ không chịu ăn", "bé quấy", "sơ sinh",
-                     "quấy khóc trẻ", "con tôi bị", "bé"],
-        "reply": ("Bạn đang hỏi về sức khỏe trẻ em. **Khoa Nhi** của chúng tôi "
-                  "có đội ngũ bác sĩ chuyên khoa nhi giàu kinh nghiệm, sẵn sàng "
-                  "thăm khám và tư vấn cho bé."),
+        "dept_id": 8, "dept_name": "Khoa Da liễu",
+        "keywords": ["dị ứng, nổi mẩn da", "dị ứng, nổi mần da", "nổi mẩn da", "nổi mần da",
+                     "nổi mẩn", "nổi mần", "dị ứng", "mẩn ngứa", "mần ngứa", "mẩn đỏ",
+                     "ngứa", "phát ban", "mề đay", "mày đay", "dị ứng da", "nấm da",
+                     "mụn", "vảy nến", "rụng tóc", "viêm da", "chàm", "dị ứng thời tiết",
+                     "dị ứng thức ăn", "dị ứng hải sản", "viêm da cơ địa"],
+        "reply": ("Triệu chứng trên da và dị ứng của bạn cần được bác sĩ **Khoa Da liễu** "
+                  "thăm khám trực tiếp để xác định chẩn đoán và có phác đồ điều trị "
+                  "phù hợp."),
     },
     {
         "dept_id": 5, "dept_name": "Khoa Tim mạch",
@@ -59,6 +63,16 @@ DEPT_ROUTING: list[dict] = [
                   "nội soi dạ dày/đại tràng để xác định nguyên nhân chính xác."),
     },
     {
+        "dept_id": 4, "dept_name": "Khoa Nhi",
+        "keywords": ["trẻ em", "trẻ nhỏ", "bé sốt", "trẻ sốt", "bé quấy",
+                     "trẻ quấy khóc", "quấy khóc trẻ", "sơ sinh", "bỏ bú",
+                     "trẻ không chịu ăn", "biếng ăn", "suy dinh dưỡng", "tiêm chủng",
+                     "tiêm vắc xin", "tiêm vacxin", "bé nhà tôi bị sốt", "bé bị sốt"],
+        "reply": ("Bạn đang hỏi về sức khỏe trẻ em. **Khoa Nhi** của chúng tôi "
+                  "có đội ngũ bác sĩ chuyên khoa nhi giàu kinh nghiệm, sẵn sàng "
+                  "thăm khám và tư vấn cho bé."),
+    },
+    {
         "dept_id": 1, "dept_name": "Khoa Nội tổng quát",
         "keywords": ["mệt mỏi", "sốt", "đổ mồ hôi đêm", "sụt cân", "chán ăn",
                      "tiểu đường", "đái tháo đường", "khát nước nhiều", "tiểu nhiều",
@@ -75,14 +89,6 @@ DEPT_ROUTING: list[dict] = [
         "reply": ("Triệu chứng của bạn cần được đánh giá bởi **Khoa Thần kinh**. "
                   "Bác sĩ sẽ khám lâm sàng thần kinh và có thể chỉ định CT/MRI sọ "
                   "não để loại trừ các nguyên nhân nghiêm trọng."),
-    },
-    {
-        "dept_id": 8, "dept_name": "Khoa Da liễu",
-        "keywords": ["ngứa", "nổi mẩn", "phát ban", "mề đay", "dị ứng da",
-                     "nấm da", "mụn", "vảy nến", "rụng tóc", "viêm da"],
-        "reply": ("Triệu chứng trên da của bạn cần được bác sĩ **Khoa Da liễu** "
-                  "thăm khám trực tiếp để xác định chẩn đoán và có phác đồ điều trị "
-                  "phù hợp."),
     },
     {
         "dept_id": 9, "dept_name": "Khoa Cơ xương khớp",
@@ -109,26 +115,25 @@ DEPT_ROUTING: list[dict] = [
 FAQ_KB: list[dict] = [
     {
         "keywords": ["bhyt", "bảo hiểm y tế", "bảo hiểm", "thẻ bhyt"],
-        "reply": ("🏥 **Thông tin BHYT tại Bệnh viện Thanh Sơn:**\n\n"
+        "reply": ("🏥 **Thông tin BHYT tại Mỹ Phát Hospital:**\n\n"
                   "• Tiếp nhận BHYT thông tuyến toàn quốc\n"
-                  "• Giờ khám: Thứ 2 – Thứ 6 (7h00 – 17h00), Thứ 7 (7h00 – 12h00)\n"
+                  "• Giờ khám: Thứ 2 – Chủ Nhật (07h00 – 17h30)\n"
                   "• Mang CCCD gắn chip hoặc thẻ BHYT trên ứng dụng VssID\n"
                   "• Cấp cứu 24/7 không cần thủ tục trước"),
     },
     {
         "keywords": ["giờ khám", "giờ làm việc", "mấy giờ", "khám buổi", "lịch làm việc"],
-        "reply": ("⏰ **Lịch khám bệnh Bệnh viện Thanh Sơn:**\n\n"
-                  "• Thứ 2 – Thứ 6: 07h00 – 17h00\n"
-                  "• Thứ 7: 07h00 – 12h00\n"
-                  "• Cấp cứu & Hồi sức: 24/7\n"
+        "reply": ("⏰ **Lịch khám bệnh Mỹ Phát Hospital:**\n\n"
+                  "• Thứ 2 – Chủ Nhật: 07h00 – 17h30\n"
+                  "• Cấp cứu & Hồi sức: 24/7 liên tục tất cả các ngày\n"
                   "• Đăng ký đặt lịch trước để tránh chờ đợi"),
     },
     {
         "keywords": ["chi phí", "giá", "phí khám", "bao nhiêu tiền", "phí dịch vụ"],
         "reply": ("💰 **Chi phí dịch vụ khám:**\n\n"
                   "• Khám BHYT đúng tuyến: theo quy định Nhà nước\n"
-                  "• Khám dịch vụ: từ 150.000 – 500.000đ/lượt (tùy chuyên khoa)\n"
-                  "• Xét nghiệm, siêu âm, X-quang: báo giá tại quầy\n"
+                  "• Khám dịch vụ: từ 150.000 – 350.000đ/lượt (tùy chuyên khoa)\n"
+                  "• Xét nghiệm, siêu âm, X-quang: báo giá niêm yết công khai tại quầy\n"
                   "• Hỗ trợ thanh toán: Tiền mặt / Chuyển khoản / VietQR"),
     },
     {
@@ -141,11 +146,11 @@ FAQ_KB: list[dict] = [
     },
     {
         "keywords": ["địa chỉ", "ở đâu", "đường đến", "vị trí", "google map"],
-        "reply": ("📍 **Địa chỉ Bệnh viện Đa khoa Thanh Sơn:**\n\n"
-                  "Thị trấn Thanh Sơn, huyện Thanh Sơn, tỉnh Phú Thọ\n"
-                  "📞 Hotline: 1900 6868\n"
-                  "🌐 Website: bvthanhson.vn\n"
-                  "⏰ Cấp cứu 24/7: 0210 3876 xxx"),
+        "reply": ("📍 **Địa chỉ Mỹ Phát Hospital:**\n\n"
+                  "1170 Quang Trung, Thị Trấn Chũ, Huyện Lục Ngạn, Tỉnh Bắc Giang\n"
+                  "📞 Hotline: 0789 065 493 (24/7)\n"
+                  "🌐 Chỉ đường: https://maps.app.goo.gl/2vAWcXFcfgSGPS7H6\n"
+                  "⏰ Cấp cứu 24/7: 0789 065 493"),
     },
     {
         "keywords": ["xét nghiệm", "làm xét nghiệm", "lấy máu", "kết quả xét nghiệm"],
@@ -208,8 +213,8 @@ class ChatbotService:
                 reply=(
                     "🚨 **TÌNH TRẠNG KHẨN CẤP – Gọi 115 ngay!**\n\n"
                     "Triệu chứng bạn mô tả có thể là dấu hiệu cấp cứu nghiêm trọng. "
-                    "Vui lòng **gọi ngay số 115** hoặc đến **Khoa Cấp cứu** của bệnh viện gần nhất.\n\n"
-                    "Bệnh viện Thanh Sơn – Cấp cứu 24/7: 0210 3876 xxx"
+                    "Vui lòng **gọi ngay số 115** hoặc đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
+                    "Mỹ Phát Hospital – Cấp cứu 24/7: 0789 065 493"
                 ),
                 disclaimer=CHATBOT_DISCLAIMER,
             )
@@ -222,7 +227,7 @@ class ChatbotService:
                 is_out_of_scope=True,
                 reply=(
                     "Xin lỗi, tôi chỉ có thể hỗ trợ các câu hỏi về sức khỏe và "
-                    "dịch vụ y tế tại Bệnh viện Thanh Sơn. Bạn có câu hỏi y tế nào "
+                    "dịch vụ y tế tại Mỹ Phát Hospital. Bạn có câu hỏi y tế nào "
                     "khác không ạ?"
                 ),
                 disclaimer=CHATBOT_DISCLAIMER,
@@ -239,7 +244,44 @@ class ChatbotService:
                     disclaimer=CHATBOT_DISCLAIMER,
                 )
 
-        # 4. SYMPTOM_CHECK – Phân luồng chuyên khoa (trước GREETING)
+        # 4. GREETING – Kiểm tra lời chào thuần túy (không kèm triệu chứng bệnh lý)
+        is_greeting = cls._match(msg, GREETING_KEYWORDS)
+        has_dept_keyword = any(cls._match(msg, dept["keywords"]) for dept in DEPT_ROUTING)
+
+        if is_greeting and not has_dept_keyword:
+            return ChatMessageResponse(
+                session_id=sid,
+                intent="GREETING",
+                reply=(
+                    "Xin chào! 👋 Tôi là Trợ lý AI Y tế của Mỹ Phát Hospital.\n\n"
+                    "Tôi có thể giúp bạn:\n"
+                    "• 🏥 Gợi ý chuyên khoa phù hợp theo triệu chứng\n"
+                    "• 📅 Hướng dẫn đặt lịch khám\n"
+                    "• ❓ Giải đáp thắc mắc về dịch vụ, giờ khám, BHYT\n\n"
+                    "Bạn đang có triệu chứng hoặc thắc mắc gì cần tư vấn?"
+                ),
+                disclaimer=CHATBOT_DISCLAIMER,
+            )
+
+        # 5. SYMPTOM_CHECK – Dự đoán chuyên khoa (Mô hình máy học ML Triage & Knowledge Base)
+        # 5a. Ưu tiên mô hình máy học đã huấn luyện
+        ml_result = predict_department(msg)
+        if ml_result is not None:
+            dept_id, dept_name, conf, meta = ml_result
+            return ChatMessageResponse(
+                session_id=sid,
+                intent="SYMPTOM_CHECK",
+                reply=meta["reply"],
+                suggested_department=DepartmentSuggestion(
+                    dept_id=dept_id,
+                    dept_name=dept_name,
+                    reason=meta["reason"],
+                ),
+                show_booking_button=True,
+                disclaimer=CHATBOT_DISCLAIMER,
+            )
+
+        # 5b. Rule-based Fallback theo cơ sở tri thức chuyên khoa
         for dept in DEPT_ROUTING:
             if cls._match(msg, dept["keywords"]):
                 return ChatMessageResponse(
@@ -254,22 +296,6 @@ class ChatbotService:
                     show_booking_button=True,
                     disclaimer=CHATBOT_DISCLAIMER,
                 )
-
-        # 5. GREETING
-        if cls._match(msg, GREETING_KEYWORDS):
-            return ChatMessageResponse(
-                session_id=sid,
-                intent="GREETING",
-                reply=(
-                    "Xin chào! 👋 Tôi là Trợ lý AI Y tế của Bệnh viện Đa khoa Thanh Sơn.\n\n"
-                    "Tôi có thể giúp bạn:\n"
-                    "• 🏥 Gợi ý chuyên khoa phù hợp theo triệu chứng\n"
-                    "• 📅 Hướng dẫn đặt lịch khám\n"
-                    "• ❓ Giải đáp thắc mắc về dịch vụ, giờ khám, BHYT\n\n"
-                    "Bạn đang có triệu chứng hoặc thắc mắc gì cần tư vấn?"
-                ),
-                disclaimer=CHATBOT_DISCLAIMER,
-            )
 
         # 6. DEFAULT – Không xác định được intent
         return ChatMessageResponse(

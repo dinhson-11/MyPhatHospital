@@ -21,4 +21,12 @@ public interface DrugService {
     List<DrugInteractionResponse> getAllInteractions();
 
     List<DrugInteractionResponse> checkInteractionsAmongDrugs(Collection<Long> drugIds);
+
+    DrugResponse createDrug(com.hospital.hmsai.pharmacy.dto.CreateDrugRequest request);
+
+    DrugResponse updateStock(Long id, com.hospital.hmsai.pharmacy.dto.UpdateStockRequest request);
+
+    List<DrugResponse> getExpiringSoonDrugs(int days);
+
+    List<DrugResponse> getLowStockDrugs(int threshold);
 }

@@ -2,24 +2,24 @@ import { describe, it, expect } from 'vitest';
 import { triageService } from '../services/triageService';
 
 describe('AI Clinical Triage & Specialty Routing Suite (Enterprise Grade)', () => {
-  it('should accurately triage cardiology conditions and trigger high urgency', () => {
+  it('should accurately triage emergency / cardiopulmonary conditions to Khoa Khám bệnh / Cấp cứu ban đầu', () => {
     const input = 'Bệnh nhân có triệu chứng đau tức ngực, đánh trống ngực và khó thở';
     const result = triageService.triageSymptoms(input);
 
     expect(result).toBeDefined();
-    expect(result.deptId).toBe(5);
-    expect(result.deptName).toBe('Khoa Tim mạch');
-    expect(result.doctorName).toContain('Nguyễn Văn Hùng');
+    expect(result.deptId).toBe(1);
+    expect(result.deptName).toBe('Khoa Khám bệnh / Cấp cứu ban đầu');
+    expect(result.doctorName).toContain('Vi Mai Anh');
     expect(result.urgency).toBe('HIGH');
   });
 
-  it('should triage pediatric symptoms to Khoa Nhi with specialist assigned', () => {
-    const input = 'Bé 2 tuổi bị sốt cao quấy khóc không chịu ăn';
+  it('should triage musculoskeletal symptoms to Khoa YHCT – Phục hồi chức năng', () => {
+    const input = 'Bệnh nhân bị đau khớp gối, đau cổ vai gáy và thoát vị đĩa đệm';
     const result = triageService.triageSymptoms(input);
 
-    expect(result.deptId).toBe(4);
-    expect(result.deptName).toBe('Khoa Nhi');
-    expect(result.doctorName).toContain('Lê Hoàng Nam');
+    expect(result.deptId).toBe(13);
+    expect(result.deptName).toBe('Khoa Y học cổ truyền – Phục hồi chức năng');
+    expect(result.doctorName).toContain('Nguyễn Văn Sỹ');
   });
 
   it('should triage ENT (Tai Mũi Họng) symptoms accurately', () => {
@@ -27,34 +27,50 @@ describe('AI Clinical Triage & Specialty Routing Suite (Enterprise Grade)', () =
     const result = triageService.triageSymptoms(input);
 
     expect(result.deptId).toBe(10);
-    expect(result.deptName).toBe('Khoa Tai mũi họng');
-    expect(result.doctorName).toContain('Vũ Đình Trọng');
+    expect(result.deptName).toBe('Tai Mũi Họng');
+    expect(result.doctorName).toContain('Hoàng Thị Dung');
   });
 
-  it('should triage gastroenterology symptoms accurately', () => {
-    const input = 'Đau vùng thượng vị dạ dày, ợ chua và đầy hơi khó tiêu';
+  it('should triage pregnancy and obstetrics symptoms to Sản - Phụ khoa', () => {
+    const input = 'Khám thai định kỳ, tư vấn quản lý thai kỳ và khám phụ khoa';
     const result = triageService.triageSymptoms(input);
 
-    expect(result.deptId).toBe(6);
-    expect(result.deptName).toBe('Khoa Tiêu hóa');
-    expect(result.doctorName).toContain('Phạm Thu Hương');
+    expect(result.deptId).toBe(3);
+    expect(result.deptName).toBe('Sản - Phụ khoa');
+    expect(result.doctorName).toContain('Phạm Lan Vy');
   });
 
-  it('should triage dermatology symptoms accurately', () => {
-    const input = 'Da bị ngứa mẩn đỏ dị ứng và nổi mề đay';
+  it('should triage surgical and minor procedure symptoms to Ngoại khoa & Phẫu thuật / Tiểu phẫu', () => {
+    const input = 'Cần tiểu phẫu điều trị hội chứng ống cổ tay và xử lý vết thương nông';
     const result = triageService.triageSymptoms(input);
 
-    expect(result.deptId).toBe(8);
-    expect(result.deptName).toBe('Khoa Da liễu');
-    expect(result.doctorName).toContain('Lê Thị Lan Anh');
+    expect(result.deptId).toBe(2);
+    expect(result.deptName).toBe('Ngoại khoa & Phẫu thuật / Tiểu phẫu');
+    expect(result.doctorName).toContain('Lê Thị Nga');
   });
 
-  it('should route unclassified symptoms safely to General Internal Medicine fallback', () => {
+  it('should triage aesthetic and skin reconstruction symptoms to Dịch vụ Thẩm mỹ / Tạo hình', () => {
+    const testCases = [
+      'dịch vụ nâng mũi',
+      'tư vấn thẩm mỹ tái tạo da',
+      'nâng mũi thẩm mỹ tạo hình'
+    ];
+
+    testCases.forEach(input => {
+      const result = triageService.triageSymptoms(input);
+      expect(result).toBeDefined();
+      expect(result.deptId).toBe(14);
+      expect(result.deptName).toBe('Dịch vụ Thẩm mỹ / Tạo hình');
+      expect(result.doctorName).toContain('Lê Tuấn Hiệp');
+    });
+  });
+
+  it('should route unclassified symptoms safely to Khoa Khám bệnh / Cấp cứu ban đầu fallback', () => {
     const input = 'Tôi muốn kiểm tra sức khỏe tổng quát định kỳ';
     const result = triageService.triageSymptoms(input);
 
     expect(result.deptId).toBe(1);
-    expect(result.deptName).toBe('Khoa Nội tổng quát');
+    expect(result.deptName).toBe('Khoa Khám bệnh / Cấp cứu ban đầu');
     expect(result.confidence).toBeDefined();
     expect(result.advice).toBeDefined();
   });

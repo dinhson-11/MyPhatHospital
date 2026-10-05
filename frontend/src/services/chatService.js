@@ -148,8 +148,8 @@ export const chatService = {
       textReply =
         '⚠️ **TÌNH HUỐNG KHẨN CẤP / CẦN XỬ TRÍ NGAY LẬP TỨC**\n\n' +
         'Các dấu hiệu bạn mô tả có thể là tình trạng cấp cứu nguy hiểm đến tính mạng.\n' +
-        '• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Bệnh viện Đa khoa Huyện Thanh Sơn**.\n' +
-        '• Hotline cấp cứu: **0210.3872.115** (trực 24/7).\n' +
+        '• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n' +
+        '• Hotline cấp cứu: **0789 065 493** (trực 24/7).\n' +
         '• Không tự ý uống thuốc hoặc chờ đợi tại nhà!';
       showBooking = false;
     }
@@ -162,11 +162,11 @@ export const chatService = {
     ) {
       intent = 'GREETING';
       textReply =
-        'Xin chào! Tôi là **Trợ lý AI Y tế Bệnh viện Thanh Sơn**.\n\n' +
+        'Xin chào! Tôi là **Trợ lý AI Y tế Mỹ Phát Hospital**.\n\n' +
         'Tôi có thể hỗ trợ bạn:\n' +
         '• Tư vấn sơ bộ triệu chứng và gợi ý chuyên khoa khám\n' +
         '• Tra cứu giờ làm việc, thủ tục BHYT và viện phí\n' +
-        '• Hướng dẫn đặt lịch khám trực tuyến\n\n' +
+        '• Hướng dẫn đặt lịch khám trực tuyến hoặc gọi hotline 0789 065 493\n\n' +
         'Bạn đang gặp vấn đề sức khỏe gì hoặc cần hỗ trợ thông tin nào?';
       showBooking = false;
     }
@@ -174,7 +174,7 @@ export const chatService = {
     else if (lower.includes('bhyt') || lower.includes('bảo hiểm') || lower.includes('thủ tục')) {
       intent = 'FAQ';
       textReply =
-        'Bệnh viện Thanh Sơn tiếp nhận khám chữa bệnh BHYT thông tuyến toàn quốc từ Thứ 2 đến Thứ 7 hàng tuần (7h00 - 17h00). ' +
+        'Mỹ Phát Hospital tiếp nhận khám chữa bệnh BHYT thông tuyến toàn quốc từ Thứ 2 đến Chủ Nhật hàng tuần (7h00 - 17h30). ' +
         'Quý khách chỉ cần mang theo CCCD gắn chip hoặc thẻ BHYT trên ứng dụng VssID khi đến làm thủ tục.';
       showBooking = true;
     }
@@ -182,10 +182,10 @@ export const chatService = {
     else if (lower.includes('giờ khám') || lower.includes('giờ làm việc') || lower.includes('mấy giờ')) {
       intent = 'FAQ';
       textReply =
-        '⏰ **Lịch khám bệnh tại Bệnh viện Thanh Sơn:**\n\n' +
-        '• Thứ 2 – Thứ 6: 07h00 – 11h30 (sáng) | 13h30 – 17h00 (chiều)\n' +
-        '• Thứ 7: 07h00 – 12h00 (khám theo yêu cầu và BHYT)\n' +
-        '• Cấp cứu hoạt động 24/24 tất cả các ngày trong tuần.';
+        '⏰ **Lịch khám bệnh tại Mỹ Phát Hospital:**\n\n' +
+        '• Thứ 2 – Chủ Nhật: 07h00 – 11h30 (sáng) | 13h30 – 17h30 (chiều)\n' +
+        '• Khám BHYT và dịch vụ theo yêu cầu hàng ngày\n' +
+        '• Cấp cứu hoạt động 24/24 tất cả các ngày trong tuần (Hotline: 0789 065 493).';
       showBooking = true;
     }
     // 5. Đặt lịch

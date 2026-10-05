@@ -43,7 +43,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final DepartmentRepository departmentRepository;
 
     /**
-     * Khung giờ chuẩn theo lịch làm việc của Bệnh viện Đa khoa Thanh Sơn.
+     * Khung giờ chuẩn theo lịch làm việc của Mỹ Phát Hospital.
      * Sáng: 08:00 - 11:00 (6 ca 30 phút)
      * Chiều: 13:30 - 16:30 (6 ca 30 phút)
      */

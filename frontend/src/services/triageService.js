@@ -2,30 +2,43 @@ import { TRIAGE_RULES } from './dataService';
 
 export const triageService = {
   analyzeSymptom(query) {
-    if (!query || typeof query !== 'string') {
+    if (!query || typeof query !== 'string' || !query.trim()) {
       return null;
     }
 
     const cleanQuery = query.trim().toLowerCase();
-    let matched = null;
+    let bestRule = null;
+    let highestScore = 0;
 
     for (const rule of TRIAGE_RULES) {
-      if (rule.keywords.some(kw => cleanQuery.includes(kw))) {
-        matched = rule;
-        break;
+      let score = 0;
+      for (const kw of rule.keywords) {
+        if (cleanQuery.includes(kw)) {
+          // Các đại từ nhân xưng chung chung ('trẻ', 'bé', 'con') có trọng số thấp hơn triệu chứng thực thể
+          const isGenericDemographic = ['trẻ', 'bé', 'con'].includes(kw);
+          const weight = isGenericDemographic ? 1 : (kw.length >= 6 ? 10 : 4);
+          score += weight;
+        }
+      }
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestRule = rule;
       }
     }
+
+    let matched = bestRule;
 
     if (!matched) {
       matched = {
         deptId: 1,
-        deptName: 'Khoa Nội tổng quát',
-        doctorId: 2,
-        doctorName: 'PGS. TS. Trần Thị Mai',
+        deptName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
+        doctorId: 1,
+        doctorName: 'TS.BS Vi Mai Anh',
         urgency: 'MEDIUM',
-        urgencyLabel: 'Khám Nội tổng quát & Sàng lọc ban đầu',
+        urgencyLabel: 'Khám Khám bệnh & Sàng lọc ban đầu',
         confidence: '95%',
-        advice: 'Với các triệu chứng mô tả, hệ thống khuyến nghị bạn nên ưu tiên khám tại Khoa Nội tổng quát để bác sĩ kiểm tra lâm sàng toàn diện và chỉ định các xét nghiệm chẩn đoán thích hợp.'
+        advice: 'Với các triệu chứng mô tả, hệ thống khuyến nghị bạn nên ưu tiên khám tại Khoa Khám bệnh / Cấp cứu ban đầu để bác sĩ kiểm tra lâm sàng toàn diện và chỉ định các xét nghiệm chẩn đoán thích hợp.'
       };
     }
 

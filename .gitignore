@@ -1,12 +1,18 @@
-# === IDE ===
+# === IDE & Editor Tools ===
 .idea/
 .vscode/
+.claude/
 *.iml
 *.iws
 *.ipr
 .project
 .classpath
 .settings/
+.eclipse/
+*.suo
+*.sln
+*.swp
+*.sw?
 
 # === Java / Maven ===
 target/
@@ -21,15 +27,27 @@ __pycache__/
 *$py.class
 *.egg-info/
 .eggs/
-dist/
 venv/
 .venv/
 env/
+# AI model artifacts (can be large binaries)
+*.joblib
+*.pkl
+*.h5
+*.pt
+*.pth
+# Pytest
+.pytest_cache/
 
 # === Node / Frontend ===
 node_modules/
 build/
 dist/
+dist-ssr/
+# Frontend env files (handled by Vite)
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
 # === Environment & Secrets ===
 .env
@@ -51,5 +69,10 @@ desktop.ini
 # === Docker ===
 docker-compose.override.yml
 
-# === Claude ===
-# .claude/ is intentionally tracked for team-shared skills/rules
+# === Large/Binary Assets (add to git-lfs if needed) ===
+*.joblib
+*.pkl
+# === Misc ===
+*.bak
+*.tmp
+*.orig

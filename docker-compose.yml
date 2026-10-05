@@ -27,7 +27,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hmsai_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-hmsai_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-hmsai_password}
-      JWT_SECRET: ${JWT_SECRET:-bXktc2VjcmV0LWtleS1mb3ItaG1zYWktcHJvamVjdC0yNTYtYml0cy1sb25n}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env - see .env.example}
       AI_SERVICE_URL: http://ai-service:8000
     ports:
       - "8080:8080"

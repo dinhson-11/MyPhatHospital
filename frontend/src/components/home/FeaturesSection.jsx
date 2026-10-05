@@ -41,7 +41,7 @@ export const FeaturesSection = () => {
             CÔNG NGHỆ & TẬN TÂM
           </span>
           <h2 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface mb-3 tracking-tight">
-            Vì sao chọn Bệnh viện Thanh Sơn?
+            Vì sao chọn Mỹ Phát Hospital?
           </h2>
           <p className="font-body text-sm text-on-surface-variant leading-relaxed">
             Sự kết hợp hoàn hảo giữa năng lực chuyên môn của y bác sĩ giàu kinh nghiệm và hệ thống hỗ trợ số hóa hiện đại hàng đầu.

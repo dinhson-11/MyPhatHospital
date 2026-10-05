@@ -80,4 +80,73 @@ public class DrugServiceImpl implements DrugService {
                 .map(DrugInteractionResponse::fromEntity)
                 .toList();
     }
+
+    @Override
+    @Transactional
+    public DrugResponse createDrug(com.hospital.hmsai.pharmacy.dto.CreateDrugRequest request) {
+        log.info("Thêm thuốc mới vào danh mục: code='{}', name='{}'", request.getCode(), request.getName());
+        if (drugRepository.existsByCode(request.getCode().trim())) {
+            throw new com.hospital.hmsai.common.exception.BusinessException("Mã thuốc " + request.getCode() + " đã tồn tại trong hệ thống");
+        }
+        Drug drug = Drug.builder()
+                .code(request.getCode().trim().toUpperCase())
+                .name(request.getName().trim())
+                .unit(request.getUnit() != null ? request.getUnit().trim() : "Viên")
+                .price(request.getPrice())
+                .stockQuantity(request.getStockQuantity() != null ? request.getStockQuantity() : 0)
+                .expiryDate(request.getExpiryDate())
+                .build();
+        Drug saved = drugRepository.save(drug);
+        log.info("Đã lưu thuốc mới ID: {}", saved.getId());
+        return DrugResponse.fromEntity(saved);
+    }
+
+    @Override
+    @Transactional
+    public DrugResponse updateStock(Long id, com.hospital.hmsai.pharmacy.dto.UpdateStockRequest request) {
+        log.info("Cập nhật tồn kho thuốc ID: {}, type: {}, qty: {}", id, request.getAdjustmentType(), request.getQuantity());
+        Drug drug = drugRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Thuốc", "id", id));
+
+        int current = drug.getStockQuantity() != null ? drug.getStockQuantity() : 0;
+        int qty = request.getQuantity();
+
+        switch (request.getAdjustmentType()) {
+            case IMPORT -> drug.setStockQuantity(current + qty);
+            case EXPORT -> {
+                if (current < qty) {
+                    throw new com.hospital.hmsai.common.exception.BusinessException(
+                            "Không đủ tồn kho để xuất. Tồn hiện tại: " + current + ", yêu cầu xuất: " + qty);
+                }
+                drug.setStockQuantity(current - qty);
+            }
+            case ADJUSTMENT -> drug.setStockQuantity(qty);
+        }
+
+        Drug updated = drugRepository.save(drug);
+        log.info("Cập nhật kho thành công thuốc ID {}: tồn kho mới = {}", id, updated.getStockQuantity());
+        return DrugResponse.fromEntity(updated);
+    }
+
+    @Override
+    public List<DrugResponse> getExpiringSoonDrugs(int days) {
+        int safeDays = days > 0 ? days : 30;
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate targetDate = today.plusDays(safeDays);
+        log.info("Lấy danh sách thuốc sắp hết hạn từ {} đến {}", today, targetDate);
+        return drugRepository.findByExpiryDateBetweenOrderByExpiryDateAsc(today, targetDate)
+                .stream()
+                .map(DrugResponse::fromEntity)
+                .toList();
+    }
+
+    @Override
+    public List<DrugResponse> getLowStockDrugs(int threshold) {
+        int safeThreshold = threshold > 0 ? threshold : 20;
+        log.info("Lấy danh sách thuốc sắp hết hàng (tồn kho <= {})", safeThreshold);
+        return drugRepository.findByStockQuantityLessThanEqualOrderByStockQuantityAsc(safeThreshold)
+                .stream()
+                .map(DrugResponse::fromEntity)
+                .toList();
+    }
 }

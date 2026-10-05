@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { patientService } from '../../services/patientService';
+import { patientService, validatePatientProfile, BLOOD_TYPES } from '../../services/patientService';
 import AllergiesSection from './AllergiesSection';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 /**
  * PatientProfileModal – Hồ sơ sức khỏe bệnh nhân.
@@ -10,6 +11,7 @@ import AllergiesSection from './AllergiesSection';
  * Tích hợp AllergiesSection để quản lý dị ứng.
  */
 export default function PatientProfileModal({ isOpen, onClose }) {
+  useEscapeKey(isOpen, onClose);
   const { user } = useAuth();
   const { showToast } = useToast();
 
@@ -18,6 +20,7 @@ export default function PatientProfileModal({ isOpen, onClose }) {
   const [editForm, setEditForm] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
 
   // Tải hồ sơ khi mở modal
   useEffect(() => {
@@ -40,6 +43,12 @@ export default function PatientProfileModal({ isOpen, onClose }) {
   };
 
   const handleSave = async () => {
+    const validationErrors = validatePatientProfile(editForm);
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
+      showToast(Object.values(validationErrors)[0], 'warning');
+      return;
+    }
     setSaving(true);
     try {
       const updateData = {
@@ -48,7 +57,8 @@ export default function PatientProfileModal({ isOpen, onClose }) {
         gender: editForm.gender,
         nationalId: editForm.nationalId,
         address: editForm.address,
-        phone: editForm.phone
+        phone: editForm.phone,
+        bloodType: editForm.bloodType || ''
       };
       const updated = await patientService.updateMyProfile(updateData);
       setProfile(updated);
@@ -63,6 +73,7 @@ export default function PatientProfileModal({ isOpen, onClose }) {
 
   const handleCancel = () => {
     setEditForm(profile);
+    setErrors({});
     setIsEditing(false);
   };
 
@@ -96,13 +107,19 @@ export default function PatientProfileModal({ isOpen, onClose }) {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-500 flex items-center justify-center transition-colors shadow-sm"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
+              ESC
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-500 flex items-center justify-center transition-colors shadow-sm cursor-pointer"
+              title="Đóng (Esc)"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -164,6 +181,7 @@ export default function PatientProfileModal({ isOpen, onClose }) {
                     value={isEditing ? editForm.fullName : profile.fullName}
                     editing={isEditing}
                     onChange={(v) => handleChange('fullName', v)}
+                    error={errors.fullName}
                   />
                   <ProfileField
                     label="Ngày sinh"
@@ -201,6 +219,17 @@ export default function PatientProfileModal({ isOpen, onClose }) {
                     value={isEditing ? editForm.phone : profile.phone}
                     editing={isEditing}
                     onChange={(v) => handleChange('phone', v)}
+                    error={errors.phone}
+                  />
+                  <ProfileField
+                    label="Nhóm máu"
+                    icon="bloodtype"
+                    value={isEditing ? editForm.bloodType : profile.bloodType}
+                    editing={isEditing}
+                    type="select"
+                    options={BLOOD_TYPES.map(b => ({ value: b, label: b }))}
+                    onChange={(v) => handleChange('bloodType', v)}
+                    error={errors.bloodType}
                   />
                   <ProfileField
                     label="Địa chỉ"
@@ -234,7 +263,7 @@ export default function PatientProfileModal({ isOpen, onClose }) {
 /**
  * ProfileField – Component hiển thị/chỉnh sửa 1 trường thông tin.
  */
-function ProfileField({ label, icon, value, editing, type = 'text', options, displayValue, onChange }) {
+function ProfileField({ label, icon, value, editing, type = 'text', options, displayValue, onChange, error }) {
   if (editing) {
     if (type === 'select') {
       return (
@@ -258,7 +287,8 @@ function ProfileField({ label, icon, value, editing, type = 'text', options, dis
     }
 
     return (
-      <div className="flex items-center gap-3 py-2 px-3 rounded-xl bg-blue-50/50 border border-blue-100">
+      <div className="py-2 px-3 rounded-xl bg-blue-50/50 border border-blue-100">
+        <div className="flex items-center gap-3">
         <span className="material-symbols-outlined text-base text-blue-500">{icon}</span>
         <div className="flex-1">
           <label className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{label}</label>
@@ -270,6 +300,8 @@ function ProfileField({ label, icon, value, editing, type = 'text', options, dis
             placeholder={`Nhập ${label.toLowerCase()}`}
           />
         </div>
+        </div>
+        {error && <p role="alert" className="text-[11px] text-rose-600 mt-1 ml-8">{error}</p>}
       </div>
     );
   }

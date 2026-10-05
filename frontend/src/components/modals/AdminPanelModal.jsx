@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { appointmentService } from '../../services/appointmentService';
 import { DEPARTMENTS, DOCTORS } from '../../services/dataService';
 import { useToast } from '../../context/ToastContext';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 export default function AdminPanelModal({ isOpen, onClose }) {
+  useEscapeKey(isOpen, onClose);
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
@@ -45,13 +47,19 @@ export default function AdminPanelModal({ isOpen, onClose }) {
               <p className="text-xs text-slate-400">HMS-AI Management Console &bull; Quyền Quản trị viên</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-700 rounded">
+              ESC
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              title="Đóng (Esc)"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
 
         {/* System Overview Badges */}

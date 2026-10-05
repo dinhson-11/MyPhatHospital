@@ -1,8 +1,10 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, onOpenPatientProfile }) {
+  useEscapeKey(isOpen, onClose);
   const { user, logout } = useAuth();
   const { showToast } = useToast();
 
@@ -31,13 +33,19 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, 
               <p className="text-xs text-slate-500">Thông tin tài khoản khám bệnh điện tử</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
+              ESC
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              title="Đóng (Esc)"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
 
         {/* User Card */}
@@ -63,13 +71,31 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, 
           </div>
 
           <div className="space-y-2.5 text-xs">
+            {user.title && (
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">Chức vụ:</span>
+                <span className="font-semibold text-slate-800 text-right">{user.title}</span>
+              </div>
+            )}
+            {user.departmentName && (
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">Khoa / Phòng:</span>
+                <span className="font-semibold text-teal-800 text-right">{user.departmentName}</span>
+              </div>
+            )}
+            {user.room && (
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">Phòng làm việc:</span>
+                <span className="font-semibold text-slate-800 text-right">{user.room}</span>
+              </div>
+            )}
             <div className="flex justify-between py-2 border-b border-slate-100">
               <span className="text-slate-500">Email:</span>
               <span className="font-semibold text-slate-800">{user.email || 'Chưa cập nhật'}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-slate-100">
               <span className="text-slate-500">Số điện thoại:</span>
-              <span className="font-semibold text-slate-800">{user.phoneNumber || 'Chưa cập nhật'}</span>
+              <span className="font-semibold text-slate-800">{user.phoneNumber || user.phone || '0789 065 493'}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-slate-100">
               <span className="text-slate-500">Trạng thái:</span>

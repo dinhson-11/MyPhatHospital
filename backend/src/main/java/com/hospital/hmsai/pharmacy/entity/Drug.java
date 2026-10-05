@@ -60,4 +60,14 @@ public class Drug {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    public boolean isLowStock(int threshold) {
+        return stockQuantity != null && stockQuantity <= threshold;
+    }
+
+    public boolean isExpiringSoon(int days) {
+        if (expiryDate == null) return false;
+        LocalDate now = LocalDate.now();
+        return !expiryDate.isBefore(now) && expiryDate.isBefore(now.plusDays(days));
+    }
 }

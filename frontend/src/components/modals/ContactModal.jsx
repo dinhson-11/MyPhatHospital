@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useToast } from '../../context/ToastContext';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 export default function ContactModal({ isOpen, onClose }) {
+  useEscapeKey(isOpen, onClose);
   const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' });
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
@@ -38,16 +40,22 @@ export default function ContactModal({ isOpen, onClose }) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900">Liên Hệ & Hỗ Trợ 24/7</h3>
-              <p className="text-xs text-slate-500">Bệnh viện Đa khoa Thanh Sơn sẵn sàng lắng nghe</p>
+              <p className="text-xs text-slate-500">Mỹ Phát Hospital luôn sẵn sàng lắng nghe & đồng hành</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
+              ESC
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              title="Đóng (Esc)"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -57,23 +65,25 @@ export default function ContactModal({ isOpen, onClose }) {
             <div>
               <h4 className="font-bold text-slate-900 text-sm mb-3">Thông Tin Đường Dây Nóng</h4>
               <div className="space-y-3 text-xs text-slate-600">
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-rose-50 border border-rose-100">
-                  <span className="material-symbols-outlined text-rose-600 text-xl">emergency</span>
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-50 border border-rose-200">
+                  <span className="material-symbols-outlined text-rose-600 text-2xl animate-pulse">emergency</span>
                   <div>
-                    <strong className="text-rose-900 block text-xs">Cấp cứu khẩn cấp 24/7:</strong>
-                    <a href="tel:02103875115" className="text-sm font-black text-rose-600 hover:underline">
-                      0210 3875 115
+                    <strong className="text-rose-900 block text-xs">Cấp cứu khẩn cấp & Hotline 24/7:</strong>
+                    <a href="tel:0789065493" className="text-base font-black text-rose-600 hover:underline">
+                      0789 065 493
                     </a>
+                    <span className="block text-[11px] text-rose-700 mt-0.5">Tiếp nhận cấp cứu 24/24 tất cả các ngày</span>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <span className="material-symbols-outlined text-primary text-xl">call</span>
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <span className="material-symbols-outlined text-teal-700 text-2xl">call</span>
                   <div>
-                    <strong className="text-primary-dark block text-xs">Tổng đài CSKH miễn phí:</strong>
-                    <a href="tel:19006868" className="text-sm font-black text-primary hover:underline">
-                      1900 6868
+                    <strong className="text-teal-950 block text-xs">Tổng đài tư vấn & Đặt lịch khám:</strong>
+                    <a href="tel:0789065493" className="text-base font-black text-teal-800 hover:underline">
+                      0789 065 493
                     </a>
+                    <span className="block text-[11px] text-teal-700 mt-0.5">Hỗ trợ BHYT, bảng giá & lịch trực bác sĩ</span>
                   </div>
                 </div>
 
@@ -81,15 +91,49 @@ export default function ContactModal({ isOpen, onClose }) {
                   <span className="material-symbols-outlined text-slate-600 text-xl">location_on</span>
                   <div>
                     <strong className="text-slate-900 block text-xs">Địa chỉ cơ sở y tế:</strong>
-                    <span>Khu 4, Thị trấn Thanh Sơn, Huyện Thanh Sơn, Tỉnh Phú Thọ</span>
+                    <a
+                      href="https://maps.app.goo.gl/2vAWcXFcfgSGPS7H6"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-teal-800 hover:underline flex items-center gap-1 mt-0.5"
+                    >
+                      <span>1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang</span>
+                      <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                    </a>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="material-symbols-outlined text-slate-600 text-xl">schedule</span>
                   <div>
-                    <strong className="text-slate-900 block text-xs">Giờ tiếp nhận khám:</strong>
-                    <span>Thứ 2 - Thứ 7: 07:00 - 17:00 (Cấp cứu trực 24/24)</span>
+                    <strong className="text-slate-900 block text-xs">Giờ tiếp nhận khám bệnh:</strong>
+                    <span>Thứ 2 – Chủ Nhật: 07:00 – 17:30 (Cấp cứu trực 24/24)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="material-symbols-outlined text-teal-600 text-xl">mail</span>
+                  <div>
+                    <strong className="text-slate-900 block text-xs">Email liên hệ:</strong>
+                    <a href="mailto:myphathospital@gmail.com" className="font-medium text-teal-800 hover:underline">
+                      myphathospital@gmail.com
+                    </a>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-blue-50/60 border border-blue-200/80">
+                  <span className="material-symbols-outlined text-blue-600 text-xl">public</span>
+                  <div>
+                    <strong className="text-blue-900 block text-xs">Fanpage Facebook chính thức:</strong>
+                    <a
+                      href="https://www.facebook.com/MyPhatHospital"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-700 hover:underline flex items-center gap-1 mt-0.5"
+                    >
+                      <span>facebook.com/MyPhatHospital</span>
+                      <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                    </a>
                   </div>
                 </div>
               </div>

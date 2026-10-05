@@ -3,7 +3,8 @@ import { DEPARTMENTS, DOCTORS, TIME_SLOTS } from '../../services/dataService';
 import { appointmentService } from '../../services/appointmentService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import logoHospital from '../../assets/LogoBV.png';
+import logoHospital from '../../assets/logo.png';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 export default function BookingModal({
   isOpen,
@@ -11,6 +12,7 @@ export default function BookingModal({
   initialData = {},
   onViewAppointments
 }) {
+  useEscapeKey(isOpen, onClose);
   const { user, isAuthenticated } = useAuth();
   const { showToast } = useToast();
 
@@ -39,14 +41,20 @@ export default function BookingModal({
       setPhoneNumber('');
     }
 
-    if (initialData.departmentId) {
+    const bookableDepts = DEPARTMENTS.filter((dept) => dept.canBook !== false);
+    if (initialData.departmentId && bookableDepts.some((dept) => dept.id === Number(initialData.departmentId))) {
       setDepartmentId(String(initialData.departmentId));
     } else {
-      setDepartmentId(String(DEPARTMENTS[0].id));
+      setDepartmentId(String(bookableDepts[0]?.id || '1'));
     }
 
     if (initialData.doctorId) {
-      setDoctorId(String(initialData.doctorId));
+      const targetDoc = DOCTORS.find((d) => d.id === Number(initialData.doctorId));
+      if (targetDoc && targetDoc.canBook !== false) {
+        setDoctorId(String(initialData.doctorId));
+      } else {
+        setDoctorId('');
+      }
     } else {
       setDoctorId('');
     }
@@ -66,9 +74,9 @@ export default function BookingModal({
 
   if (!isOpen) return null;
 
-  // Filter available doctors for the selected department
+  // Filter available doctors for the selected department (only bookable examining doctors)
   const availableDoctors = DOCTORS.filter(
-    (d) => !departmentId || d.departmentId === Number(departmentId)
+    (d) => (!departmentId || d.departmentId === Number(departmentId)) && d.canBook !== false
   );
 
   const handleSubmit = async (e) => {
@@ -123,8 +131,8 @@ export default function BookingModal({
             <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shadow-xs shrink-0">
               <img
                 src={logoHospital}
-                alt="Logo Bệnh viện Thanh Sơn"
-                className="w-full h-full object-contain"
+                alt="Logo Mỹ Phát Hospital"
+                className="w-full h-full object-contain rounded-full"
                 onError={(e) => {
                   e.currentTarget.src = '/logo.png';
                 }}
@@ -135,17 +143,23 @@ export default function BookingModal({
                 {ticket ? 'Phiếu Khám Bệnh Điện Tử' : 'Đăng Ký Đặt Lịch Khám'}
               </h3>
               <p className="text-xs text-slate-500">
-                {ticket ? 'Mã phiếu khám hợp lệ tại Bệnh viện Thanh Sơn' : 'Tiết kiệm thời gian, không cần xếp hàng bốc số'}
+                {ticket ? 'Mã phiếu khám hợp lệ tại Mỹ Phát Hospital' : 'Tiết kiệm thời gian, không cần xếp hàng bốc số'}
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
+              ESC
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              title="Đóng (Esc)"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
@@ -186,8 +200,10 @@ export default function BookingModal({
                   <p className="font-bold text-slate-900">{ticket.doctorName}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Ngày khám:</p>
-                  <p className="font-bold text-slate-900">{ticket.appointmentDate}</p>
+                  <p className="text-xs text-slate-500">Ngày khám (dd/mm/yyyy):</p>
+                  <p className="font-bold text-slate-900">
+                    {ticket.appointmentDate ? ticket.appointmentDate.split('-').reverse().join('/') : ''}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Khung giờ:</p>
@@ -195,14 +211,20 @@ export default function BookingModal({
                 </div>
               </div>
 
-              <div className="pt-3">
-                <p className="text-xs text-slate-500">Địa điểm / Phòng khám:</p>
-                <p className="text-xs font-semibold text-slate-800 mt-0.5">{ticket.room}</p>
+              <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs text-slate-500">Địa điểm / Phòng khám:</p>
+                  <p className="text-xs font-bold text-teal-800 mt-0.5">{ticket.room}</p>
+                </div>
+                <div className="text-xs text-slate-500">
+                  <span>Trạng thái: </span>
+                  <span className="font-semibold text-emerald-700">Chờ tiếp đón tại quầy Tầng 1</span>
+                </div>
               </div>
 
               {/* Barcode Mock */}
-              <div className="mt-6 pt-4 border-t border-dashed border-emerald-200 text-center">
-                <div className="inline-block bg-white p-2 rounded-lg border border-slate-200">
+              <div className="mt-5 pt-4 border-t border-dashed border-emerald-200 text-center">
+                <div className="inline-block bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
                   <div className="h-10 flex items-center justify-center gap-1">
                     {[12, 24, 8, 16, 28, 6, 20, 14, 26, 10, 30, 8, 22, 18, 12, 26, 8, 24, 16].map(
                       (h, i) => (
@@ -214,12 +236,12 @@ export default function BookingModal({
                       )
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono tracking-widest mt-1 block">
+                  <span className="text-[11px] text-slate-600 font-mono font-bold tracking-widest mt-1 block">
                     {ticket.ticketCode}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2">
-                  Quý khách vui lòng lưu lại mã vé hoặc chụp màn hình để xuất trình tại quầy lễ tân số 02.
+                <p className="text-xs text-slate-600 mt-2 font-medium">
+                  Quý khách vui lòng xuất trình mã vé tại Quầy tiếp đón – Mỹ Phát Hospital (1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang). Hotline: 0789 065 493.
                 </p>
               </div>
             </div>
@@ -230,10 +252,10 @@ export default function BookingModal({
                 type="button"
                 id="btn-print-ticket"
                 onClick={handlePrint}
-                className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-lg">print</span>
-                In / Lưu Phiếu
+                In / Lưu Phiếu Khám
               </button>
 
               <button
@@ -243,7 +265,7 @@ export default function BookingModal({
                   onClose();
                   if (onViewAppointments) onViewAppointments();
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-3 px-4 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-lg">list_alt</span>
                 Xem Lịch Khám Của Tôi
@@ -251,8 +273,29 @@ export default function BookingModal({
             </div>
           </div>
         ) : (
-          /* BOOKING FORM */
-          <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+          /* BOOKING FORM WITH STEPPER */
+          <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+            {/* Visual Stepper */}
+            <div className="grid grid-cols-3 gap-2 pb-2 border-b border-slate-100 text-center">
+              <div className="flex flex-col items-center">
+                <span className="w-6 h-6 rounded-full bg-teal-700 text-white text-xs font-bold flex items-center justify-center mb-1">
+                  1
+                </span>
+                <span className="text-[11px] font-bold text-teal-800">Chuyên khoa</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="w-6 h-6 rounded-full bg-teal-700 text-white text-xs font-bold flex items-center justify-center mb-1">
+                  2
+                </span>
+                <span className="text-[11px] font-bold text-teal-800">Thời gian</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="w-6 h-6 rounded-full bg-teal-700 text-white text-xs font-bold flex items-center justify-center mb-1">
+                  3
+                </span>
+                <span className="text-[11px] font-bold text-teal-800">Người khám</span>
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -299,7 +342,7 @@ export default function BookingModal({
                   }}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
                 >
-                  {DEPARTMENTS.map((dept) => (
+                  {DEPARTMENTS.filter((d) => d.canBook !== false).map((dept) => (
                     <option key={dept.id} value={dept.id}>
                       {dept.name}
                     </option>

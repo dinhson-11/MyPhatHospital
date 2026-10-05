@@ -3,7 +3,7 @@ import React from 'react';
 const TESTIMONIALS = [
   {
     name: 'Bác Nguyễn Văn Thành (62 tuổi)',
-    location: 'Thị trấn Thanh Sơn, Phú Thọ',
+    location: 'Chũ, Bắc Ninh',
     department: 'Khoa Tim mạch',
     rating: 5,
     comment:
@@ -12,7 +12,7 @@ const TESTIMONIALS = [
   },
   {
     name: 'Chị Hoàng Thùy Linh (34 tuổi)',
-    location: 'Huyện Tân Sơn, Phú Thọ',
+    location: 'Lục Ngạn, Bắc Ninh',
     department: 'Khoa Nhi',
     rating: 5,
     comment:
@@ -21,7 +21,7 @@ const TESTIMONIALS = [
   },
   {
     name: 'Anh Đỗ Quang Huy (45 tuổi)',
-    location: 'Thanh Thủy, Phú Thọ',
+    location: 'Lục Nam, Bắc Ninh',
     department: 'Khoa Tiêu hóa',
     rating: 5,
     comment:
@@ -43,7 +43,7 @@ export default function TestimonialsSection() {
             Tin Tưởng Từ Hàng Trăm Nghìn Bệnh Nhân
           </h2>
           <p className="text-slate-600 text-base sm:text-lg">
-            Sự hài lòng và sức khỏe hồi phục của người bệnh chính là thước đo giá trị cao quý nhất của Bệnh viện Đa khoa Thanh Sơn.
+            Sự hài lòng và sức khỏe hồi phục của người bệnh chính là thước đo giá trị cao quý nhất của Mỹ Phát Hospital.
           </p>
         </div>
 

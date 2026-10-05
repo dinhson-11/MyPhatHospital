@@ -48,6 +48,7 @@ public class PatientServiceImpl implements PatientService {
                 .nationalId(request.getNationalId())
                 .address(request.getAddress())
                 .phone(request.getPhone())
+                .bloodType(blankToNull(request.getBloodType()))
                 .build();
 
         Patient saved = patientRepository.save(patient);
@@ -132,7 +133,7 @@ public class PatientServiceImpl implements PatientService {
     // ==================== Helper Methods ====================
 
     /**
-     * Sinh mã bệnh nhân theo format: BN-YYMMDD-XXX
+     * Sinh mã bệnh nhân theo format: BN-YYMMDD-NNN
      * VD: BN-260928-042
      */
     private String generatePatientCode() {
@@ -174,6 +175,13 @@ public class PatientServiceImpl implements PatientService {
         if (request.getPhone() != null) {
             patient.setPhone(request.getPhone());
         }
+        if (request.getBloodType() != null) {
+            patient.setBloodType(blankToNull(request.getBloodType()));
+        }
+    }
+
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 
     /**
@@ -189,6 +197,7 @@ public class PatientServiceImpl implements PatientService {
                 .nationalId(patient.getNationalId())
                 .address(patient.getAddress())
                 .phone(patient.getPhone())
+                .bloodType(patient.getBloodType())
                 .userId(patient.getUser() != null ? patient.getUser().getId() : null)
                 .createdAt(patient.getCreatedAt())
                 .updatedAt(patient.getUpdatedAt())

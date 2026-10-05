@@ -5,7 +5,6 @@ import com.hospital.hmsai.clinical.entity.VisitStatus;
 import com.hospital.hmsai.clinical.service.VisitService;
 import com.hospital.hmsai.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +30,7 @@ public class VisitController {
     private final VisitService visitService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'NURSE', 'ADMIN')")
     @Operation(summary = "Bắt đầu ca khám bệnh", description = "Bác sĩ hoặc điều dưỡng tạo lượt khám mới (từ lịch hẹn hoặc trực tiếp).")
     public ResponseEntity<ApiResponse<VisitResponse>> createVisit(
             @Valid @RequestBody CreateVisitRequest request) {

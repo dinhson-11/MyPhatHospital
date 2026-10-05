@@ -77,4 +77,45 @@ public class DrugController {
         List<DrugInteractionResponse> result = drugService.checkInteractionsAmongDrugs(drugIds);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
+
+    @PostMapping
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
+    @Operation(summary = "Thêm thuốc mới vào danh mục", description = "Tạo mới thuốc trong danh mục kho dược (FR-6.1)")
+    public ResponseEntity<ApiResponse<DrugResponse>> createDrug(
+            @jakarta.validation.Valid @RequestBody com.hospital.hmsai.pharmacy.dto.CreateDrugRequest request) {
+        log.info("POST /api/v1/drugs – mã thuốc: {}", request.getCode());
+        DrugResponse response = drugService.createDrug(request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Thêm thuốc vào danh mục thành công"));
+    }
+
+    @PutMapping("/{id}/stock")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
+    @Operation(summary = "Cập nhật tồn kho thuốc", description = "Nhập kho, xuất kho hoặc điều chỉnh tồn kho (FR-6.1)")
+    public ResponseEntity<ApiResponse<DrugResponse>> updateStock(
+            @PathVariable Long id,
+            @jakarta.validation.Valid @RequestBody com.hospital.hmsai.pharmacy.dto.UpdateStockRequest request) {
+        log.info("PUT /api/v1/drugs/{}/stock – type: {}, qty: {}", id, request.getAdjustmentType(), request.getQuantity());
+        DrugResponse response = drugService.updateStock(id, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật tồn kho thành công"));
+    }
+
+    @GetMapping("/expiring-soon")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
+    @Operation(summary = "Danh sách thuốc sắp hết hạn", description = "Lọc thuốc hết hạn trong N ngày tới (mặc định 30 ngày) - FR-6.3")
+    public ResponseEntity<ApiResponse<List<DrugResponse>>> getExpiringSoon(
+            @RequestParam(required = false, defaultValue = "30") int days) {
+        log.info("GET /api/v1/drugs/expiring-soon – days: {}", days);
+        List<DrugResponse> list = drugService.getExpiringSoonDrugs(days);
+        return ResponseEntity.ok(ApiResponse.success(list));
+    }
+
+    @GetMapping("/low-stock")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
+    @Operation(summary = "Danh sách thuốc tồn kho thấp", description = "Lọc thuốc có số lượng tồn kho <= ngưỡng cảnh báo (mặc định 20) - FR-6.3")
+    public ResponseEntity<ApiResponse<List<DrugResponse>>> getLowStock(
+            @RequestParam(required = false, defaultValue = "20") int threshold) {
+        log.info("GET /api/v1/drugs/low-stock – threshold: {}", threshold);
+        List<DrugResponse> list = drugService.getLowStockDrugs(threshold);
+        return ResponseEntity.ok(ApiResponse.success(list));
+    }
 }

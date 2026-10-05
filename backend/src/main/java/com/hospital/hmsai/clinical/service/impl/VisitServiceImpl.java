@@ -11,7 +11,6 @@ import com.hospital.hmsai.appointment.repository.AppointmentRepository;
 import com.hospital.hmsai.clinical.dto.*;
 import com.hospital.hmsai.clinical.entity.*;
 import com.hospital.hmsai.clinical.repository.LabOrderRepository;
-import com.hospital.hmsai.clinical.repository.PrescriptionItemRepository;
 import com.hospital.hmsai.clinical.repository.PrescriptionRepository;
 import com.hospital.hmsai.clinical.repository.VisitRepository;
 import com.hospital.hmsai.clinical.service.VisitService;
@@ -48,7 +47,6 @@ public class VisitServiceImpl implements VisitService {
     private final PatientRepository patientRepository;
     private final StaffProfileRepository staffProfileRepository;
     private final PrescriptionRepository prescriptionRepository;
-    private final PrescriptionItemRepository prescriptionItemRepository;
     private final LabOrderRepository labOrderRepository;
     private final DrugRepository drugRepository;
     private final MedicalRecordRepository medicalRecordRepository;

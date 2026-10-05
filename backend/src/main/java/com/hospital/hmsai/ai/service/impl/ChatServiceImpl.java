@@ -211,8 +211,8 @@ public class ChatServiceImpl implements ChatService {
             return AiChatbotResponse.builder()
                     .reply("⚠️ **TÌNH HUỐNG KHẨN CẤP / CẦN XỬ TRÍ NGAY LẬP TỨC**\n\n"
                             + "Các dấu hiệu bạn mô tả có thể là tình trạng cấp cứu nguy hiểm đến tính mạng.\n"
-                            + "• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Bệnh viện Đa khoa Huyện Thanh Sơn**.\n"
-                            + "• Hotline cấp cứu: **0210.3872.115** (trực 24/7).\n"
+                            + "• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n"
+                            + "• Hotline cấp cứu 24/7: **0789 065 493**.\n"
                             + "• Không tự ý uống thuốc hoặc chờ đợi tại nhà!")
                     .intent("EMERGENCY")
                     .showBookingButton(false)
@@ -224,7 +224,7 @@ public class ChatServiceImpl implements ChatService {
         // 2. Chào hỏi
         if (lower.contains("xin chào") || lower.contains("chào bạn") || lower.contains("hello") || lower.contains("hi bạn")) {
             return AiChatbotResponse.builder()
-                    .reply("Xin chào! Tôi là **Trợ lý AI Y tế của Bệnh viện Thanh Sơn**.\n\n"
+                    .reply("Xin chào! Tôi là **Trợ lý AI Y tế của Mỹ Phát Hospital**.\n\n"
                             + "Tôi có thể giúp bạn:\n"
                             + "• Tra cứu thông tin dịch vụ, giờ khám, bảo hiểm y tế\n"
                             + "• Tư vấn sơ bộ triệu chứng và gợi ý chuyên khoa khám phù hợp\n"
@@ -240,7 +240,7 @@ public class ChatServiceImpl implements ChatService {
         // 3. FAQ: BHYT
         if (lower.contains("bhyt") || lower.contains("bảo hiểm y tế") || lower.contains("thẻ bhyt")) {
             return AiChatbotResponse.builder()
-                    .reply("🏥 **Thông tin Bảo hiểm Y tế tại Bệnh viện Thanh Sơn:**\n\n"
+                    .reply("🏥 **Thông tin Bảo hiểm Y tế tại Mỹ Phát Hospital:**\n\n"
                             + "• Tiếp nhận BHYT thông tuyến toàn quốc (tuyến huyện/tỉnh theo quy định).\n"
                             + "• Khi đi khám, bạn cần mang theo: CCCD gắn chip (hoặc thẻ BHYT trên ứng dụng VssID) và giấy hẹn khám lại (nếu có).\n"
                             + "• Thời gian tiếp nhận khám BHYT: Thứ 2 – Thứ 6 (7h00 – 17h00), Thứ 7 (7h00 – 12h00).\n"
@@ -255,7 +255,7 @@ public class ChatServiceImpl implements ChatService {
         // 4. FAQ: Giờ khám
         if (lower.contains("giờ khám") || lower.contains("giờ làm việc") || lower.contains("mấy giờ") || lower.contains("lịch làm việc")) {
             return AiChatbotResponse.builder()
-                    .reply("⏰ **Lịch làm việc Bệnh viện Thanh Sơn:**\n\n"
+                    .reply("⏰ **Lịch làm việc Mỹ Phát Hospital:**\n\n"
                             + "• **Thứ 2 – Thứ 6**: Sáng 07h00 – 11h30 | Chiều 13h30 – 17h00\n"
                             + "• **Thứ 7**: Sáng 07h00 – 12h00 (khám theo yêu cầu và BHYT)\n"
                             + "• **Chủ nhật**: Khám theo yêu cầu (liên hệ hotline trước)\n"
@@ -280,6 +280,15 @@ public class ChatServiceImpl implements ChatService {
         }
 
         // 6. Gợi ý chuyên khoa theo triệu chứng
+        // 6a. Triệu chứng Da liễu & Dị ứng: ưu tiên cao cho các tổn thương da mẩn/mần ngứa, dị ứng, mề đay kể cả khi có từ 'bé', 'con'
+        if (lower.contains("dị ứng") || lower.contains("nổi mẩn") || lower.contains("nổi mần")
+                || lower.contains("mẩn ngứa") || lower.contains("mần ngứa") || lower.contains("ngứa")
+                || lower.contains("phát ban") || lower.contains("mề đay") || lower.contains("mày đay")
+                || lower.contains("viêm da") || lower.contains("mụn") || lower.contains("nấm da")) {
+            return buildDeptResponse(sessionId, 8, "Khoa Da liễu",
+                    "Triệu chứng trên da và dị ứng của bạn nên được bác sĩ **Khoa Da liễu** thăm khám trực tiếp để chẩn đoán chính xác và kê đơn điều trị.",
+                    "Dấu hiệu da liễu / dị ứng, mẩn ngứa", "MEDIUM");
+        }
         if (lower.contains("trẻ") || lower.contains("bé") || lower.contains("con tôi") || lower.contains("sơ sinh")) {
             return buildDeptResponse(sessionId, 4, "Khoa Nhi",
                     "Bạn đang hỏi về sức khỏe trẻ nhỏ. Bệnh viện có **Khoa Nhi** với các bác sĩ chuyên khoa sẵn sàng thăm khám cho bé.",
@@ -304,11 +313,6 @@ public class ChatServiceImpl implements ChatService {
             return buildDeptResponse(sessionId, 7, "Khoa Thần kinh",
                     "Triệu chứng thần kinh của bạn nên được bác sĩ **Khoa Thần kinh** đánh giá lâm sàng chuyên sâu.",
                     "Dấu hiệu thần kinh / tuần hoàn não", "MEDIUM");
-        }
-        if (lower.contains("ngứa") || lower.contains("nổi mẩn") || lower.contains("phát ban") || lower.contains("mề đay")) {
-            return buildDeptResponse(sessionId, 8, "Khoa Da liễu",
-                    "Triệu chứng trên da nên được bác sĩ **Khoa Da liễu** thăm khám trực tiếp để chẩn đoán chính xác.",
-                    "Dấu hiệu da liễu / dị ứng", "MEDIUM");
         }
         if (lower.contains("đau khớp") || lower.contains("đau lưng") || lower.contains("thoái hóa") || lower.contains("sưng khớp")) {
             return buildDeptResponse(sessionId, 9, "Khoa Cơ xương khớp",

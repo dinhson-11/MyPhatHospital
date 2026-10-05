@@ -18,17 +18,17 @@ export default function QuickCtaSection({ onOpenBooking, onOpenContact }) {
               Cần Tư Vấn Sức Khỏe Hoặc Khám Khẩn Cấp?
             </h2>
             <p className="text-emerald-100 text-base sm:text-lg leading-relaxed">
-              Tổng đài chăm sóc khách hàng và đội ngũ y bác sĩ trực cấp cứu của Bệnh viện Đa khoa Thanh Sơn luôn sẵn sàng phục vụ bạn và gia đình bất kể ngày đêm.
+              Tổng đài chăm sóc khách hàng và đội ngũ y bác sĩ trực cấp cứu của Mỹ Phát Hospital luôn sẵn sàng phục vụ bạn và gia đình bất kể ngày đêm.
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
             <a
-              href="tel:19006868"
+              href="tel:0789065493"
               className="w-full sm:w-auto px-6 py-4 rounded-xl bg-white text-primary hover:bg-emerald-50 font-extrabold text-sm shadow-xl transition-all flex items-center justify-center gap-3 text-center"
             >
-              <span className="material-symbols-outlined text-xl text-rose-500">call</span>
-              <span>Hotline 24/7: 1900 6868</span>
+              <span className="material-symbols-outlined text-xl text-rose-500 animate-pulse">call</span>
+              <span>Hotline 24/7: 0789 065 493</span>
             </a>
 
             <button
