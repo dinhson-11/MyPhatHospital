@@ -1,0 +1,38 @@
+# AI Service .dockerignore – Loại bỏ file không cần thiết khi Docker build
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Pytest cache & reports
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Trained model files (quá nặng – nên load từ external storage trong production)
+models/*.joblib
+models/*.pkl
+models/*.h5
+models/*.pt
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+
+# Env files
+.env
+.env.*
+
+# Docs & Tests output
+*.md

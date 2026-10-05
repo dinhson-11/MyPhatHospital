@@ -20,6 +20,9 @@ target/
 *.jar
 *.war
 *.ear
+# Maven wrapper downloaded binary (do not commit)
+.mvn/apache-maven-*/
+mvnw.cmd
 
 # === Python ===
 __pycache__/
