@@ -1,0 +1,81 @@
+# === IDE & Editor Tools ===
+.idea/
+.vscode/
+.claude/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+.eclipse/
+*.suo
+*.sln
+*.swp
+*.sw?
+
+# === Java / Maven ===
+target/
+*.class
+*.jar
+*.war
+*.ear
+# Maven wrapper downloaded binary (do not commit)
+.mvn/apache-maven-*/
+mvnw.cmd
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+# AI model artifacts (can be large binaries)
+*.joblib
+*.pkl
+*.h5
+*.pt
+*.pth
+# Pytest
+.pytest_cache/
+
+# === Node / Frontend ===
+node_modules/
+build/
+dist/
+dist-ssr/
+# Frontend env files (handled by Vite)
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# === Environment & Secrets ===
+.env
+.env.*
+!.env.example
+*.env.local
+*.env.production
+application-prod.yml
+
+# === Logs ===
+*.log
+logs/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Docker ===
+docker-compose.override.yml
+
+# === Large/Binary Assets (add to git-lfs if needed) ===
+*.joblib
+*.pkl
+# === Misc ===
+*.bak
+*.tmp
+*.orig

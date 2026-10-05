@@ -1,0 +1,30 @@
+# Frontend .dockerignore – Loại bỏ file không cần thiết khi Docker build
+
+# Node modules (sẽ được install lại trong container)
+node_modules/
+
+# Build output (sẽ được build lại trong Dockerfile)
+dist/
+dist-ssr/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.suo
+*.sln
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Env files (inject via docker-compose environment)
+.env
+.env.*
+
+# Tests (không cần trong production image)
+src/tests/
+
+# Docs
+*.md
+README.md

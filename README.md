@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 > **Địa chỉ:** 1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang  
-> **Hotline:** 0789 065 493 &nbsp;|&nbsp; **Email:** <myphathospital@gmail.com>  
+> **Hotline:** 0789 065 493 &nbsp;|&nbsp; **Email:** myphathospital@gmail.com  
 > **Facebook:** [facebook.com/MyPhatHospital](https://www.facebook.com/MyPhatHospital)
 
 </div>
@@ -57,7 +57,7 @@
 ## ✨ Tính năng
 
 | Module | Mô tả |
-| -------- | ------- |
+|--------|-------|
 | **🔑 Authentication** | Đăng nhập JWT, refresh token, tự động logout sau 30 phút |
 | **👥 Lễ tân** | Tiếp đón, tạo hồ sơ bệnh nhân, check-in ca khám |
 | **🩺 Khám bệnh** | Ghi kết quả khám, kê đơn thuốc, cận lâm sàng, AI gợi ý chẩn đoán |
@@ -107,7 +107,7 @@
 ## 🛠️ Tech Stack
 
 | Layer | Công nghệ | Version |
-| ------- | ----------- | --------- |
+|-------|-----------|---------|
 | **Frontend** | React, Vite, Axios, CSS Modules | React 18 |
 | **Backend** | Spring Boot, Spring Security, Spring Data JPA | 3.3.x |
 | **Authentication** | JWT (jjwt), BCrypt | — |
@@ -214,11 +214,11 @@ docker-compose ps
 Sau khoảng 60 giây (backend khởi động + Flyway chạy migration):
 
 | Service | URL |
-| --------- | ----- |
-| 🌐 Frontend | <http://localhost:3000> |
-| ⚙️ Backend API | <http://localhost:8080> |
-| 📖 Swagger UI | <http://localhost:8080/swagger-ui.html> |
-| 🤖 AI Service | <http://localhost:8000/docs> |
+|---------|-----|
+| 🌐 Frontend | http://localhost:3000 |
+| ⚙️ Backend API | http://localhost:8080 |
+| 📖 Swagger UI | http://localhost:8080/swagger-ui.html |
+| 🤖 AI Service | http://localhost:8000/docs |
 
 ### Chạy riêng từng service (Development)
 
@@ -237,7 +237,6 @@ docker-compose up -d mysql
   -DMYSQL_PASSWORD=root \
   -DJWT_SECRET=<your-secret>
 ```
-
 </details>
 
 <details>
@@ -249,7 +248,6 @@ npm install
 npm run dev
 # → http://localhost:5173
 ```
-
 </details>
 
 <details>
@@ -263,7 +261,6 @@ venv\Scripts\activate      # Windows
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
-
 </details>
 
 ---
@@ -273,7 +270,7 @@ uvicorn main:app --reload --port 8000
 Copy `.env.example` → `.env` và cấu hình:
 
 | Biến | Mô tả | Ví dụ |
-| ------ | ------- | ------- |
+|------|-------|-------|
 | `MYSQL_ROOT_PASSWORD` | Mật khẩu root MySQL | `StrongRoot@2024!` |
 | `MYSQL_USER` | Database user | `hmsai_user` |
 | `MYSQL_PASSWORD` | Mật khẩu database | `StrongDb@2024!` |
@@ -292,7 +289,7 @@ Copy `.env.example` → `.env` và cấu hình:
 Hệ thống cung cấp sẵn **7 tài khoản mẫu** cho 7 vai trò:
 
 | # | Username | Password | Vai trò | Chức năng |
-| :-: | ---------- | ---------- | --------- | ----------- |
+|:-:|----------|----------|---------|-----------|
 | 1 | `admin` | `Admin@123` | **ADMIN** | Quản trị hệ thống, xếp lịch trực, báo cáo tổng thể |
 | 2 | `letan` | `Receptionist@123` | **RECEPTIONIST** | Tiếp đón, tạo hồ sơ, check-in ca khám |
 | 3 | `bacsi` | `Doctor@123` | **DOCTOR** | Khám bệnh, kê đơn, AI chẩn đoán & cảnh báo thuốc |
@@ -331,7 +328,7 @@ curl http://localhost:8080/api/v1/patients \
 Xem hướng dẫn chi tiết deploy lên các nền tảng miễn phí trong [**DEPLOYMENT.md**](DEPLOYMENT.md):
 
 | Nền tảng | Phù hợp | Ghi chú |
-| ---------- | --------- | --------- |
+|----------|---------|---------|
 | [Railway.app](https://railway.app) | ⭐ Khuyến nghị | Docker Compose, MySQL built-in, free tier |
 | [Render.com](https://render.com) | Dễ dùng | Free tier spin-down sau 15 phút idle |
 | [Fly.io](https://fly.io) | Linh hoạt | 3 VMs miễn phí, Docker native |
@@ -362,7 +359,7 @@ pytest
 Schema được quản lý bằng **Flyway**. Các migration file nằm tại `backend/src/main/resources/db/migration/`:
 
 | Version | Nội dung |
-| --------- | ---------- |
+|---------|----------|
 | V1 – V5 | Schema cơ bản: users, patients, appointments |
 | V6 – V10 | Clinical: visits, prescriptions, lab results |
 | V11 – V12 | Billing, pharmacy |
@@ -383,7 +380,6 @@ Schema được quản lý bằng **Flyway**. Các migration file nằm tại `b
 5. Mở Pull Request
 
 **Commit convention**: [Conventional Commits](https://www.conventionalcommits.org/)
-
 ```
 feat:     Tính năng mới
 fix:      Sửa lỗi
@@ -398,17 +394,17 @@ test:     Tests
 ## 📞 Liên hệ & Hỗ trợ
 
 | | |
-| - | - |
+|-|-|
 | 🏥 **Bệnh viện** | Mỹ Phát Hospital |
 | 📍 **Địa chỉ** | 1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang |
 | 📞 **Hotline** | 0789 065 493 |
-| 📧 **Email** | <myphathospital@gmail.com> |
+| 📧 **Email** | myphathospital@gmail.com |
 | 📘 **Facebook** | [facebook.com/MyPhatHospital](https://www.facebook.com/MyPhatHospital) |
 
 ---
 
 <div align="center">
 
-Made with ❤️ for **Mỹ Phát Hospital** · 2019–2026
+Made with ❤️ for **Mỹ Phát Hospital** · 2024–2026
 
 </div>

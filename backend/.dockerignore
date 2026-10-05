@@ -1,0 +1,27 @@
+# Backend .dockerignore – Loại bỏ file không cần thiết khi Docker build
+# Giúp image nhỏ hơn và build nhanh hơn
+
+# Maven build output (sẽ được build lại trong Dockerfile)
+target/
+
+# IDE & Editor
+.idea/
+.vscode/
+*.iml
+
+# Maven wrapper binary (không cần trong container)
+.mvn/apache-maven-*/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Postman collections (chỉ dùng khi dev)
+postman/
+
+# Docs
+*.md
+
+# Test output
+**/*Test*.java

@@ -1,0 +1,31 @@
+# =============================================
+# HMS-AI Backend – TEST Profile
+# =============================================
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true
+
+  flyway:
+    enabled: false   # H2 không tương thích 100% với MySQL Flyway scripts
+
+jwt:
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci11bml0LXRlc3RpbmctcHVycG9zZS1vbmx5LTI1Ni1iaXRz
+  expiration: 1800000
+  refresh-expiration: 604800000
+
+ai-service:
+  base-url: http://localhost:8000
+  timeout: 3000
+
+logging:
+  level:
+    com.hospital.hmsai: DEBUG

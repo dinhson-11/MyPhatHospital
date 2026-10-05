@@ -1,0 +1,68 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: hmsai-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: hmsai_db
+      MYSQL_USER: ${MYSQL_USER:-hmsai_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-hmsai_password}
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hmsai-network
+
+  backend:
+    build: ./backend
+    container_name: hmsai-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hmsai_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-hmsai_user}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-hmsai_password}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env - see .env.example}
+      AI_SERVICE_URL: http://ai-service:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - hmsai-network
+
+  ai-service:
+    build: ./ai-service
+    container_name: hmsai-ai
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-hmsai_user}:${MYSQL_PASSWORD:-hmsai_password}@mysql:3306/hmsai_db
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+    networks:
+      - hmsai-network
+
+  frontend:
+    build: ./frontend
+    container_name: hmsai-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - hmsai-network
+
+volumes:
+  mysql_data:
+
+networks:
+  hmsai-network:
+    driver: bridge

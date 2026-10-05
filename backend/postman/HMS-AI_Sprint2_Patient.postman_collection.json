@@ -1,0 +1,144 @@
+{
+  "info": {
+    "name": "HMS-AI – Sprint 2: Patient & Allergy",
+    "description": "Postman collection kiểm thử API hồ sơ bệnh nhân & dị ứng. Chạy 'Auth > Login' trước để lưu token vào biến {{token}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "patientId", "value": "1" },
+    { "key": "allergyId", "value": "1" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (lưu token)",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "const res = pm.response.json();",
+              "pm.test('Login 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('token', res.data.accessToken || res.data.token);"
+            ] }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"Admin@123\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Patients",
+      "item": [
+        {
+          "name": "Tạo hồ sơ (RECEPTIONIST/ADMIN)",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const d = pm.response.json().data;",
+              "pm.test('Có mã BN & nhóm máu', () => { pm.expect(d.patientCode).to.match(/^BN-/); pm.expect(d.bloodType).to.eql('O+'); });",
+              "pm.collectionVariables.set('patientId', d.id);"
+            ] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/patients",
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Nguyễn Văn Test\",\n  \"dob\": \"1995-03-20\",\n  \"gender\": \"MALE\",\n  \"nationalId\": \"0010990{{$randomInt}}\",\n  \"phone\": \"0912345678\",\n  \"address\": \"123 Lê Lợi, TP.HCM\",\n  \"bloodType\": \"O+\"\n}" }
+          }
+        },
+        {
+          "name": "Tạo hồ sơ – nhóm máu sai (400)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('400 validation', () => pm.response.to.have.status(400));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/patients",
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Test\",\n  \"bloodType\": \"Z+\"\n}" }
+          }
+        },
+        {
+          "name": "Tìm kiếm (tên/SĐT/mã) + phân trang",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));", "pm.test('Có phân trang', () => pm.expect(pm.response.json().data).to.have.property('totalElements'));"] } }],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/patients?keyword=Nguyễn&page=0&size=20&sort=createdAt,desc", "host": ["{{baseUrl}}"], "path": ["patients"], "query": [
+              { "key": "keyword", "value": "Nguyễn" }, { "key": "page", "value": "0" }, { "key": "size", "value": "20" }, { "key": "sort", "value": "createdAt,desc" }
+            ] }
+          }
+        },
+        {
+          "name": "Xem chi tiết",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/patients/{{patientId}}" }
+        },
+        {
+          "name": "Cập nhật hồ sơ",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));", "pm.test('Nhóm máu đã đổi', () => pm.expect(pm.response.json().data.bloodType).to.eql('A+'));"] } }],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/patients/{{patientId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"address\": \"456 Nguyễn Trãi, HCM\",\n  \"bloodType\": \"A+\"\n}" }
+          }
+        },
+        {
+          "name": "Hồ sơ của tôi (PATIENT)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/patients/me" }
+        },
+        {
+          "name": "Cập nhật hồ sơ của tôi (PATIENT)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/patients/me",
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"0987654321\",\n  \"bloodType\": \"B+\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Allergies",
+      "item": [
+        {
+          "name": "Danh sách dị ứng",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/patients/{{patientId}}/allergies" }
+        },
+        {
+          "name": "Thêm dị ứng",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('allergyId', pm.response.json().data.id);"
+            ] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/patients/{{patientId}}/allergies",
+            "body": { "mode": "raw", "raw": "{\n  \"allergen\": \"Penicillin\",\n  \"severity\": \"SEVERE\",\n  \"note\": \"Phản ứng phản vệ\"\n}" }
+          }
+        },
+        {
+          "name": "Xóa dị ứng",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"] } }],
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/patients/{{patientId}}/allergies/{{allergyId}}" }
+        }
+      ]
+    }
+  ]
+}
