@@ -6,9 +6,20 @@ FastAPI application for AI-powered clinical features:
 - Diagnosis suggestion
 """
 
+import sys
+import logging
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import health, chat, drug_interaction, diagnosis
+
+logger = logging.getLogger("hmsai.ai")
 
 app = FastAPI(
     title="HMS-AI – AI Service",
@@ -40,4 +51,7 @@ app.include_router(diagnosis.router)
 
 @app.on_event("startup")
 async def startup_event():
-    print("🏥 HMS-AI Service started successfully!")
+    try:
+        print("🏥 HMS-AI Service started successfully!")
+    except Exception:
+        print("[HMS-AI] Service started successfully!")

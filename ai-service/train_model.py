@@ -21,7 +21,7 @@ if sys.stdout.encoding != 'utf-8':
     except Exception:
         pass
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, accuracy_score
 
@@ -142,12 +142,7 @@ def train_and_save_model(output_path: str = None):
             sublinear_tf=True,
             min_df=1
         )),
-        ('clf', LogisticRegression(
-            C=5.0,
-            max_iter=300,
-            class_weight='balanced',
-            random_state=42
-        ))
+        ('clf', MultinomialNB(alpha=0.1))
     ])
 
     pipeline.fit(texts, labels)
