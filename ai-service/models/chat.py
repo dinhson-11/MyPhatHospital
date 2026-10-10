@@ -25,7 +25,7 @@ class ChatMessageResponse(BaseModel):
     """Phản hồi của AI Chatbot."""
     session_id: str
     reply: str
-    intent: str = Field(..., description="SYMPTOM_CHECK | BOOKING | FAQ | OUT_OF_SCOPE | GREETING")
+    intent: str = Field(..., description="EMERGENCY | SYMPTOM_CHECK | BOOKING | FAQ | OUT_OF_SCOPE | GREETING")
     suggested_department: Optional[DepartmentSuggestion] = None
     show_booking_button: bool = False
     is_out_of_scope: bool = False

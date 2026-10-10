@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 export default function SensitiveMask({ value, type = 'phone', className = '' }) {
   const [revealed, setRevealed] = useState(false);
 
-  if (!value) return <span className="text-slate-400 italic">Chưa có</span>;
+  if (!value) return <span className="text-slate-500 italic">Chưa có</span>;
 
   const maskValue = (val, maskType) => {
     const str = String(val).trim();
@@ -30,16 +30,16 @@ export default function SensitiveMask({ value, type = 'phone', className = '' })
   };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 font-mono text-sm ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 font-mono ${className}`}>
       <span>{revealed ? value : maskValue(value, type)}</span>
       <button
         type="button"
         onClick={() => setRevealed(!revealed)}
-        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer p-0.5"
+        className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer p-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         title={revealed ? 'Ẩn thông tin nhạy cảm' : 'Xem thông tin đầy đủ'}
         aria-label={revealed ? 'Ẩn thông tin nhạy cảm' : 'Xem thông tin đầy đủ'}
       >
-        <span className="material-symbols-outlined text-[15px] leading-none align-middle">
+        <span className="material-symbols-outlined text-[15px] leading-none align-middle" aria-hidden="true">
           {revealed ? 'visibility_off' : 'visibility'}
         </span>
       </button>

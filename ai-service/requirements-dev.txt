@@ -1,0 +1,5 @@
+# Phụ thuộc cho phát triển & kiểm thử (không dùng trong image chạy thật)
+# Cài đặt: pip install -r requirements-dev.txt
+# Chạy test: python -m pytest -q
+-r requirements.txt
+pytest>=8.3,<10

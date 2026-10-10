@@ -1,5 +1,7 @@
 package com.hospital.hmsai.ai.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,9 +26,14 @@ public class DiagnosisSuggestionResponse {
     @Builder.Default
     private List<DiagnosisSuggestionItem> suggestions = Collections.emptyList();
 
+    /** Python DiagnosisSuggestionResponse.total_suggestions (frontend cũng đọc total_suggestions). */
+    @JsonProperty("total_suggestions")
+    @JsonAlias("totalSuggestions")
     @Builder.Default
     private Integer totalSuggestions = 0;
 
+    @JsonProperty("confidence_score")
+    @JsonAlias("confidenceScore")
     @Builder.Default
     private BigDecimal confidenceScore = new BigDecimal("0.90");
 

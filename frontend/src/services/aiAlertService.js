@@ -1,4 +1,6 @@
 import apiClient from './api';
+import { toAppError } from './apiError';
+import { severityLevel } from '../utils/format';
 
 export const AI_DISCLAIMER_TEXT =
   'Kết quả do AI phân tích chỉ mang tính tham khảo, không thay thế phán đoán lâm sàng của bác sĩ.';
@@ -98,6 +100,62 @@ function matchText(text, keywords) {
   return keywords.some(kw => lower.includes(kw.toLowerCase()));
 }
 
+/** Chỉ gửi các trường dị ứng mà backend hiểu (PatientAllergyItemDto). */
+function toAllergyPayload(allergies = []) {
+  return (Array.isArray(allergies) ? allergies : [])
+    .map((a) => (typeof a === 'string'
+      ? { allergen: a }
+      : { id: a.id, allergen: a.allergen || a.name, severity: a.severity, note: a.note }))
+    .filter((a) => a.allergen);
+}
+
+/** Chuẩn hóa kết quả kiểm tra an toàn: has_critical tính lại theo bộ từ vựng chung (CRITICAL/SEVERE). */
+function normalizeSafetyResult(data, source) {
+  const interactions = Array.isArray(data?.interactions) ? data.interactions : [];
+  const allergyAlerts = Array.isArray(data?.allergy_alerts) ? data.allergy_alerts : [];
+  const hasCritical = Boolean(data?.has_critical)
+    || interactions.some((i) => severityLevel(i.severity) === 'critical')
+    || allergyAlerts.some((a) => severityLevel(a.severity) === 'critical');
+  return {
+    ...data,
+    source,
+    interactions,
+    allergy_alerts: allergyAlerts,
+    interaction_count: data?.interaction_count ?? interactions.length,
+    allergy_count: data?.allergy_count ?? allergyAlerts.length,
+    has_warning: Boolean(data?.has_warning) || interactions.length + allergyAlerts.length > 0,
+    has_critical: hasCritical
+  };
+}
+
+/**
+ * Các cảnh báo bắt buộc bác sĩ ghi lý do khi vẫn kê đơn – khớp quy tắc chặn của backend:
+ * tương tác mức nghiêm trọng (CRITICAL/SEVERE) hoặc trùng dị ứng mà dị ứng của bệnh nhân
+ * ở mức SEVERE/MODERATE (hoặc chính cảnh báo dị ứng ở mức nghiêm trọng).
+ * @returns {string[]} mô tả từng cảnh báo (tiếng Việt)
+ */
+export function getBlockingFindings(safetyData, patientAllergies = []) {
+  if (!safetyData) return [];
+  const findings = [];
+  const allergySeverity = new Map(
+    (Array.isArray(patientAllergies) ? patientAllergies : [])
+      .filter((a) => a && typeof a === 'object' && a.allergen)
+      .map((a) => [String(a.allergen).toLowerCase().trim(), String(a.severity || '').toUpperCase()])
+  );
+  for (const i of safetyData.interactions || []) {
+    if (severityLevel(i.severity) === 'critical') {
+      findings.push(`Tương tác nghiêm trọng: ${i.drug_a_name || i.drugAName} + ${i.drug_b_name || i.drugBName}${i.description ? ` – ${i.description}` : ''}`);
+    }
+  }
+  for (const a of safetyData.allergy_alerts || []) {
+    const patientSev = allergySeverity.get(String(a.allergen || '').toLowerCase().trim());
+    if (severityLevel(a.severity) === 'critical' || patientSev === 'SEVERE' || patientSev === 'MODERATE') {
+      findings.push(`Dị ứng: ${a.drug_name || a.drugName} – bệnh nhân có tiền sử dị ứng "${a.allergen}"${a.description ? ` (${a.description})` : ''}`);
+    }
+  }
+  return findings;
+}
+
 export const aiAlertService = {
   /**
    * Kiểm tra an toàn đơn thuốc tổng thể (kêu gọi Backend Spring Boot hoặc fallback)
@@ -126,24 +184,23 @@ export const aiAlertService = {
     }
 
     try {
-      // 1. Thử gọi endpoint kiểm tra an toàn theo ca khám (có tự động lưu audit log NFR-8)
+      // 1. Kiểm tra theo ca khám (máy chủ tự lấy dị ứng của bệnh nhân và lưu nhật ký AI)
       if (visitId) {
         const res = await apiClient.post(`/ai/clinical/visits/${visitId}/check-safety`, formattedDrugs);
-        if (res && res.data) return res.data;
-        if (res && res.success && res.data) return res.data;
+        if (res && res.data) return normalizeSafetyResult(res.data, 'server');
       }
 
-      // 2. Thử gọi endpoint kiểm tra an toàn độc lập
+      // 2. Kiểm tra độc lập (gửi kèm dị ứng của bệnh nhân)
       const res = await apiClient.post('/ai/clinical/check-safety', {
         drugs: formattedDrugs,
-        patient_allergies: patientAllergies
+        patient_allergies: toAllergyPayload(patientAllergies)
       });
-      if (res && res.data) return res.data;
+      if (res && res.data) return normalizeSafetyResult(res.data, 'server');
     } catch (err) {
-      console.warn('API AI check safety không khả dụng, kích hoạt fallback kiểm tra cục bộ:', err.message);
+      console.warn('Dịch vụ kiểm tra an toàn AI không phản hồi, dùng quy tắc cục bộ:', err?.message);
     }
 
-    // 3. Fallback cục bộ
+    // 3. Quy tắc cục bộ (gắn nhãn source = 'local' để giao diện thông báo rõ)
     return this.fallbackSafetyCheck(formattedDrugs, patientAllergies);
   },
 
@@ -176,8 +233,9 @@ export const aiAlertService = {
 
     const interactions = this.fallbackDetectInteractions(formattedDrugs);
     return {
+      source: 'local',
       has_interaction: interactions.length > 0,
-      has_critical: interactions.some(i => i.severity === 'CRITICAL'),
+      has_critical: interactions.some(i => severityLevel(i.severity) === 'critical'),
       total_interactions: interactions.length,
       interactions,
       disclaimer: AI_DISCLAIMER_TEXT
@@ -195,7 +253,7 @@ export const aiAlertService = {
 
     try {
       const res = await apiClient.post('/ai/clinical/check-allergy', {
-        patient_allergies: patientAllergies,
+        patient_allergies: toAllergyPayload(patientAllergies),
         drugs: formattedDrugs
       });
       if (res && res.data) return res.data;
@@ -205,8 +263,9 @@ export const aiAlertService = {
 
     const alerts = this.fallbackDetectAllergies(formattedDrugs, patientAllergies);
     return {
+      source: 'local',
       has_allergy_conflict: alerts.length > 0,
-      has_critical: alerts.some(a => a.severity === 'CRITICAL'),
+      has_critical: alerts.some(a => severityLevel(a.severity) === 'critical'),
       total_alerts: alerts.length,
       alerts,
       disclaimer: AI_DISCLAIMER_TEXT
@@ -214,17 +273,17 @@ export const aiAlertService = {
   },
 
   /**
-   * Lấy lịch sử audit log AI của ca khám (NFR-8)
+   * Lịch sử phân tích AI của ca khám. Lỗi → ném ra để giao diện hiển thị "Thử lại"
+   * (không trả danh sách rỗng gây hiểu nhầm là "chưa có bản ghi").
    */
   async getVisitAuditLogs(visitId) {
     if (!visitId) return [];
     try {
       const res = await apiClient.get(`/ai/clinical/visits/${visitId}/suggestions`);
-      if (res && res.data) return res.data;
+      return Array.isArray(res?.data) ? res.data : [];
     } catch (err) {
-      console.warn('Không thể tải audit log AI ca khám:', err.message);
+      throw toAppError(err, 'Không tải được lịch sử phân tích AI.');
     }
-    return [];
   },
 
   // =========================================================================
@@ -236,10 +295,11 @@ export const aiAlertService = {
 
     const hasWarning = interactions.length > 0 || allergyAlerts.length > 0;
     const hasCritical =
-      interactions.some(i => i.severity === 'CRITICAL') ||
-      allergyAlerts.some(a => a.severity === 'CRITICAL');
+      interactions.some(i => severityLevel(i.severity) === 'critical') ||
+      allergyAlerts.some(a => severityLevel(a.severity) === 'critical');
 
     return {
+      source: 'local',
       is_safe: !hasWarning,
       has_warning: hasWarning,
       has_critical: hasCritical,
@@ -364,12 +424,12 @@ export const aiAlertService = {
       // 1. Thử gọi endpoint gợi ý chẩn đoán theo ca khám (có audit log NFR-8)
       if (options.visitId) {
         const res = await apiClient.post(`/ai/clinical/visits/${options.visitId}/suggest-diagnosis`, payload);
-        if (res && res.data) return res.data;
+        if (res && res.data) return { ...res.data, source: 'server' };
       }
 
       // 2. Thử gọi endpoint gợi ý chẩn đoán độc lập
       const res = await apiClient.post('/ai/clinical/suggest-diagnosis', payload);
-      if (res && res.data) return res.data;
+      if (res && res.data) return { ...res.data, source: 'server' };
     } catch (err) {
       console.warn('API AI suggest-diagnosis không khả dụng, kích hoạt fallback cục bộ:', err.message);
     }
@@ -440,6 +500,7 @@ export const aiAlertService = {
           suggestions: group.suggestions.slice(0, 3),
           total_suggestions: Math.min(group.suggestions.length, 3),
           confidence_score: 0.90,
+          source: 'local',
           disclaimer: AI_DISCLAIMER_TEXT
         };
       }
@@ -453,6 +514,7 @@ export const aiAlertService = {
       ],
       total_suggestions: 2,
       confidence_score: 0.70,
+      source: 'local',
       disclaimer: AI_DISCLAIMER_TEXT
     };
   }

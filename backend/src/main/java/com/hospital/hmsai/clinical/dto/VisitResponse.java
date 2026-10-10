@@ -42,6 +42,10 @@ public class VisitResponse {
     private LocalDateTime visitTime;
     private String chiefComplaint;
     private VitalSignsDto vitalSigns;
+    /** Chỉ số khối cơ thể (kg/m²), tính từ cân nặng & chiều cao, làm tròn 1 chữ số thập phân. */
+    private Double bmi;
+    /** Phân loại BMI theo ngưỡng WHO cho người châu Á – Thái Bình Dương. */
+    private String bmiCategory;
     private String diagnosisCode;
     private String diagnosisNote;
     private VisitStatus status;
@@ -66,6 +70,8 @@ public class VisitResponse {
                 log.warn("Không thể parse vitalSigns JSON cho visit ID {}: {}", visit.getId(), e.getMessage());
             }
         }
+
+        Double bmi = vsDto != null ? computeBmi(vsDto.getWeight(), vsDto.getHeight()) : null;
 
         List<PrescriptionResponse> presList = visit.getPrescriptions() != null
                 ? visit.getPrescriptions().stream().map(PrescriptionResponse::fromEntity).toList()
@@ -105,6 +111,8 @@ public class VisitResponse {
                 .visitTime(visit.getVisitTime())
                 .chiefComplaint(visit.getChiefComplaint())
                 .vitalSigns(vsDto)
+                .bmi(bmi)
+                .bmiCategory(bmiCategory(bmi))
                 .diagnosisCode(visit.getDiagnosisCode())
                 .diagnosisNote(visit.getDiagnosisNote())
                 .status(visit.getStatus())
@@ -113,5 +121,40 @@ public class VisitResponse {
                 .createdAt(visit.getCreatedAt())
                 .updatedAt(visit.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * BMI = cân nặng (kg) / chiều cao (m)².
+     */
+    public static Double computeBmi(Double weightKg, Double heightCm) {
+        if (weightKg == null || heightCm == null || weightKg <= 0 || heightCm <= 0) {
+            return null;
+        }
+        double heightM = heightCm / 100.0;
+        double bmi = weightKg / (heightM * heightM);
+        return Math.round(bmi * 10.0) / 10.0;
+    }
+
+    /**
+     * Ngưỡng BMI cho người châu Á (WHO Asia-Pacific 2000, Bộ Y tế áp dụng):
+     * &lt;18,5 thiếu cân; 18,5–22,9 bình thường; 23–24,9 thừa cân; 25–29,9 béo phì độ I; ≥30 béo phì độ II.
+     */
+    public static String bmiCategory(Double bmi) {
+        if (bmi == null) {
+            return null;
+        }
+        if (bmi < 18.5) {
+            return "Thiếu cân";
+        }
+        if (bmi < 23.0) {
+            return "Bình thường";
+        }
+        if (bmi < 25.0) {
+            return "Thừa cân";
+        }
+        if (bmi < 30.0) {
+            return "Béo phì độ I";
+        }
+        return "Béo phì độ II";
     }
 }

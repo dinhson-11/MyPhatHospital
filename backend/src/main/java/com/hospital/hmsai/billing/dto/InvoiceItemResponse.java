@@ -19,6 +19,8 @@ public class InvoiceItemResponse {
     private InvoiceItemType itemType;
     private Long refId;
     private String description;
+    private Integer quantity;
+    private BigDecimal unitPrice;
     private BigDecimal amount;
 
     public static InvoiceItemResponse fromEntity(InvoiceItem item) {
@@ -28,6 +30,8 @@ public class InvoiceItemResponse {
                 .itemType(item.getItemType())
                 .refId(item.getRefId())
                 .description(item.getDescription())
+                .quantity(item.getQuantity())
+                .unitPrice(item.getUnitPrice())
                 .amount(item.getAmount())
                 .build();
     }

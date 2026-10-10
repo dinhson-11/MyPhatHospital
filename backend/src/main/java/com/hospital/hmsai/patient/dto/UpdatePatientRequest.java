@@ -22,6 +22,7 @@ public class UpdatePatientRequest {
     @Size(max = 150, message = "Họ tên tối đa 150 ký tự")
     private String fullName;
 
+    @PastOrPresent(message = "Ngày sinh không được ở tương lai")
     private LocalDate dob;
 
     private Gender gender;
@@ -37,4 +38,12 @@ public class UpdatePatientRequest {
 
     @Pattern(regexp = "^((A|B|AB|O)[+-])?$", message = "Nhóm máu không hợp lệ (A+, A-, B+, B-, AB+, AB-, O+, O-)")
     private String bloodType;
+
+    @Pattern(regexp = "^([A-Za-z]{2}[1-5][0-9]{12})?$",
+            message = "Mã thẻ BHYT gồm 15 ký tự: 2 chữ cái, 1 chữ số mức hưởng (1–5) và 12 chữ số")
+    private String insuranceNumber;
+
+    private LocalDate insuranceValidFrom;
+
+    private LocalDate insuranceValidTo;
 }

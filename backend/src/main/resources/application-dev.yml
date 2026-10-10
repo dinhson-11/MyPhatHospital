@@ -20,6 +20,15 @@ spring:
 jwt:
   secret: ${JWT_SECRET:s8GqRwLy15kENaTDsis74W4hXUKSTKhaKky0yKIByzs=}
 
+# Tài khoản VietQR DEMO cho môi trường dev – giao diện hiển thị cảnh báo "không chuyển tiền thật"
+billing:
+  vietqr:
+    bank-bin: ${VIETQR_BANK_BIN:970422}
+    bank-name: ${VIETQR_BANK_NAME:MB Bank (DEMO)}
+    account-no: ${VIETQR_ACCOUNT_NO:0000000000}
+    account-name: ${VIETQR_ACCOUNT_NAME:MY PHAT HOSPITAL DEMO}
+    demo: true
+
 # Logging
 logging:
   level:

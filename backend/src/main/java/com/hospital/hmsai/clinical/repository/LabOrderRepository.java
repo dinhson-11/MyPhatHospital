@@ -2,7 +2,9 @@ package com.hospital.hmsai.clinical.repository;
 
 import com.hospital.hmsai.clinical.entity.LabOrder;
 import com.hospital.hmsai.clinical.entity.LabOrderStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -26,4 +28,12 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, Long> {
            "LEFT JOIN FETCH lo.results " +
            "WHERE lo.id = :id")
     Optional<LabOrder> findByIdWithResults(@Param("id") Long id);
+
+    /** Khóa ghi chỉ định CLS khi nhập kết quả (chống nhập trùng đồng thời). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT lo FROM LabOrder lo WHERE lo.id = :id")
+    Optional<LabOrder> findByIdForUpdate(@Param("id") Long id);
+
+    /** Chỉ định CLS có thuộc lượt khám của tài khoản bệnh nhân (username) không. */
+    boolean existsByIdAndVisit_Patient_User_UsernameIgnoreCase(Long id, String username);
 }

@@ -1,12 +1,11 @@
 import React from 'react';
+import { formatDateTime } from '../../utils/format';
 
 /**
- * ChatHistory Component (FR-10 – Sprint 7)
- * Quản lý và xem lại lịch sử các phiên chat trước đó:
- * - Danh sách phiên theo thời gian
- * - Tóm tắt số tin nhắn và nội dung tin nhắn gần nhất
- * - Chuyển đổi qua lại giữa các phiên
- * - Bắt đầu cuộc trò chuyện mới
+ * ChatHistory – xem lại các phiên trò chuyện trước:
+ * - Danh sách phiên (mỗi phiên là một nút bấm được bằng bàn phím)
+ * - Tóm tắt số tin nhắn và nội dung gần nhất
+ * - Chuyển phiên / bắt đầu phiên mới
  */
 export default function ChatHistory({
   sessions = [],
@@ -16,98 +15,78 @@ export default function ChatHistory({
   onBack,
 }) {
   return (
-    <div className="flex-1 flex flex-col bg-slate-50/50 overflow-hidden text-xs">
-      {/* Top action bar */}
-      <div className="p-3 bg-white border-b border-slate-100 flex items-center justify-between gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1 text-slate-600 hover:text-primary font-medium transition-colors cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-50 text-sm">
+      {/* Thanh thao tác */}
+      <div className="px-3 py-2.5 bg-white border-b border-slate-200 flex items-center justify-between gap-2 shrink-0">
+        <button type="button" onClick={onBack} className="btn btn-light btn-sm">
+          <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
           <span>Quay lại chat</span>
         </button>
 
-        <button
-          type="button"
-          onClick={onNewSession}
-          className="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-[14px]">add</span>
+        <button type="button" onClick={onNewSession} className="btn btn-primary btn-sm">
+          <span className="material-symbols-outlined" aria-hidden="true">add</span>
           <span>Phiên mới</span>
         </button>
       </div>
 
-      {/* Sessions list */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {/* Danh sách phiên */}
+      <div className="flex-1 overflow-y-auto p-3">
         {sessions.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-            <span className="material-symbols-outlined text-[40px] text-slate-300 mb-2">
-              chat_bubble_outline
-            </span>
-            <p className="font-medium text-slate-600">Chưa có lịch sử hội thoại</p>
-            <p className="text-[11px] mt-1 text-slate-400">
-              Các cuộc hội thoại trước đó của bạn sẽ xuất hiện tại đây.
-            </p>
+          <div className="empty-state h-full">
+            <div className="empty-state-icon">
+              <span className="material-symbols-outlined" aria-hidden="true">chat_bubble_outline</span>
+            </div>
+            <p className="empty-state-title">Chưa có lịch sử hội thoại</p>
+            <p className="empty-state-text">Các cuộc hội thoại trước đó của bạn sẽ xuất hiện tại đây.</p>
           </div>
         ) : (
-          sessions.map(s => {
-            const isSelected = s.id === currentSessionId;
-            return (
-              <div
-                key={s.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => onSelectSession(s.id)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSelectSession(s.id);
-                  }
-                }}
-                className={`w-full text-left p-3 rounded-2xl border transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-emerald-50/80 border-primary shadow-xs'
-                    : 'bg-white border-slate-200/80 hover:border-primary/40 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[14px] text-primary">
-                      chat
+          <ul className="space-y-2" aria-label="Lịch sử hội thoại">
+            {sessions.map(s => {
+              const isSelected = s.id === currentSessionId;
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectSession(s.id)}
+                    aria-current={isSelected ? 'true' : undefined}
+                    className={`w-full text-left p-3 rounded-xl border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                      isSelected
+                        ? 'bg-primary-fixed border-primary'
+                        : 'bg-white border-slate-200 hover:border-primary/40 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-semibold text-slate-900 flex items-center gap-1.5 min-w-0">
+                        <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+                          chat
+                        </span>
+                        <span className="truncate">Phiên #{s.id}</span>
+                      </span>
+                      <span className="text-xs text-slate-500 shrink-0">
+                        {s.startedAt ? formatDateTime(s.startedAt) : 'Gần đây'}
+                      </span>
                     </span>
-                    <span>Phiên #{s.id}</span>
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {s.startedAt
-                      ? new Date(s.startedAt).toLocaleDateString('vi-VN', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : 'Gần đây'}
-                  </span>
-                </div>
 
-                {s.lastMessage && (
-                  <p className="text-[11px] text-slate-500 line-clamp-1 italic">
-                    "{s.lastMessage}"
-                  </p>
-                )}
+                    {s.lastMessage && (
+                      <span className="block text-xs text-slate-600 line-clamp-1 italic">
+                        "{s.lastMessage}"
+                      </span>
+                    )}
 
-                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-slate-100">
-                  <span>{s.messageCount || 1} tin nhắn</span>
-                  {isSelected && (
-                    <span className="text-primary font-bold flex items-center gap-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                      <span>Đang mở</span>
+                    <span className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                      <span>{s.messageCount || 1} tin nhắn</span>
+                      {isSelected && (
+                        <span className="text-primary font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary" aria-hidden="true"></span>
+                          <span>Đang mở</span>
+                        </span>
+                      )}
                     </span>
-                  )}
-                </div>
-              </div>
-            );
-          })
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </div>

@@ -36,8 +36,8 @@ export const triageService = {
         doctorId: 1,
         doctorName: 'TS.BS Vi Mai Anh',
         urgency: 'MEDIUM',
-        urgencyLabel: 'Khám Khám bệnh & Sàng lọc ban đầu',
-        confidence: '95%',
+        urgencyLabel: 'Khám bệnh & sàng lọc ban đầu',
+        confidence: 'Thấp',
         advice: 'Với các triệu chứng mô tả, hệ thống khuyến nghị bạn nên ưu tiên khám tại Khoa Khám bệnh / Cấp cứu ban đầu để bác sĩ kiểm tra lâm sàng toàn diện và chỉ định các xét nghiệm chẩn đoán thích hợp.'
       };
     }

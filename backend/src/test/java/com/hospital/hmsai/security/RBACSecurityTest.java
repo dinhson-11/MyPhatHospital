@@ -28,6 +28,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -205,5 +207,51 @@ class RBACSecurityTest {
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ==================== Phân quyền lâm sàng theo vai trò (không cần truy vấn CSDL) ====================
+
+    @Test
+    @WithMockUser(username = "benhnhan", roles = {"PATIENT"})
+    @DisplayName("SEC-17: Bệnh nhân không được tự xóa dị ứng đã ghi nhận → 403")
+    void testPatientDeleteAllergy_Returns403() throws Exception {
+        mockMvc.perform(delete("/api/v1/patients/1/allergies/2"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "dieuduong", roles = {"NURSE"})
+    @DisplayName("SEC-18: Điều dưỡng không được kê đơn, chỉ định CLS hay hoàn tất lượt khám → 403")
+    void testNurseClinicalOrders_Returns403() throws Exception {
+        mockMvc.perform(post("/api/v1/visits/5/prescriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[{\"drugId\":1,\"dosage\":\"1 viên\",\"quantity\":1}]}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/visits/5/lab-orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"testType\":\"Công thức máu\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/v1/visits/5/complete"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "duocsi", roles = {"PHARMACIST"})
+    @DisplayName("SEC-19: Dược sĩ không xem được chi tiết lượt khám / chỉ định CLS → 403")
+    void testPharmacistViewVisitDetail_Returns403() throws Exception {
+        mockMvc.perform(get("/api/v1/visits/5"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/lab-orders/5"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "benhnhan", roles = {"PATIENT"})
+    @DisplayName("SEC-20: Bệnh nhân không được tự hoàn tất / xác nhận lịch hẹn → 403")
+    void testPatientCompleteAppointment_Returns403() throws Exception {
+        mockMvc.perform(patch("/api/v1/appointments/5/complete"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/v1/appointments/5/confirm"))
+                .andExpect(status().isForbidden());
     }
 }

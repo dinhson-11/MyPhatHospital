@@ -1,5 +1,6 @@
 package com.hospital.hmsai.common;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -35,6 +36,11 @@ public final class WorkingHours {
         addSlots(slots, morningStart, morningStart.plusHours(4));
         addSlots(slots, afternoonStart, afternoonStart.plusHours(4).plusMinutes(30));
         return slots;
+    }
+
+    /** Khám BHYT từ Thứ 2 đến Thứ 7. */
+    public static boolean isInsuranceDay(LocalDate date) {
+        return date.getDayOfWeek() != DayOfWeek.SUNDAY;
     }
 
     public static boolean isValidSlotStart(LocalDateTime dateTime) {

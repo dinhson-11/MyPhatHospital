@@ -33,6 +33,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -84,25 +85,32 @@ class ReportServiceImplTest {
     }
 
     @Test
-    @DisplayName("Thống kê doanh thu phân loại chính xác tiền mặt và VietQR")
+    @DisplayName("Doanh thu tính theo ngày thu tiền, tách BHYT và tiền người bệnh trả theo phương thức")
     void testRevenueSummary_Success() {
         LocalDate from = LocalDate.now().minusDays(2);
         LocalDate to = LocalDate.now();
 
+        // Lập hóa đơn từ tuần trước nhưng thu tiền hôm nay → vẫn tính vào doanh thu hôm nay
         Invoice i1 = Invoice.builder()
                 .id(1L)
                 .status(InvoiceStatus.PAID)
                 .totalAmount(new BigDecimal("150000"))
+                .patientAmount(new BigDecimal("150000"))
                 .paymentMethod(PaymentMethod.CASH)
-                .createdAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now().minusDays(7))
+                .paidAt(LocalDateTime.now())
                 .build();
 
+        // BHYT 80%: tổng 350.000, BHYT 280.000, người bệnh trả 70.000
         Invoice i2 = Invoice.builder()
                 .id(2L)
                 .status(InvoiceStatus.PAID)
                 .totalAmount(new BigDecimal("350000"))
+                .insuranceAmount(new BigDecimal("280000"))
+                .patientAmount(new BigDecimal("70000"))
                 .paymentMethod(PaymentMethod.VIETQR)
                 .createdAt(LocalDateTime.now())
+                .paidAt(LocalDateTime.now())
                 .build();
 
         Invoice i3 = Invoice.builder()
@@ -112,15 +120,21 @@ class ReportServiceImplTest {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        when(invoiceRepository.findByCreatedAtBetween(any(), any())).thenReturn(List.of(i1, i2, i3));
+        when(invoiceRepository.findByStatusAndPaidAtBetween(eq(InvoiceStatus.PAID), any(), any())).thenReturn(List.of(i1, i2));
+        when(invoiceRepository.findByCreatedAtBetween(any(), any())).thenReturn(List.of(i2, i3));
+        when(invoiceRepository.findByStatusAndVoidedAtBetween(eq(InvoiceStatus.REFUNDED), any(), any())).thenReturn(List.of());
 
         RevenueSummaryResponse res = reportService.getRevenueSummary(from, to);
 
         assertThat(res.getTotalRevenue()).isEqualByComparingTo(new BigDecimal("500000"));
+        assertThat(res.getInsuranceAmount()).isEqualByComparingTo(new BigDecimal("280000"));
+        assertThat(res.getPatientCollected()).isEqualByComparingTo(new BigDecimal("220000"));
         assertThat(res.getPaidInvoicesCount()).isEqualTo(2);
         assertThat(res.getPendingInvoicesCount()).isEqualTo(1);
         assertThat(res.getCashRevenue()).isEqualByComparingTo(new BigDecimal("150000"));
-        assertThat(res.getVietQrRevenue()).isEqualByComparingTo(new BigDecimal("350000"));
+        assertThat(res.getVietQrRevenue()).isEqualByComparingTo(new BigDecimal("70000"));
+        assertThat(res.getDailyRevenues().get(res.getDailyRevenues().size() - 1).getAmount())
+                .isEqualByComparingTo(new BigDecimal("500000"));
     }
 
     @Test

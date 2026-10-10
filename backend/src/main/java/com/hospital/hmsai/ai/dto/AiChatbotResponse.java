@@ -28,5 +28,9 @@ public class AiChatbotResponse {
     @JsonProperty("session_id")
     private String sessionId;
 
+    /** Python ChatMessageResponse.is_out_of_scope (true với OUT_OF_SCOPE / EMERGENCY). */
+    @JsonProperty("is_out_of_scope")
+    private Boolean isOutOfScope;
+
     private String disclaimer;
 }

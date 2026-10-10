@@ -1,1028 +1,858 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { visitService, COMMON_ICD10_CODES } from '../../services/visitService';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  visitService,
+  COMMON_ICD10_CODES,
+  findIcd10,
+  vitalsToForm,
+  validateVitalSigns,
+  toVitalSignsPayload,
+  getVitalWarnings,
+  VITAL_SIGN_FIELDS
+} from '../../services/visitService';
+import { patientService } from '../../services/patientService';
+import { aiAlertService, AI_DISCLAIMER_TEXT } from '../../services/aiAlertService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../common/ConfirmDialog';
+import Modal from '../common/Modal';
+import PatientSafetyBanner from '../common/PatientSafetyBanner';
+import SensitiveMask from '../common/SensitiveMask';
+import { formatDate, formatDateTime, formatGender, SEVERITY_LABELS, VISIT_STATUS_LABELS, labelOf } from '../../utils/format';
 import PrescriptionForm from './PrescriptionForm';
 import LabOrderPanel from './LabOrderPanel';
 import DiagnosisSuggestBox from './DiagnosisSuggestBox';
-import { aiAlertService, AI_DISCLAIMER_TEXT } from '../../services/aiAlertService';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
-import PatientSafetyBanner from '../common/PatientSafetyBanner';
-import SensitiveMask from '../common/SensitiveMask';
+import VitalSignsForm from './VitalSignsForm';
+
+const TABS = [
+  { id: 'clinical', label: 'Sinh hiệu & chẩn đoán', icon: 'monitor_heart' },
+  { id: 'prescription', label: 'Kê đơn thuốc', icon: 'prescriptions' },
+  { id: 'lab', label: 'Cận lâm sàng', icon: 'science' },
+  { id: 'summary', label: 'Phiếu khám tổng hợp', icon: 'description' },
+  { id: 'ai_audit', label: 'Lịch sử phân tích AI', icon: 'history_edu' }
+];
+
+const AI_TYPE_LABELS = {
+  DRUG_INTERACTION: 'Kiểm tra an toàn đơn thuốc',
+  ALLERGY_ALERT: 'Cảnh báo dị ứng',
+  DIAGNOSIS_SUGGESTION: 'Gợi ý chẩn đoán'
+};
+
+const STATUS_FILTERS = [
+  { id: 'ALL', label: 'Tất cả' },
+  { id: 'IN_PROGRESS', label: 'Đang khám' },
+  { id: 'COMPLETED', label: 'Đã hoàn tất' }
+];
+
+const formFromVisit = (visit) => ({
+  chiefComplaint: visit?.chiefComplaint || '',
+  diagnosisCode: visit?.diagnosisCode || '',
+  diagnosisNote: visit?.diagnosisNote || '',
+  vitals: vitalsToForm(visit?.vitalSigns)
+});
+
+const sameForm = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+function ageFrom(dob) {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age -= 1;
+  return age >= 0 ? age : null;
+}
+
+function formatVitalValue(field, value) {
+  if (value === null || value === undefined || value === '') return '—';
+  return `${String(value).replace('.', ',')} ${field.unit}`;
+}
+
+/** Tóm tắt nội dung nhật ký AI (outputContent là JSON) thành các dòng dễ đọc. */
+function summarizeAiOutput(raw) {
+  if (!raw) return [];
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const lines = [];
+  if (Array.isArray(data?.interactions)) {
+    if (data.interactions.length === 0) lines.push('Không phát hiện tương tác thuốc.');
+    data.interactions.forEach((i) => lines.push(
+      `Tương tác ${i.drug_a_name || i.drugAName} + ${i.drug_b_name || i.drugBName}: ${labelOf(SEVERITY_LABELS, String(i.severity || '').toUpperCase(), 'Cần lưu ý')}`
+    ));
+  }
+  const allergyAlerts = data?.allergy_alerts || data?.allergyAlerts;
+  if (Array.isArray(allergyAlerts)) {
+    allergyAlerts.forEach((a) => lines.push(
+      `Dị ứng: ${a.drug_name || a.drugName} – ${a.allergen} (${labelOf(SEVERITY_LABELS, String(a.severity || '').toUpperCase(), 'Cần lưu ý')})`
+    ));
+  }
+  if (Array.isArray(data?.suggestions)) {
+    data.suggestions.forEach((s) => lines.push(`Gợi ý ${s.code} – ${s.name}`));
+  }
+  return lines;
+}
 
 export default function VisitDashboard({ isOpen, onClose }) {
-  const { user } = useAuth();
+  const { user, isDoctor } = useAuth();
   const { showToast } = useToast();
-
-  useEscapeKey(isOpen, () => {
-    if (showNewVisitModal) {
-      setShowNewVisitModal(false);
-    } else {
-      onClose();
-    }
-  });
+  const confirm = useConfirm();
 
   const [visits, setVisits] = useState([]);
+  const [listState, setListState] = useState({ status: 'idle', error: '' });
   const [activeVisitId, setActiveVisitId] = useState(null);
-  const [activeTab, setActiveTab] = useState('clinical'); // 'clinical' | 'prescription' | 'lab' | 'summary' | 'ai_audit'
+  const [activeTab, setActiveTab] = useState('clinical');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+
+  const [form, setForm] = useState(formFromVisit(null));
+  const [baseline, setBaseline] = useState(formFromVisit(null));
+  const [vitalErrors, setVitalErrors] = useState({});
+  const [diagnosisError, setDiagnosisError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [auditLogs, setAuditLogs] = useState([]);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
-  // Form states for active visit
-  const [chiefComplaint, setChiefComplaint] = useState('');
-  const [diagnosisCode, setDiagnosisCode] = useState('');
-  const [diagnosisNote, setDiagnosisNote] = useState('');
-  const [vitalSigns, setVitalSigns] = useState({
-    pulse: 80,
-    bloodPressureSystolic: 120,
-    bloodPressureDiastolic: 80,
-    temperature: 36.8,
-    respiratoryRate: 18,
-    spO2: 98,
-    weight: 65,
-    height: 170
-  });
+  const [allergyState, setAllergyState] = useState({ status: 'idle', items: [] });
+  const [audit, setAudit] = useState({ status: 'idle', items: [], error: '' });
 
-  // Modal tạo ca khám mới trực tiếp
-  const [showNewVisitModal, setShowNewVisitModal] = useState(false);
-  const [newPatientName, setNewPatientName] = useState('');
-  const [newPatientPhone, setNewPatientPhone] = useState('');
-  const [newPatientComplaint, setNewPatientComplaint] = useState('');
+  const tabRefs = useRef({});
+  const activeIdRef = useRef(null);
+  useEffect(() => { activeIdRef.current = activeVisitId; }, [activeVisitId]);
 
-  // Load visits
-  const loadVisits = async () => {
+  const activeVisit = useMemo(() => visits.find((v) => v.id === activeVisitId) || null, [visits, activeVisitId]);
+  const isDirty = Boolean(activeVisit) && !sameForm(form, baseline);
+  const isCompleted = activeVisit?.status === 'COMPLETED';
+  const canEdit = Boolean(activeVisit) && isDoctor && !isCompleted;
+  const readOnlyReason = isCompleted
+    ? 'Ca khám đã hoàn tất – hồ sơ đã khóa, không thể thay đổi.'
+    : 'Chỉ bác sĩ phụ trách ca khám mới được chẩn đoán, kê đơn và chỉ định.';
+
+  const applyVisit = useCallback((visit) => {
+    const next = formFromVisit(visit);
+    setActiveVisitId(visit ? visit.id : null);
+    setForm(next);
+    setBaseline(next);
+    setVitalErrors({});
+    setDiagnosisError('');
+    setAudit({ status: 'idle', items: [], error: '' });
+  }, []);
+
+  const replaceVisit = useCallback((updated) => {
+    if (!updated?.id) return;
+    setVisits((prev) => prev.map((v) => (v.id === updated.id ? { ...v, ...updated } : v)));
+  }, []);
+
+  const loadVisits = useCallback(async () => {
+    setListState({ status: 'loading', error: '' });
     try {
-      setIsLoading(true);
       const list = await visitService.getVisits();
       setVisits(list);
-      if (list.length > 0 && !activeVisitId) {
-        selectVisit(list[0]);
+      setListState({ status: 'ready', error: '' });
+      const current = activeIdRef.current;
+      if (!(current && list.some((v) => v.id === current))) applyVisit(list[0] || null);
+    } catch (err) {
+      setListState({ status: 'error', error: err.message });
+    }
+  }, [applyVisit]);
+
+  useEffect(() => {
+    if (isOpen) loadVisits();
+  }, [isOpen, loadVisits]);
+
+  // Dị ứng thật của bệnh nhân – nguồn duy nhất cho thanh cảnh báo và kiểm tra an toàn đơn thuốc
+  const patientId = activeVisit?.patientId;
+  const loadAllergies = useCallback(async () => {
+    if (!patientId) {
+      setAllergyState({ status: 'error', items: [] });
+      return;
+    }
+    setAllergyState({ status: 'loading', items: [] });
+    try {
+      const items = await patientService.getAllergies(patientId);
+      setAllergyState({ status: 'ready', items });
+    } catch {
+      setAllergyState({ status: 'error', items: [] });
+    }
+  }, [patientId]);
+
+  useEffect(() => {
+    if (isOpen && activeVisitId) loadAllergies();
+  }, [isOpen, activeVisitId, loadAllergies]);
+
+  const loadAudit = useCallback(async () => {
+    if (!activeVisitId) return;
+    setAudit((prev) => ({ ...prev, status: 'loading', error: '' }));
+    try {
+      const items = await aiAlertService.getVisitAuditLogs(activeVisitId);
+      setAudit({ status: 'ready', items, error: '' });
+    } catch (err) {
+      setAudit({ status: 'error', items: [], error: err.message });
+    }
+  }, [activeVisitId]);
+
+  useEffect(() => {
+    if (activeTab === 'ai_audit' && audit.status === 'idle' && activeVisitId) loadAudit();
+  }, [activeTab, audit.status, activeVisitId, loadAudit]);
+
+  const vitalCheck = useMemo(() => validateVitalSigns(form.vitals), [form.vitals]);
+  const vitalWarnings = useMemo(() => getVitalWarnings(vitalCheck.values), [vitalCheck.values]);
+
+  const confirmDiscard = async (title) => {
+    if (!isDirty) return true;
+    return confirm({
+      title,
+      message: 'Các thay đổi chưa lưu của ca khám hiện tại sẽ bị bỏ.',
+      tone: 'warning',
+      confirmText: 'Bỏ thay đổi',
+      cancelText: 'Ở lại'
+    });
+  };
+
+  const handleSelectVisit = async (visit) => {
+    if (visit.id === activeVisitId) return;
+    if (!(await confirmDiscard('Chuyển sang bệnh nhân khác?'))) return;
+    applyVisit(visit);
+  };
+
+  const handleClose = async () => {
+    if (isSaving) return;
+    if (!(await confirmDiscard('Đóng phòng khám?'))) return;
+    onClose?.();
+  };
+
+  const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+  const setVital = (key, value) => {
+    setForm((prev) => ({ ...prev, vitals: { ...prev.vitals, [key]: value } }));
+    setVitalErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  };
+
+  const buildUpdate = () => ({
+    chiefComplaint: form.chiefComplaint.trim(),
+    diagnosisCode: form.diagnosisCode.trim().toUpperCase(),
+    diagnosisNote: form.diagnosisNote.trim(),
+    vitalSigns: toVitalSignsPayload(vitalCheck.values)
+  });
+
+  const checkVitalsOrWarn = () => {
+    setVitalErrors(vitalCheck.errors);
+    if (Object.keys(vitalCheck.errors).length > 0) {
+      setActiveTab('clinical');
+      showToast('Chỉ số sinh hiệu chưa hợp lệ – vui lòng kiểm tra các ô được đánh dấu.', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!activeVisit || !canEdit || isSaving) return;
+    if (!checkVitalsOrWarn()) return;
+    setIsSaving(true);
+    try {
+      const updated = await visitService.updateVisit(activeVisit.id, buildUpdate());
+      if (updated?.id) {
+        replaceVisit(updated);
+        const next = formFromVisit({ ...activeVisit, ...updated });
+        setForm(next);
+        setBaseline(next);
+      } else {
+        setBaseline(form);
       }
+      showToast('Đã lưu sinh hiệu và chẩn đoán.', 'success');
     } catch (err) {
-      showToast('Không thể tải danh sách ca khám', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      loadVisits();
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (activeVisitId && activeTab === 'ai_audit') {
-      const fetchLogs = async () => {
-        setIsLoadingLogs(true);
-        try {
-          const data = await aiAlertService.getVisitAuditLogs(activeVisitId);
-          setAuditLogs(data || []);
-        } catch (err) {
-          console.error('Không thể tải audit log AI:', err);
-        } finally {
-          setIsLoadingLogs(false);
-        }
-      };
-      fetchLogs();
-    }
-  }, [activeVisitId, activeTab]);
-
-  const activeVisit = useMemo(() => {
-    return visits.find(v => v.id === activeVisitId) || null;
-  }, [visits, activeVisitId]);
-
-  const selectVisit = (visit) => {
-    setActiveVisitId(visit.id);
-    setChiefComplaint(visit.chiefComplaint || '');
-    setDiagnosisCode(visit.diagnosisCode || '');
-    setDiagnosisNote(visit.diagnosisNote || '');
-    if (visit.vitalSigns) {
-      setVitalSigns({
-        pulse: visit.vitalSigns.pulse ?? 80,
-        bloodPressureSystolic: visit.vitalSigns.bloodPressureSystolic ?? 120,
-        bloodPressureDiastolic: visit.vitalSigns.bloodPressureDiastolic ?? 80,
-        temperature: visit.vitalSigns.temperature ?? 36.8,
-        respiratoryRate: visit.vitalSigns.respiratoryRate ?? 18,
-        spO2: visit.vitalSigns.spO2 ?? 98,
-        weight: visit.vitalSigns.weight ?? 65,
-        height: visit.vitalSigns.height ?? 170
-      });
-    }
-  };
-
-  // Tính chỉ số BMI tự động
-  const bmi = useMemo(() => {
-    if (!vitalSigns.weight || !vitalSigns.height) return null;
-    const h = vitalSigns.height / 100;
-    return (vitalSigns.weight / (h * h)).toFixed(1);
-  }, [vitalSigns.weight, vitalSigns.height]);
-
-  // Cảnh báo sinh hiệu bất thường
-  const vitalWarnings = useMemo(() => {
-    const warnings = [];
-    if (vitalSigns.pulse > 100) warnings.push('Mạch nhanh (>100 bpm)');
-    if (vitalSigns.pulse < 60) warnings.push('Mạch chậm (<60 bpm)');
-    if (vitalSigns.bloodPressureSystolic >= 140 || vitalSigns.bloodPressureDiastolic >= 90) {
-      warnings.push('Huyết áp cao (≥140/90 mmHg)');
-    }
-    if (vitalSigns.temperature >= 38.0) warnings.push('Sốt cao (≥38.0°C)');
-    if (vitalSigns.spO2 && vitalSigns.spO2 < 95) warnings.push('SpO2 giảm thấp (<95%)');
-    return warnings;
-  }, [vitalSigns]);
-
-  const handleSaveClinicalData = async () => {
-    if (!activeVisit) return;
-    try {
-      setIsSaving(true);
-      const updated = await visitService.updateVisit(activeVisit.id, {
-        chiefComplaint,
-        diagnosisCode,
-        diagnosisNote,
-        vitalSigns
-      });
-      showToast('Đã lưu chẩn đoán & sinh hiệu ca khám thành công!', 'success');
-      setVisits(prev => prev.map(v => v.id === updated.id ? updated : v));
-    } catch (err) {
-      showToast(err.message || 'Lỗi lưu thông tin ca khám', 'error');
+      showToast(err.message || 'Không lưu được thông tin ca khám', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleCompleteVisit = async () => {
-    if (!activeVisit) return;
-    if (!diagnosisCode) {
-      showToast('Vui lòng chọn hoặc nhập mã chẩn đoán ICD-10 trước khi hoàn tất khám!', 'warning');
+  const handleComplete = async () => {
+    if (!activeVisit || !canEdit || isSaving) return;
+    const code = form.diagnosisCode.trim().toUpperCase();
+    if (!code) {
+      setDiagnosisError('Bắt buộc nhập mã chẩn đoán ICD-10 trước khi hoàn tất ca khám.');
+      setActiveTab('clinical');
+      showToast('Chưa có mã chẩn đoán ICD-10 – không thể hoàn tất ca khám.', 'warning');
       return;
     }
+    if (!checkVitalsOrWarn()) return;
 
+    const prescriptions = activeVisit.prescriptions || [];
+    const drugCount = prescriptions.reduce((n, p) => n + (p.items?.length || 0), 0);
+    const labOrders = activeVisit.labOrders || [];
+    const pendingLabs = labOrders.filter((o) => o.status !== 'RESULTED');
+    const icd = findIcd10(code);
+
+    const ok = await confirm({
+      title: 'Hoàn tất ca khám?',
+      message: 'Sau khi hoàn tất, hồ sơ ca khám bị khóa: không thể sửa chẩn đoán, kê thêm đơn thuốc hoặc chỉ định cận lâm sàng.',
+      details: [
+        `Bệnh nhân: ${activeVisit.patientName}${activeVisit.patientCode ? ` (${activeVisit.patientCode})` : ''}`,
+        `Chẩn đoán: ${code}${icd ? ` – ${icd.name}` : ''}`,
+        prescriptions.length ? `Đơn thuốc: ${prescriptions.length} đơn, ${drugCount} loại thuốc` : 'Đơn thuốc: chưa kê đơn',
+        pendingLabs.length
+          ? `Cận lâm sàng CHƯA có kết quả (${pendingLabs.length}): ${pendingLabs.map((o) => o.testType).join(', ')}`
+          : `Cận lâm sàng: ${labOrders.length ? 'đã có đủ kết quả' : 'không chỉ định'}`
+      ],
+      tone: pendingLabs.length ? 'warning' : 'primary',
+      confirmText: 'Hoàn tất ca khám'
+    });
+    if (!ok) return;
+
+    setIsSaving(true);
     try {
-      setIsSaving(true);
-      // Lưu thông tin trước khi hoàn tất
-      await visitService.updateVisit(activeVisit.id, {
-        chiefComplaint,
-        diagnosisCode,
-        diagnosisNote,
-        vitalSigns
-      });
-
+      const upd = buildUpdate();
+      const updated = await visitService.updateVisit(activeVisit.id, upd);
       const completed = await visitService.completeVisit(activeVisit.id);
-      showToast(`Đã hoàn tất ca khám của bệnh nhân ${completed.patientName}!`, 'success');
-      setVisits(prev => prev.map(v => v.id === completed.id ? completed : v));
+      const merged = {
+        ...activeVisit,
+        chiefComplaint: upd.chiefComplaint,
+        diagnosisCode: upd.diagnosisCode,
+        diagnosisNote: upd.diagnosisNote,
+        vitalSigns: { ...(activeVisit.vitalSigns || {}), ...(upd.vitalSigns || {}) },
+        ...(updated || {}),
+        ...(completed || {}),
+        status: completed?.status || 'COMPLETED'
+      };
+      replaceVisit(merged);
+      const next = formFromVisit(merged);
+      setForm(next);
+      setBaseline(next);
+      showToast(`Đã hoàn tất ca khám của ${merged.patientName}.`, 'success');
     } catch (err) {
-      showToast(err.message || 'Không thể hoàn tất ca khám', 'error');
+      showToast(err.message || 'Không hoàn tất được ca khám', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleCreateNewVisit = async (e) => {
-    e.preventDefault();
-    if (!newPatientName.trim()) {
-      showToast('Vui lòng nhập họ tên bệnh nhân', 'warning');
-      return;
-    }
-
-    try {
-      const newV = await visitService.createVisit({
-        patientId: Date.now() % 10000,
-        patientName: newPatientName.trim(),
-        patientPhone: newPatientPhone.trim(),
-        patientGender: 'MALE',
-        doctorId: 1,
-        doctorName: user?.fullName || 'TS.BS Vi Mai Anh',
-        doctorSpecialty: 'Khám bệnh & Nội tổng quát',
-        departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
-        chiefComplaint: newPatientComplaint.trim(),
-        vitalSigns: {
-          pulse: 80,
-          bloodPressureSystolic: 120,
-          bloodPressureDiastolic: 80,
-          temperature: 37.0,
-          respiratoryRate: 18,
-          spO2: 98
-        }
-      });
-
-      showToast(`Đã tiếp nhận bệnh nhân ${newV.patientName} vào phòng khám!`, 'success');
-      setVisits(prev => [newV, ...prev]);
-      selectVisit(newV);
-      setShowNewVisitModal(false);
-      setNewPatientName('');
-      setNewPatientPhone('');
-      setNewPatientComplaint('');
-    } catch (err) {
-      showToast(err.message || 'Lỗi tiếp nhận bệnh nhân', 'error');
-    }
-  };
-
-  const handlePrintSummary = () => {
-    window.print();
-  };
-
-  // Phím tắt lâm sàng F9 để lưu ca khám nhanh
+  // Phím tắt F9: lưu nhanh (dùng ref để luôn gọi phiên bản mới nhất)
+  const saveRef = useRef(handleSave);
+  useEffect(() => { saveRef.current = handleSave; });
   useEffect(() => {
-    const handleClinicalShortcuts = (e) => {
+    if (!isOpen) return undefined;
+    const onKey = (e) => {
       if (e.key === 'F9') {
         e.preventDefault();
-        handleSaveClinicalData();
+        saveRef.current();
       }
     };
-    if (isOpen) {
-      window.addEventListener('keydown', handleClinicalShortcuts);
-      return () => window.removeEventListener('keydown', handleClinicalShortcuts);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen]);
+
+  const handleTabKeyDown = (e, index) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    let next = index;
+    if (e.key === 'ArrowRight') next = (index + 1) % TABS.length;
+    if (e.key === 'ArrowLeft') next = (index - 1 + TABS.length) % TABS.length;
+    if (e.key === 'Home') next = 0;
+    if (e.key === 'End') next = TABS.length - 1;
+    setActiveTab(TABS[next].id);
+    tabRefs.current[TABS[next].id]?.focus();
+  };
+
+  const refreshActiveVisit = async () => {
+    if (!activeVisitId) return;
+    try {
+      const fresh = await visitService.getVisitById(activeVisitId);
+      if (fresh) replaceVisit(fresh);
+    } catch {
+      loadVisits();
     }
-  }, [isOpen, activeVisit, chiefComplaint, diagnosisCode, diagnosisNote, vitalSigns]);
+  };
 
-  if (!isOpen) return null;
-
-  const filteredVisits = visits.filter(v => {
+  const term = searchTerm.trim().toLowerCase();
+  const filteredVisits = visits.filter((v) => {
     const matchesStatus = filterStatus === 'ALL' || v.status === filterStatus;
-    const matchesSearch = !searchTerm.trim() ||
-      (v.patientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v.patientCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v.patientPhone || '').includes(searchTerm);
+    const matchesSearch = !term
+      || (v.patientName || '').toLowerCase().includes(term)
+      || (v.patientCode || '').toLowerCase().includes(term)
+      || (v.patientPhone || '').includes(term);
     return matchesStatus && matchesSearch;
   });
 
+  const icdMatch = findIcd10(form.diagnosisCode);
+  const tabCount = (id) => {
+    if (id === 'prescription') return activeVisit?.prescriptions?.length || 0;
+    if (id === 'lab') return activeVisit?.labOrders?.length || 0;
+    return null;
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-50 rounded-3xl w-full max-w-[1400px] h-[92vh] flex flex-col shadow-2xl border border-outline-variant/30 overflow-hidden animate-fade-in">
-        
-        {/* Top Clinical Header */}
-        <div className="bg-white border-b border-surface-container-high px-6 py-4 flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shadow-xs">
-              <span className="material-symbols-outlined text-[24px]">stethoscope</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-headline text-lg font-bold text-on-surface">
-                  Phòng Khám Bác Sĩ – Mỹ Phát Hospital
-                </h3>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
-                  Sprint 4 Clinical
-                </span>
-              </div>
-              <p className="text-xs text-on-surface-variant font-label">
-                Bác sĩ phụ trách: <span className="font-bold text-on-surface">{user?.fullName || 'TS.BS Vi Mai Anh'}</span> • Khoa Khám bệnh / Cấp cứu ban đầu
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Phòng khám bác sĩ"
+      subtitle={user?.fullName ? `Bác sĩ: ${user.fullName}` : 'Khám bệnh, chẩn đoán, kê đơn và chỉ định cận lâm sàng'}
+      icon="stethoscope"
+      size="full"
+      className="h-[100dvh] sm:h-[92vh]"
+      bodyClassName="p-0 flex flex-col md:flex-row overflow-hidden"
+    >
+      {/* Cột trái: danh sách ca khám */}
+      <aside className="w-full md:w-80 lg:w-96 shrink-0 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col min-h-0 max-h-[40vh] md:max-h-none">
+        <div className="p-4 border-b border-slate-200 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-900">Danh sách ca khám ({filteredVisits.length})</h3>
             <button
-              onClick={() => setShowNewVisitModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-white font-label text-xs font-semibold hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
+              type="button"
+              onClick={loadVisits}
+              disabled={listState.status === 'loading'}
+              className="btn btn-ghost btn-sm"
             >
-              <span className="material-symbols-outlined text-[18px]">person_add</span>
-              <span>Tiếp nhận ca mới</span>
-            </button>
-            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-500 border border-slate-300 rounded">
-              ESC
-            </span>
-            <button
-              onClick={onClose}
-              className="w-9 h-9 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface transition-colors cursor-pointer"
-              title="Đóng phòng khám (Esc)"
-            >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className={`material-symbols-outlined ${listState.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
+              Làm mới
             </button>
           </div>
-        </div>
-
-        {/* Main Body: 2 Columns */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-          
-          {/* Left Column: Queue & Patient List */}
-          <div className="w-full md:w-80 lg:w-96 bg-white border-r border-surface-container-high flex flex-col overflow-hidden">
-            {/* Filter bar */}
-            <div className="p-4 border-b border-surface-variant/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-headline text-sm font-bold text-on-surface">
-                  Danh sách ca khám ({filteredVisits.length})
-                </span>
-                <span className="text-xs text-on-surface-variant">Hôm nay</span>
-              </div>
-              <div className="flex rounded-lg bg-surface-container-low p-1 border border-outline-variant/30 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setFilterStatus('ALL')}
-                  className={`flex-1 py-1.5 rounded-md font-semibold transition-colors ${filterStatus === 'ALL' ? 'bg-white text-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}
-                >
-                  Tất cả
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterStatus('IN_PROGRESS')}
-                  className={`flex-1 py-1.5 rounded-md font-semibold transition-colors ${filterStatus === 'IN_PROGRESS' ? 'bg-white text-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}
-                >
-                  Đang khám
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterStatus('COMPLETED')}
-                  className={`flex-1 py-1.5 rounded-md font-semibold transition-colors ${filterStatus === 'COMPLETED' ? 'bg-white text-primary shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}
-                >
-                  Đã hoàn tất
-                </button>
-              </div>
-
-              {/* Patient search filter */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Lọc BN theo tên, mã hồ sơ, SĐT..."
-                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-hidden focus:ring-1 focus:ring-primary"
-                />
-                <span className="material-symbols-outlined text-slate-400 text-sm absolute left-2.5 top-2 pointer-events-none">
-                  search
-                </span>
-              </div>
-            </div>
-
-            {/* Visits List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-surface-variant/10">
-              {isLoading ? (
-                <div className="p-8 text-center text-xs text-on-surface-variant">
-                  Đang tải danh sách ca khám...
-                </div>
-              ) : filteredVisits.length === 0 ? (
-                <div className="p-8 text-center text-xs text-on-surface-variant">
-                  Không có ca khám nào theo bộ lọc.
-                </div>
-              ) : (
-                filteredVisits.map((v) => {
-                  const isSelected = v.id === activeVisitId;
-                  const isDone = v.status === 'COMPLETED';
-                  return (
-                    <div
-                      key={v.id}
-                      onClick={() => selectVisit(v)}
-                      className={`p-4 cursor-pointer transition-all border-l-4 ${
-                        isSelected
-                          ? 'bg-surface-container-lowest border-l-primary shadow-xs'
-                          : 'hover:bg-slate-50 border-l-transparent'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-sm text-on-surface">
-                          {v.patientName}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isDone ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {isDone ? 'HOÀN TẤT' : 'ĐANG KHÁM'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-                        <span>{v.patientCode}</span>
-                        <span>•</span>
-                        <span>{v.patientGender === 'MALE' ? 'Nam' : 'Nữ'}</span>
-                      </div>
-                      <div className="text-xs text-on-surface-variant mt-1.5 line-clamp-1 italic">
-                        {v.chiefComplaint || 'Khám tổng quát'}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Right Column: Clinical Examination Workspace */}
-          {activeVisit ? (
-            <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
-              
-              {/* Patient Banner */}
-              <div className="bg-white border-b border-surface-container-high px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary font-bold text-base flex items-center justify-center">
-                    {activeVisit.patientName.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-headline text-lg font-bold text-on-surface">
-                        {activeVisit.patientName}
-                      </h4>
-                      <span className="font-label text-xs font-semibold px-2 py-0.5 rounded bg-surface-container text-primary">
-                        {activeVisit.patientCode}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-on-surface-variant mt-0.5 font-label">
-                      <span>SĐT: <SensitiveMask value={activeVisit.patientPhone} type="phone" /></span>
-                      <span>•</span>
-                      <span>Giới tính: <strong className="text-on-surface">{activeVisit.patientGender === 'MALE' ? 'Nam' : 'Nữ'}</strong></span>
-                      <span>•</span>
-                      <span>Ngày sinh: <strong className="text-on-surface">{activeVisit.patientDob || 'N/A'}</strong></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-error flex items-center gap-1 bg-error-container/20 px-3 py-1.5 rounded-lg border border-error/20">
-                    <span className="material-symbols-outlined text-[16px]">emergency</span>
-                    <span>Tiền sử: Dị ứng Penicillin</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Patient Safety Banner: Ghim cảnh báo lâm sàng dị ứng & sinh hiệu */}
-              <div className="px-6 py-2.5 bg-slate-100/70 border-b border-surface-container">
-                <PatientSafetyBanner
-                  allergies={activeVisit.allergies || ['Penicillin']}
-                  vitalWarnings={vitalWarnings}
-                />
-              </div>
-
-              {/* Navigation Tabs */}
-              <div className="bg-white border-b border-surface-container px-6 flex items-center gap-6 text-sm">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('clinical')}
-                  className={`py-3 font-label font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'clinical'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">monitor_heart</span>
-                  <span>Sinh hiệu & Chẩn đoán</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('prescription')}
-                  className={`py-3 font-label font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'prescription'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">prescriptions</span>
-                  <span>Kê đơn thuốc ({activeVisit.prescriptions?.length || 0})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('lab')}
-                  className={`py-3 font-label font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'lab'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">science</span>
-                  <span>Chỉ định Cận lâm sàng ({activeVisit.labOrders?.length || 0})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('summary')}
-                  className={`py-3 font-label font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'summary'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">description</span>
-                  <span>Phiếu khám tổng hợp (EMR)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('ai_audit')}
-                  className={`py-3 font-label font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'ai_audit'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">smart_toy</span>
-                  <span>Lịch sử AI Audit (NFR-8)</span>
-                </button>
-              </div>
-
-              {/* Tab Contents */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                
-                {/* TAB 1: CLINICAL & VITAL SIGNS */}
-                {activeTab === 'clinical' && (
-                  <div className="space-y-6">
-                    {/* Vital warnings banner */}
-                    {vitalWarnings.length > 0 && (
-                      <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 flex items-center gap-3 text-amber-900 text-xs font-semibold">
-                        <span className="material-symbols-outlined text-amber-600 text-[22px]">warning</span>
-                        <div>
-                          <span>Cảnh báo chỉ số sinh hiệu bất thường: </span>
-                          <strong className="text-amber-800">{vitalWarnings.join(' • ')}</strong>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* VITAL SIGNS WIDGET */}
-                    <div className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-xs space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-headline text-base font-bold text-on-surface flex items-center gap-2">
-                          <span className="material-symbols-outlined text-primary text-[20px]">vital_signs</span>
-                          <span>Chỉ số sinh hiệu (Vital Signs)</span>
-                        </h4>
-                        {bmi && (
-                          <span className="text-xs font-label px-3 py-1 rounded-full bg-surface-container font-semibold text-primary">
-                            BMI: {bmi} kg/m² ({bmi < 18.5 ? 'Gầy' : bmi < 24.9 ? 'Bình thường' : 'Thừa cân'})
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {/* Pulse */}
-                        <div className={`p-3 rounded-xl border ${
-                          vitalSigns.pulse < 60 || vitalSigns.pulse > 100
-                            ? 'bg-red-50 border-red-300 text-red-900'
-                            : 'bg-slate-50 border-outline-variant/30 text-on-surface'
-                        }`}>
-                          <span className="block text-[11px] font-medium opacity-80">Mạch (bpm)</span>
-                          <input
-                            type="number"
-                            value={vitalSigns.pulse}
-                            onChange={(e) => setVitalSigns(prev => ({ ...prev, pulse: Number(e.target.value) }))}
-                            className="w-full mt-1 bg-transparent font-headline text-xl font-bold focus:outline-none"
-                          />
-                          <span className="text-[10px] opacity-70">Chuẩn: 60-100</span>
-                        </div>
-
-                        {/* Blood Pressure Systolic */}
-                        <div className={`p-3 rounded-xl border ${
-                          vitalSigns.bloodPressureSystolic >= 140
-                            ? 'bg-red-50 border-red-300 text-red-900'
-                            : 'bg-slate-50 border-outline-variant/30 text-on-surface'
-                        }`}>
-                          <span className="block text-[11px] font-medium opacity-80">HA Tâm thu (mmHg)</span>
-                          <input
-                            type="number"
-                            value={vitalSigns.bloodPressureSystolic}
-                            onChange={(e) => setVitalSigns(prev => ({ ...prev, bloodPressureSystolic: Number(e.target.value) }))}
-                            className="w-full mt-1 bg-transparent font-headline text-xl font-bold focus:outline-none"
-                          />
-                          <span className="text-[10px] opacity-70">Chuẩn: 90-120</span>
-                        </div>
-
-                        {/* Blood Pressure Diastolic */}
-                        <div className={`p-3 rounded-xl border ${
-                          vitalSigns.bloodPressureDiastolic >= 90
-                            ? 'bg-red-50 border-red-300 text-red-900'
-                            : 'bg-slate-50 border-outline-variant/30 text-on-surface'
-                        }`}>
-                          <span className="block text-[11px] font-medium opacity-80">HA Tâm trương (mmHg)</span>
-                          <input
-                            type="number"
-                            value={vitalSigns.bloodPressureDiastolic}
-                            onChange={(e) => setVitalSigns(prev => ({ ...prev, bloodPressureDiastolic: Number(e.target.value) }))}
-                            className="w-full mt-1 bg-transparent font-headline text-xl font-bold focus:outline-none"
-                          />
-                          <span className="text-[10px] opacity-70">Chuẩn: 60-80</span>
-                        </div>
-
-                        {/* Temperature */}
-                        <div className={`p-3 rounded-xl border ${
-                          vitalSigns.temperature >= 38.0
-                            ? 'bg-red-50 border-red-300 text-red-900'
-                            : 'bg-slate-50 border-outline-variant/30 text-on-surface'
-                        }`}>
-                          <span className="block text-[11px] font-medium opacity-80">Nhiệt độ (°C)</span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={vitalSigns.temperature}
-                            onChange={(e) => setVitalSigns(prev => ({ ...prev, temperature: Number(e.target.value) }))}
-                            className="w-full mt-1 bg-transparent font-headline text-xl font-bold focus:outline-none"
-                          />
-                          <span className="text-[10px] opacity-70">Chuẩn: 36.5-37.5</span>
-                        </div>
-
-                        {/* SpO2 */}
-                        <div className={`p-3 rounded-xl border ${
-                          vitalSigns.spO2 < 95
-                            ? 'bg-red-50 border-red-300 text-red-900'
-                            : 'bg-slate-50 border-outline-variant/30 text-on-surface'
-                        }`}>
-                          <span className="block text-[11px] font-medium opacity-80">SpO2 (%)</span>
-                          <input
-                            type="number"
-                            value={vitalSigns.spO2}
-                            onChange={(e) => setVitalSigns(prev => ({ ...prev, spO2: Number(e.target.value) }))}
-                            className="w-full mt-1 bg-transparent font-headline text-xl font-bold focus:outline-none"
-                          />
-                          <span className="text-[10px] opacity-70">Chuẩn: ≥ 95%</span>
-                        </div>
-
-                        {/* Weight */}
-                        <div className="p-3 rounded-xl border bg-slate-50 border-outline-variant/30 text-on-surface">
-                          <span className="block text-[11px] font-medium opacity-80">Cân nặng (kg)</span>
-                          <input
-                            type="number"
-                            value={vitalSigns.weight}
-                            onChange={(e) => setVitalSigns(prev => ({ ...prev, weight: Number(e.target.value) }))}
-                            className="w-full mt-1 bg-transparent font-headline text-xl font-bold focus:outline-none"
-                          />
-                          <span className="text-[10px] opacity-70">Chiều cao: {vitalSigns.height}cm</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* CLINICAL SYMPTOMS & ICD-10 DIAGNOSIS */}
-                    <div className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-xs space-y-5">
-                      <h4 className="font-headline text-base font-bold text-on-surface flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary text-[20px]">medical_information</span>
-                        <span>Khám lâm sàng & Chẩn đoán bệnh</span>
-                      </h4>
-
-                      {/* Lý do đến khám */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-semibold text-on-surface-variant">
-                          Lý do đến khám & Triệu chứng khởi phát (Chief Complaint) *
-                        </label>
-                        <textarea
-                          rows="2"
-                          value={chiefComplaint}
-                          onChange={(e) => setChiefComplaint(e.target.value)}
-                          placeholder="Mô tả triệu chứng bệnh nhân khai báo, thời gian xuất hiện, tính chất đau..."
-                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                        />
-                      </div>
-
-                      {/* Gợi ý chẩn đoán AI (Sprint 6 - FR-11.3) */}
-                      <DiagnosisSuggestBox
-                        symptomsText={chiefComplaint}
-                        onSelectDiagnosis={(code, name) => {
-                          setDiagnosisCode(code);
-                          showToast(`Đã áp dụng mã ICD-10 gợi ý từ AI: ${code} - ${name}`, 'success');
-                        }}
-                      />
-
-                      {/* Mã chẩn đoán ICD-10 */}
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                        <div className="md:col-span-5 space-y-1.5">
-                          <label className="block text-xs font-semibold text-on-surface-variant">
-                            Mã bệnh quốc tế ICD-10 *
-                          </label>
-                          <select
-                            value={diagnosisCode}
-                            onChange={(e) => setDiagnosisCode(e.target.value)}
-                            className="w-full px-3 py-2.5 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
-                          >
-                            <option value="">-- Chọn mã ICD-10 thông dụng --</option>
-                            {COMMON_ICD10_CODES.map(c => (
-                              <option key={c.code} value={c.code}>
-                                [{c.code}] {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="md:col-span-7 space-y-1.5">
-                          <label className="block text-xs font-semibold text-on-surface-variant">
-                            Hoặc nhập mã / tên chẩn đoán xác định tự do
-                          </label>
-                          <input
-                            type="text"
-                            value={diagnosisCode}
-                            onChange={(e) => setDiagnosisCode(e.target.value)}
-                            placeholder="vd: I10 - Tăng huyết áp vô căn..."
-                            className="w-full px-4 py-2.5 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Ghi chú điều trị */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-semibold text-on-surface-variant">
-                          Ghi chú lâm sàng, lời dặn & kế hoạch điều trị
-                        </label>
-                        <textarea
-                          rows="3"
-                          value={diagnosisNote}
-                          onChange={(e) => setDiagnosisNote(e.target.value)}
-                          placeholder="Chế độ ăn giảm muối, hạn chế mỡ động vật, tái khám sau 14 ngày hoặc khi có dấu hiệu bất thường..."
-                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 2: PRESCRIPTION FORM */}
-                {activeTab === 'prescription' && (
-                  <PrescriptionForm
-                    visit={activeVisit}
-                    onPrescriptionAdded={(newPres) => {
-                      setVisits(prev => prev.map(v => {
-                        if (v.id === activeVisit.id) {
-                          return {
-                            ...v,
-                            prescriptions: [...(v.prescriptions || []), newPres]
-                          };
-                        }
-                        return v;
-                      }));
-                    }}
-                  />
-                )}
-
-                {/* TAB 3: LAB ORDER PANEL */}
-                {activeTab === 'lab' && (
-                  <LabOrderPanel
-                    visit={activeVisit}
-                    onOrderAdded={(newOrder) => {
-                      setVisits(prev => prev.map(v => {
-                        if (v.id === activeVisit.id) {
-                          return {
-                            ...v,
-                            labOrders: [...(v.labOrders || []), newOrder]
-                          };
-                        }
-                        return v;
-                      }));
-                    }}
-                    onResultUpdated={(result) => {
-                      loadVisits();
-                    }}
-                  />
-                )}
-
-                {/* TAB 4: PRINT SUMMARY (EMR) */}
-                {activeTab === 'summary' && (
-                  <div className="bg-white rounded-2xl p-8 border border-outline-variant/30 shadow-xs space-y-6 max-w-3xl mx-auto print:p-0 print:border-none">
-                    <div className="text-center border-b border-surface-variant/30 pb-4">
-                      <h2 className="font-headline text-xl font-bold text-primary">MỸ PHÁT HOSPITAL</h2>
-                      <p className="text-xs text-on-surface-variant">Địa chỉ: 1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang • Hotline: 0789 065 493</p>
-                      <h3 className="font-headline text-lg font-bold text-on-surface mt-3">PHIẾU KHÁM BỆNH & TÓM TẮT ĐIỀU TRỊ</h3>
-                      <p className="text-xs text-on-surface-variant font-label">Mã hồ sơ: #{activeVisit.id} • Ngày khám: {new Date(activeVisit.visitTime).toLocaleDateString('vi-VN')}</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div>Họ và tên: <strong className="text-sm">{activeVisit.patientName}</strong></div>
-                      <div>Mã bệnh nhân: <strong>{activeVisit.patientCode}</strong></div>
-                      <div>Giới tính: <strong>{activeVisit.patientGender === 'MALE' ? 'Nam' : 'Nữ'}</strong></div>
-                      <div>Số điện thoại: <strong>{activeVisit.patientPhone || 'N/A'}</strong></div>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-slate-50 text-xs space-y-1">
-                      <div>Sinh hiệu: <strong>Mạch: {vitalSigns.pulse} bpm • HA: {vitalSigns.bloodPressureSystolic}/{vitalSigns.bloodPressureDiastolic} mmHg • Thân nhiệt: {vitalSigns.temperature}°C • SpO2: {vitalSigns.spO2}%</strong></div>
-                    </div>
-
-                    <div className="text-xs space-y-1.5 border-t border-surface-variant/20 pt-3">
-                      <div>Lý do khám: <span className="font-medium">{chiefComplaint}</span></div>
-                      <div>Chẩn đoán xác định: <strong className="text-primary text-sm">[{diagnosisCode}]</strong></div>
-                      <div>Lời dặn bác sĩ: <span>{diagnosisNote || 'Theo dõi định kỳ.'}</span></div>
-                    </div>
-
-                    {activeVisit.prescriptions && activeVisit.prescriptions.length > 0 && (
-                      <div className="text-xs space-y-2 border-t border-surface-variant/20 pt-3">
-                        <strong className="text-primary">Đơn thuốc chỉ định:</strong>
-                        {activeVisit.prescriptions.map((p, idx) => (
-                          <div key={idx} className="pl-3 space-y-1">
-                            {p.items?.map((it, iIdx) => (
-                              <div key={iIdx} className="flex justify-between">
-                                <span>{iIdx + 1}. {it.drugName} - {it.dosage} ({it.instruction})</span>
-                                <span className="font-bold">{it.quantity} {it.unit}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-end pt-8 text-xs border-t border-surface-variant/20">
-                      <div>
-                        <span>Trạng thái: </span>
-                        <strong className={activeVisit.status === 'COMPLETED' ? 'text-emerald-700' : 'text-amber-700'}>
-                          {activeVisit.status === 'COMPLETED' ? 'Đã hoàn tất' : 'Đang điều trị'}
-                        </strong>
-                      </div>
-                      <div className="text-center">
-                        <p className="italic mb-8">Bác sĩ khám bệnh</p>
-                        <p className="font-bold text-sm text-primary">{activeVisit.doctorName || 'TS.BS Vi Mai Anh'}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4 border-t border-surface-variant/20 print:hidden">
-                      <button
-                        type="button"
-                        onClick={handlePrintSummary}
-                        className="px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-semibold flex items-center gap-2 hover:bg-primary/90"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">print</span>
-                        <span>In phiếu khám EMR</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 5: AI CLINICAL AUDIT LOG (NFR-8) */}
-                {activeTab === 'ai_audit' && (
-                  <div className="space-y-6">
-                    <div className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-xs space-y-4">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                          <h4 className="font-headline text-base font-bold text-on-surface flex items-center gap-2">
-                            <span className="material-symbols-outlined text-primary text-[22px]">history_edu</span>
-                            <span>Nhật ký truy vết lâm sàng AI (Audit Log)</span>
-                          </h4>
-                          <p className="text-xs text-on-surface-variant mt-1">
-                            Tuân thủ NFR-8: Toàn bộ gợi ý, phân tích và cảnh báo lâm sàng từ AI Service đều được ghi vết lưu trữ tự động.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setIsLoadingLogs(true);
-                            const data = await aiAlertService.getVisitAuditLogs(activeVisit.id);
-                            setAuditLogs(data || []);
-                            setIsLoadingLogs(false);
-                          }}
-                          className="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-semibold flex items-center gap-1.5 hover:bg-surface-container cursor-pointer"
-                        >
-                          <span className={`material-symbols-outlined text-[16px] ${isLoadingLogs ? 'animate-spin' : ''}`}>
-                            refresh
-                          </span>
-                          <span>Làm mới</span>
-                        </button>
-                      </div>
-
-                      {isLoadingLogs ? (
-                        <div className="py-12 text-center text-xs text-on-surface-variant">
-                          <span className="material-symbols-outlined animate-spin text-[28px] text-primary block mb-2">
-                            progress_activity
-                          </span>
-                          <span>Đang tải lịch sử audit AI...</span>
-                        </div>
-                      ) : auditLogs.length === 0 ? (
-                        <div className="py-12 text-center text-xs text-on-surface-variant bg-surface-container-low rounded-xl border border-dashed border-outline-variant/50 space-y-2">
-                          <span className="material-symbols-outlined text-[36px] text-outline">verified</span>
-                          <p className="font-medium text-on-surface">Chưa có bản ghi phân tích an toàn AI nào cho ca khám này.</p>
-                          <p className="text-[11px]">Bản ghi sẽ tự động được tạo khi bác sĩ thực hiện kê đơn hoặc kiểm tra tương tác thuốc.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {auditLogs.map((logItem, idx) => (
-                            <div key={logItem.id || idx} className="p-4 rounded-xl border border-outline-variant/30 bg-slate-50 space-y-2">
-                              <div className="flex items-center justify-between text-xs flex-wrap gap-2">
-                                <div className="flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                                    logItem.suggestionType === 'DRUG_INTERACTION'
-                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                      : 'bg-purple-100 text-purple-900 border border-purple-300'
-                                  }`}>
-                                    {logItem.suggestionType}
-                                  </span>
-                                  <span className="font-bold text-on-surface">Bản ghi #{logItem.id}</span>
-                                </div>
-                                <div className="text-on-surface-variant text-[11px] flex items-center gap-2">
-                                  <span>Độ tin cậy: <strong className="text-primary font-bold">{Math.round((logItem.confidenceScore || 0.95) * 100)}%</strong></span>
-                                  <span>•</span>
-                                  <span>{new Date(logItem.createdAt || Date.now()).toLocaleString('vi-VN')}</span>
-                                </div>
-                              </div>
-
-                              <div className="text-xs bg-white rounded-lg p-3 border border-outline-variant/20 font-mono text-[11px] overflow-x-auto text-on-surface">
-                                <div className="font-bold font-sans text-on-surface-variant mb-1">Chi tiết phân tích AI (JSON Output):</div>
-                                <pre className="whitespace-pre-wrap">{logItem.outputContent}</pre>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="pt-3 border-t border-surface-variant/20 flex items-center gap-2 text-[11px] text-on-surface-variant italic">
-                        <span className="material-symbols-outlined text-[16px] text-outline">verified_user</span>
-                        <span>{AI_DISCLAIMER_TEXT}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom Action Footer */}
-              <div className="bg-white border-t border-surface-container-high px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-xs text-on-surface-variant">
-                  Ca khám: <strong className="text-on-surface">#{activeVisit.id}</strong> • Trạng thái: 
-                  <span className={`ml-1.5 px-2 py-0.5 rounded font-bold ${activeVisit.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                    {activeVisit.status === 'COMPLETED' ? 'Đã hoàn tất khám' : 'Đang khám'}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSaveClinicalData}
-                    disabled={isSaving || activeVisit.status === 'COMPLETED'}
-                    className="px-5 py-2.5 rounded-xl border border-outline-variant text-on-surface font-label text-xs font-semibold hover:bg-surface-container-low disabled:opacity-40 transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">save</span>
-                    <span>Lưu cập nhật ca khám</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleCompleteVisit}
-                    disabled={isSaving || activeVisit.status === 'COMPLETED'}
-                    className="px-6 py-2.5 rounded-xl bg-emerald-700 text-white font-label text-xs font-semibold hover:bg-emerald-800 shadow-xs disabled:opacity-40 transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                    <span>Hoàn tất ca khám (EMR)</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-8 text-on-surface-variant text-sm">
-              Chọn một ca khám từ danh sách bên trái hoặc tiếp nhận bệnh nhân mới để bắt đầu khám bệnh.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* New Visit Modal */}
-      {showNewVisitModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-outline-variant/30 space-y-4">
-            <div className="flex items-center justify-between border-b border-surface-variant/20 pb-3">
-              <h4 className="font-headline text-base font-bold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[22px]">person_add</span>
-                <span>Tiếp nhận ca khám mới</span>
-              </h4>
+          <div className="flex rounded-lg bg-slate-100 p-1 text-[13px]" role="group" aria-label="Lọc theo trạng thái">
+            {STATUS_FILTERS.map((f) => (
               <button
+                key={f.id}
                 type="button"
-                onClick={() => setShowNewVisitModal(false)}
-                className="w-8 h-8 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant"
+                aria-pressed={filterStatus === f.id}
+                onClick={() => setFilterStatus(f.id)}
+                className={`flex-1 py-1.5 rounded-md font-semibold transition-colors ${filterStatus === f.id ? 'bg-white text-primary shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                ✕
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="input-group">
+            <span className="material-symbols-outlined input-icon" aria-hidden="true">search</span>
+            <label htmlFor="visit-search" className="sr-only">Lọc bệnh nhân</label>
+            <input
+              id="visit-search"
+              type="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tên, mã hồ sơ hoặc SĐT"
+              className="input"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {listState.status === 'loading' && visits.length === 0 ? (
+            <p className="p-8 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải danh sách ca khám…</p>
+          ) : listState.status === 'error' ? (
+            <div role="alert" className="p-6 text-center space-y-3">
+              <p className="text-sm text-red-800">{listState.error || 'Không tải được danh sách ca khám.'}</p>
+              <button type="button" onClick={loadVisits} className="btn btn-secondary btn-sm">
+                <span className="material-symbols-outlined" aria-hidden="true">refresh</span>
+                Thử lại
               </button>
             </div>
+          ) : filteredVisits.length === 0 ? (
+            <div className="p-8 text-center text-[13px] text-slate-600 space-y-1">
+              <p>Không có ca khám nào phù hợp.</p>
+              <p>Ca khám mới được tạo khi quầy tiếp đón check-in bệnh nhân.</p>
+            </div>
+          ) : (
+            <ul aria-label="Ca khám" className="divide-y divide-slate-100">
+              {filteredVisits.map((v) => {
+                const isSelected = v.id === activeVisitId;
+                const isDone = v.status === 'COMPLETED';
+                return (
+                  <li key={v.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectVisit(v)}
+                      aria-current={isSelected ? 'true' : undefined}
+                      className={`w-full text-left p-4 border-l-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50 ${isSelected ? 'bg-primary-fixed border-l-primary' : 'border-l-transparent hover:bg-slate-50'}`}
+                    >
+                      <span className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-bold text-sm text-slate-900">{v.patientName}</span>
+                        <span className={`badge ${isDone ? 'badge-success' : 'badge-warning'}`}>
+                          {labelOf(VISIT_STATUS_LABELS, v.status, 'Không rõ')}
+                        </span>
+                      </span>
+                      <span className="block text-[13px] text-slate-600">
+                        {v.patientCode || '—'} · {formatGender(v.patientGender)} · {formatDateTime(v.visitTime)}
+                      </span>
+                      {v.chiefComplaint && (
+                        <span className="block text-[13px] text-slate-600 mt-1 line-clamp-1">{v.chiefComplaint}</span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </aside>
 
-            <form onSubmit={handleCreateNewVisit} className="space-y-3">
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-on-surface-variant">Họ tên bệnh nhân *</label>
-                <input
-                  type="text"
-                  value={newPatientName}
-                  onChange={(e) => setNewPatientName(e.target.value)}
-                  placeholder="vd: Nguyễn Hoàng Anh"
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  required
-                />
+      {/* Cột phải: không gian khám */}
+      {activeVisit ? (
+        <section className="flex-1 flex flex-col min-h-0 bg-slate-50" aria-label={`Ca khám của ${activeVisit.patientName}`}>
+          <div className="bg-white border-b border-slate-200 px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-11 h-11 shrink-0 rounded-xl bg-primary-fixed text-primary font-bold flex items-center justify-center" aria-hidden="true">
+                {(activeVisit.patientName || '?').trim().split(/\s+/).slice(-1)[0]?.[0] || '?'}
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-bold text-slate-900">{activeVisit.patientName}</h3>
+                  {activeVisit.patientCode && <span className="badge badge-primary">{activeVisit.patientCode}</span>}
+                  <span className={`badge ${isCompleted ? 'badge-success' : 'badge-warning'}`}>
+                    {labelOf(VISIT_STATUS_LABELS, activeVisit.status, 'Không rõ')}
+                  </span>
+                </div>
+                <p className="text-[13px] text-slate-600 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>Giới tính: <strong className="text-slate-900">{formatGender(activeVisit.patientGender)}</strong></span>
+                  <span>
+                    Ngày sinh: <strong className="text-slate-900">{formatDate(activeVisit.patientDob)}</strong>
+                    {ageFrom(activeVisit.patientDob) !== null && ` (${ageFrom(activeVisit.patientDob)} tuổi)`}
+                  </span>
+                  <span>SĐT: <SensitiveMask value={activeVisit.patientPhone} type="phone" /></span>
+                  <span>Ca khám #{activeVisit.id} · {formatDateTime(activeVisit.visitTime)}</span>
+                </p>
               </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-on-surface-variant">Số điện thoại</label>
-                <input
-                  type="tel"
-                  value={newPatientPhone}
-                  onChange={(e) => setNewPatientPhone(e.target.value)}
-                  placeholder="0912345678"
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-on-surface-variant">Lý do đến khám</label>
-                <textarea
-                  rows="2"
-                  value={newPatientComplaint}
-                  onChange={(e) => setNewPatientComplaint(e.target.value)}
-                  placeholder="vd: Đau đầu, chóng mặt, đo kiểm tra huyết áp..."
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-surface-variant/20">
-                <button
-                  type="button"
-                  onClick={() => setShowNewVisitModal(false)}
-                  className="px-4 py-2 rounded-xl border border-outline-variant text-xs font-semibold hover:bg-surface-container"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-[16px]">check</span>
-                  <span>Bắt đầu khám</span>
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
+
+          <div className="px-5 sm:px-6 py-3 bg-white border-b border-slate-200">
+            <PatientSafetyBanner
+              allergies={allergyState.items}
+              allergiesStatus={allergyState.status === 'idle' ? 'loading' : allergyState.status}
+              onRetryAllergies={loadAllergies}
+              vitalWarnings={vitalWarnings}
+            />
+          </div>
+
+          <div role="tablist" aria-label="Nội dung ca khám" className="bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center gap-1 overflow-x-auto">
+            {TABS.map((tab, index) => {
+              const selected = activeTab === tab.id;
+              const count = tabCount(tab.id);
+              return (
+                <button
+                  key={tab.id}
+                  ref={(el) => { tabRefs.current[tab.id] = el; }}
+                  type="button"
+                  role="tab"
+                  id={`visit-tab-${tab.id}`}
+                  aria-selected={selected}
+                  aria-controls={`visit-panel-${tab.id}`}
+                  tabIndex={selected ? 0 : -1}
+                  onClick={() => setActiveTab(tab.id)}
+                  onKeyDown={(e) => handleTabKeyDown(e, index)}
+                  className={`py-3 px-3 text-[13px] font-semibold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:bg-primary-fixed ${selected ? 'border-primary text-primary' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{tab.icon}</span>
+                  {tab.label}{count !== null ? ` (${count})` : ''}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            role="tabpanel"
+            id={`visit-panel-${activeTab}`}
+            aria-labelledby={`visit-tab-${activeTab}`}
+            className="flex-1 overflow-y-auto min-h-0 p-5 sm:p-6 space-y-6"
+          >
+            {activeTab === 'clinical' && (
+              <>
+                <section className="card p-5 sm:p-6 space-y-4" aria-labelledby="vitals-title">
+                  <h4 id="vitals-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">vital_signs</span>
+                    Chỉ số sinh hiệu
+                  </h4>
+                  <VitalSignsForm
+                    idPrefix={`visit-${activeVisit.id}-vs`}
+                    values={form.vitals}
+                    errors={vitalErrors}
+                    onChange={setVital}
+                    disabled={!canEdit}
+                  />
+                </section>
+
+                <section className="card p-5 sm:p-6 space-y-5" aria-labelledby="dx-title">
+                  <h4 id="dx-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">medical_information</span>
+                    Khám lâm sàng & chẩn đoán
+                  </h4>
+
+                  <div className="form-field">
+                    <label htmlFor="visit-complaint" className="form-label">Lý do khám & triệu chứng</label>
+                    <textarea
+                      id="visit-complaint"
+                      rows={2}
+                      value={form.chiefComplaint}
+                      onChange={(e) => setField('chiefComplaint', e.target.value)}
+                      disabled={!canEdit}
+                      placeholder="Triệu chứng bệnh nhân khai báo, thời gian xuất hiện, tính chất…"
+                      className="textarea"
+                    />
+                  </div>
+
+                  <DiagnosisSuggestBox
+                    symptomsText={form.chiefComplaint}
+                    visitId={activeVisit.id}
+                    disabled={!canEdit}
+                    onSelectDiagnosis={(code, name) => {
+                      setField('diagnosisCode', code);
+                      setDiagnosisError('');
+                      showToast(`Đã điền mã gợi ý ${code} – ${name}. Vui lòng xác nhận lại trước khi lưu.`, 'info');
+                    }}
+                  />
+
+                  <div className="form-field">
+                    <label htmlFor="visit-icd" className="form-label">
+                      Mã chẩn đoán ICD-10 <span className="required">*</span>
+                    </label>
+                    <input
+                      id="visit-icd"
+                      type="text"
+                      list="visit-icd-options"
+                      value={form.diagnosisCode}
+                      onChange={(e) => { setField('diagnosisCode', e.target.value); setDiagnosisError(''); }}
+                      disabled={!canEdit}
+                      placeholder="VD: I10"
+                      aria-invalid={diagnosisError ? 'true' : undefined}
+                      aria-describedby="visit-icd-hint"
+                      className={`input max-w-md uppercase ${diagnosisError ? 'is-error' : ''}`}
+                    />
+                    <datalist id="visit-icd-options">
+                      {COMMON_ICD10_CODES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                    </datalist>
+                    {diagnosisError ? (
+                      <p id="visit-icd-hint" role="alert" className="form-error">{diagnosisError}</p>
+                    ) : (
+                      <p id="visit-icd-hint" className="form-hint">
+                        {icdMatch ? `${icdMatch.code} – ${icdMatch.name}` : 'Bắt buộc khi hoàn tất ca khám. Chọn từ danh sách gợi ý hoặc nhập mã.'}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="form-field">
+                    <label htmlFor="visit-note" className="form-label">Ghi chú lâm sàng, lời dặn & kế hoạch điều trị</label>
+                    <textarea
+                      id="visit-note"
+                      rows={3}
+                      value={form.diagnosisNote}
+                      onChange={(e) => setField('diagnosisNote', e.target.value)}
+                      disabled={!canEdit}
+                      className="textarea"
+                    />
+                  </div>
+                </section>
+              </>
+            )}
+
+            {activeTab === 'prescription' && (
+              <PrescriptionForm
+                key={activeVisit.id}
+                visit={activeVisit}
+                allergies={allergyState.items}
+                allergiesStatus={allergyState.status}
+                readOnly={!canEdit}
+                readOnlyReason={readOnlyReason}
+                onPrescriptionAdded={(pres) => {
+                  if (!pres) return;
+                  setVisits((prev) => prev.map((v) => (v.id === activeVisit.id
+                    ? { ...v, prescriptions: [...(v.prescriptions || []), pres] }
+                    : v)));
+                }}
+              />
+            )}
+
+            {activeTab === 'lab' && (
+              <LabOrderPanel
+                key={activeVisit.id}
+                visit={activeVisit}
+                readOnly={!canEdit}
+                readOnlyReason={readOnlyReason}
+                canEnterResults={isDoctor}
+                onOrderAdded={(order) => {
+                  if (!order) return;
+                  setVisits((prev) => prev.map((v) => (v.id === activeVisit.id
+                    ? { ...v, labOrders: [...(v.labOrders || []), order] }
+                    : v)));
+                }}
+                onResultUpdated={refreshActiveVisit}
+              />
+            )}
+
+            {activeTab === 'summary' && (
+              <article className="card p-6 sm:p-8 space-y-5 max-w-3xl mx-auto print:p-0 print:border-none print:shadow-none">
+                <header className="text-center border-b border-slate-200 pb-4">
+                  <h4 className="text-xl font-bold text-primary">BỆNH VIỆN MỸ PHÁT</h4>
+                  <p className="text-[13px] text-slate-600">1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0789 065 493</p>
+                  <h5 className="text-lg font-bold text-slate-900 mt-3">PHIẾU KHÁM BỆNH & TÓM TẮT ĐIỀU TRỊ</h5>
+                  <p className="text-[13px] text-slate-600">Ca khám #{activeVisit.id} · Ngày khám: {formatDate(activeVisit.visitTime)}</p>
+                </header>
+
+                {isDirty && (
+                  <p className="text-[13px] p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 print:hidden">
+                    Có thay đổi chưa lưu – phiếu dưới đây hiển thị dữ liệu đã lưu trên hệ thống.
+                  </p>
+                )}
+
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+                  <div><dt className="inline text-slate-600">Họ và tên: </dt><dd className="inline font-bold">{activeVisit.patientName}</dd></div>
+                  <div><dt className="inline text-slate-600">Mã bệnh nhân: </dt><dd className="inline font-bold">{activeVisit.patientCode || '—'}</dd></div>
+                  <div><dt className="inline text-slate-600">Giới tính: </dt><dd className="inline font-bold">{formatGender(activeVisit.patientGender)}</dd></div>
+                  <div><dt className="inline text-slate-600">Ngày sinh: </dt><dd className="inline font-bold">{formatDate(activeVisit.patientDob)}</dd></div>
+                </dl>
+
+                <div className="p-3 rounded-lg bg-slate-50 text-[13px]">
+                  <p className="font-semibold mb-1">Sinh hiệu</p>
+                  <p>
+                    {VITAL_SIGN_FIELDS.map((f) => `${f.label}: ${formatVitalValue(f, activeVisit.vitalSigns?.[f.key])}`).join(' · ')}
+                  </p>
+                </div>
+
+                <div className="text-[13px] space-y-1.5 border-t border-slate-200 pt-3">
+                  <p>Lý do khám: <span className="font-medium">{activeVisit.chiefComplaint || '—'}</span></p>
+                  <p>
+                    Chẩn đoán: <strong className="text-primary text-sm">{activeVisit.diagnosisCode || 'Chưa có'}</strong>
+                    {findIcd10(activeVisit.diagnosisCode) && ` – ${findIcd10(activeVisit.diagnosisCode).name}`}
+                  </p>
+                  <p>Lời dặn: <span>{activeVisit.diagnosisNote || '—'}</span></p>
+                  <p>
+                    Dị ứng: {allergyState.status === 'ready'
+                      ? (allergyState.items.length ? allergyState.items.map((a) => a.allergen).join(', ') : 'Chưa ghi nhận')
+                      : 'Chưa xác định'}
+                  </p>
+                </div>
+
+                {(activeVisit.prescriptions || []).length > 0 && (
+                  <div className="text-[13px] space-y-2 border-t border-slate-200 pt-3">
+                    <p className="font-bold text-primary">Đơn thuốc</p>
+                    {activeVisit.prescriptions.map((p, idx) => (
+                      <ol key={p.id || idx} className="pl-3 space-y-1">
+                        {(p.items || []).map((it, iIdx) => (
+                          <li key={it.id || iIdx} className="flex justify-between gap-3">
+                            <span>{iIdx + 1}. {it.drugName} – {it.dosage}{it.instruction ? ` (${it.instruction})` : ''}</span>
+                            <span className="font-bold shrink-0">{it.quantity} {it.unit || ''}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    ))}
+                  </div>
+                )}
+
+                <footer className="flex justify-between items-end pt-6 text-[13px] border-t border-slate-200">
+                  <p>Trạng thái: <strong>{labelOf(VISIT_STATUS_LABELS, activeVisit.status, '—')}</strong></p>
+                  <div className="text-center">
+                    <p className="italic mb-8">Bác sĩ khám bệnh</p>
+                    <p className="font-bold text-sm text-primary">{activeVisit.doctorName || ''}</p>
+                  </div>
+                </footer>
+
+                <div className="flex justify-end pt-2 print:hidden">
+                  <button type="button" onClick={() => window.print()} className="btn btn-primary">
+                    <span className="material-symbols-outlined" aria-hidden="true">print</span>
+                    In phiếu khám
+                  </button>
+                </div>
+              </article>
+            )}
+
+            {activeTab === 'ai_audit' && (
+              <section className="card p-5 sm:p-6 space-y-4" aria-labelledby="ai-audit-title">
+                <div className="flex items-start justify-between flex-wrap gap-2">
+                  <div>
+                    <h4 id="ai-audit-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">history_edu</span>
+                      Lịch sử phân tích AI của ca khám
+                    </h4>
+                    <p className="text-[13px] text-slate-600 mt-1">
+                      Mọi lần kiểm tra an toàn đơn thuốc và gợi ý chẩn đoán đều được ghi lại để truy vết.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadAudit}
+                    disabled={audit.status === 'loading'}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <span className={`material-symbols-outlined ${audit.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
+                    {audit.status === 'loading' ? 'Đang tải…' : 'Làm mới'}
+                  </button>
+                </div>
+
+                {audit.status === 'loading' || audit.status === 'idle' ? (
+                  <p className="py-10 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải lịch sử phân tích…</p>
+                ) : audit.status === 'error' ? (
+                  <div role="alert" className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-900 text-sm flex flex-wrap items-center gap-3">
+                    <span>{audit.error}</span>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={loadAudit}>Thử lại</button>
+                  </div>
+                ) : audit.items.length === 0 ? (
+                  <p className="py-10 text-center text-[13px] text-slate-600 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                    Chưa có lần phân tích AI nào cho ca khám này.
+                  </p>
+                ) : (
+                  <ol className="space-y-3">
+                    {audit.items.map((logItem, idx) => {
+                      const lines = summarizeAiOutput(logItem.outputContent);
+                      const pct = logItem.confidenceScore != null ? Math.round(Number(logItem.confidenceScore) * 100) : null;
+                      return (
+                        <li key={logItem.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                          <div className="flex items-center justify-between text-[13px] flex-wrap gap-2">
+                            <span className={`badge ${logItem.suggestionType === 'DIAGNOSIS_SUGGESTION' ? 'badge-info' : 'badge-warning'}`}>
+                              {labelOf(AI_TYPE_LABELS, logItem.suggestionType, 'Phân tích AI')}
+                            </span>
+                            <span className="text-slate-600">
+                              {formatDateTime(logItem.createdAt)}
+                              {pct !== null && Number.isFinite(pct) ? ` · Độ tin cậy ${pct}%` : ''}
+                            </span>
+                          </div>
+                          {lines.length > 0 && (
+                            <ul className="list-disc pl-5 text-[13px] text-slate-900 space-y-0.5">
+                              {lines.map((l, i) => <li key={i}>{l}</li>)}
+                            </ul>
+                          )}
+                          {logItem.outputContent && (
+                            <details className="text-[13px]">
+                              <summary className="cursor-pointer text-primary font-semibold">Xem dữ liệu gốc</summary>
+                              <pre className="mt-2 whitespace-pre-wrap break-words bg-white rounded-lg p-3 border border-slate-200 text-xs">{logItem.outputContent}</pre>
+                            </details>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+
+                <p className="pt-3 border-t border-slate-200 flex items-center gap-2 text-xs text-slate-600 italic">
+                  <span className="material-symbols-outlined text-[16px]" aria-hidden="true">verified_user</span>
+                  {AI_DISCLAIMER_TEXT}
+                </p>
+              </section>
+            )}
+          </div>
+
+          <div className="bg-white border-t border-slate-200 px-5 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-[13px] text-slate-600" aria-live="polite">
+              {isCompleted
+                ? 'Ca khám đã hoàn tất – hồ sơ đã khóa.'
+                : isDirty ? 'Có thay đổi chưa lưu (F9 để lưu nhanh).' : 'Mọi thay đổi đã được lưu.'}
+            </p>
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={handleSave} disabled={isSaving} className="btn btn-secondary">
+                  <span className="material-symbols-outlined" aria-hidden="true">save</span>
+                  {isSaving ? 'Đang lưu…' : 'Lưu ca khám'}
+                </button>
+                <button type="button" onClick={handleComplete} disabled={isSaving} className="btn btn-primary">
+                  <span className="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                  Hoàn tất ca khám
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : (
+        <div className="flex-1 flex items-center justify-center p-8 text-slate-600 text-sm text-center">
+          {listState.status === 'ready'
+            ? 'Chọn một ca khám ở danh sách bên trái để bắt đầu.'
+            : listState.status === 'error' ? 'Không có dữ liệu ca khám để hiển thị.' : 'Đang tải…'}
         </div>
       )}
-    </div>
+    </Modal>
   );
 }

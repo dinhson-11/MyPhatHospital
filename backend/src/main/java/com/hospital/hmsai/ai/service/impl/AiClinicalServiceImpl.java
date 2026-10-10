@@ -20,11 +20,16 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.regex.Pattern;
+
+import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.normalize;
+import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.stripDiacritics;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +57,9 @@ public class AiClinicalServiceImpl implements AiClinicalService {
                     .build();
         }
 
+        // Bảng drug_interactions (dữ liệu đã kiểm duyệt) LUÔN được tra cứu để AI bỏ sót không che mất cặp SEVERE
+        List<DrugInteractionWarningDto> dbInteractions = findDbInteractions(request.getDrugs());
+
         String url = aiServiceBaseUrl + "/api/v1/ai/clinical/check-interaction";
         try {
             log.info("Gọi AI Service kiểm tra tương tác thuốc tại: {}", url);
@@ -61,6 +69,12 @@ public class AiClinicalServiceImpl implements AiClinicalService {
 
             InteractionCheckResponse response = restTemplate.postForObject(url, entity, InteractionCheckResponse.class);
             if (response != null) {
+                List<DrugInteractionWarningDto> merged =
+                        mergeInteractions(response.getInteractions(), dbInteractions, request.getDrugs());
+                response.setInteractions(merged);
+                response.setTotalInteractions(merged.size());
+                response.setHasInteraction(!merged.isEmpty());
+                response.setHasCritical(Boolean.TRUE.equals(response.getHasCritical()) || hasSeverity(merged, "CRITICAL"));
                 return response;
             }
         } catch (Exception e) {
@@ -68,7 +82,7 @@ public class AiClinicalServiceImpl implements AiClinicalService {
         }
 
         // Fallback local: Dựa trên bảng drug_interactions trong DB
-        return fallbackCheckInteractions(request.getDrugs());
+        return buildInteractionResponse(dbInteractions);
     }
 
     @Override
@@ -108,6 +122,9 @@ public class AiClinicalServiceImpl implements AiClinicalService {
             return PrescriptionSafetyResponse.builder().build();
         }
 
+        // Bảng drug_interactions LUÔN được hợp nhất với kết quả AI (AI bỏ sót không che mất cặp SEVERE trong DB)
+        List<DrugInteractionWarningDto> dbInteractions = findDbInteractions(request.getDrugs());
+
         String url = aiServiceBaseUrl + "/api/v1/ai/clinical/check-prescription-safety";
         try {
             log.info("Gọi AI Service kiểm tra an toàn tổng hợp tại: {}", url);
@@ -117,6 +134,23 @@ public class AiClinicalServiceImpl implements AiClinicalService {
 
             PrescriptionSafetyResponse response = restTemplate.postForObject(url, entity, PrescriptionSafetyResponse.class);
             if (response != null) {
+                List<DrugInteractionWarningDto> merged =
+                        mergeInteractions(response.getInteractions(), dbInteractions, request.getDrugs());
+                List<AllergyWarningDto> allergyAlerts =
+                        response.getAllergyAlerts() != null ? response.getAllergyAlerts() : List.of();
+                boolean hasAllergyConflict = !allergyAlerts.isEmpty()
+                        || (response.getAllergyCount() != null && response.getAllergyCount() > 0);
+                // Tương tác mức INFO chỉ mang tính thông tin: không làm đơn "không an toàn"
+                boolean hasWarning = hasActionableInteraction(merged) || hasAllergyConflict;
+                boolean hasCritical = Boolean.TRUE.equals(response.getHasCritical())
+                        || hasSeverity(merged, "CRITICAL")
+                        || allergyAlerts.stream().anyMatch(a -> "CRITICAL".equals(a.getSeverity()));
+
+                response.setInteractions(merged);
+                response.setInteractionCount(merged.size());
+                response.setHasWarning(hasWarning);
+                response.setHasCritical(hasCritical);
+                response.setIsSafe(!hasWarning);
                 return response;
             }
         } catch (Exception e) {
@@ -124,10 +158,10 @@ public class AiClinicalServiceImpl implements AiClinicalService {
         }
 
         // Fallback tổng hợp
-        InteractionCheckResponse interactionRes = fallbackCheckInteractions(request.getDrugs());
+        InteractionCheckResponse interactionRes = buildInteractionResponse(dbInteractions);
         AllergyCheckResponse allergyRes = fallbackCheckAllergies(request.getPatientAllergies(), request.getDrugs());
 
-        boolean hasWarning = interactionRes.getHasInteraction() || allergyRes.getHasAllergyConflict();
+        boolean hasWarning = hasActionableInteraction(interactionRes.getInteractions()) || allergyRes.getHasAllergyConflict();
         boolean hasCritical = interactionRes.getHasCritical() || allergyRes.getHasCritical();
 
         return PrescriptionSafetyResponse.builder()
@@ -143,8 +177,14 @@ public class AiClinicalServiceImpl implements AiClinicalService {
                 .build();
     }
 
+    /**
+     * NOT_SUPPORTED: tạm treo transaction của caller (vd VisitServiceImpl.createPrescription) trong lúc gọi AI và
+     * ghi audit log. Mỗi lần save audit chạy trong transaction riêng của repository, nên lỗi ở đây (kể cả lỗi
+     * INSERT audit bị repository đánh dấu rollback-only) không thể "đầu độc" transaction lưu đơn thuốc của caller.
+     * Lỗi ghi audit được bắt và log trong saveAuditLogs(); lỗi tra cứu DB tương tác được bắt trong findDbInteractions().
+     */
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public PrescriptionSafetyResponse checkAndAuditPrescriptionSafety(Long visitId, List<DrugItemDto> drugs) {
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lượt khám", "id", visitId));
@@ -245,14 +285,34 @@ public class AiClinicalServiceImpl implements AiClinicalService {
     // =========================================================================
     // LOCAL FALLBACK LOGIC
     // =========================================================================
-    private InteractionCheckResponse fallbackCheckInteractions(List<DrugItemDto> drugs) {
+    private static final Map<String, Integer> SEVERITY_RANK = Map.of("CRITICAL", 3, "WARNING", 2, "INFO", 1);
+
+    private static int severityRank(String severity) {
+        return severity == null ? 0 : SEVERITY_RANK.getOrDefault(severity, 0);
+    }
+
+    private static boolean hasSeverity(List<DrugInteractionWarningDto> interactions, String severity) {
+        return interactions != null && interactions.stream().anyMatch(w -> severity.equals(w.getSeverity()));
+    }
+
+    /** Có tương tác cần xử trí (CRITICAL / WARNING). Tương tác INFO không làm đơn "không an toàn". */
+    private static boolean hasActionableInteraction(List<DrugInteractionWarningDto> interactions) {
+        return interactions != null && interactions.stream().anyMatch(w -> severityRank(w.getSeverity()) >= 2);
+    }
+
+    /** Tra cứu bảng drug_interactions; lỗi DB không được làm hỏng luồng kiểm tra (trả danh sách rỗng). */
+    private List<DrugInteractionWarningDto> findDbInteractions(List<DrugItemDto> drugs) {
         List<Long> drugIds = drugs.stream()
                 .map(DrugItemDto::getId)
                 .filter(Objects::nonNull)
+                .distinct()
                 .toList();
 
         List<DrugInteractionWarningDto> warnings = new ArrayList<>();
-        if (drugIds.size() >= 2) {
+        if (drugIds.size() < 2) {
+            return warnings;
+        }
+        try {
             List<DrugInteraction> interactions = drugInteractionRepository.findInteractionsAmongDrugs(drugIds);
             for (DrugInteraction di : interactions) {
                 String sev = di.getSeverity() != null ? di.getSeverity().name() : "WARNING";
@@ -267,50 +327,204 @@ public class AiClinicalServiceImpl implements AiClinicalService {
                         .recommendation("Cân nhắc điều chỉnh hoặc đổi thuốc thay thế.")
                         .build());
             }
+        } catch (Exception e) {
+            log.error("Không tra cứu được bảng drug_interactions: {}", e.getMessage(), e);
         }
+        return warnings;
+    }
 
-        boolean hasInter = !warnings.isEmpty();
-        boolean hasCrit = warnings.stream().anyMatch(w -> "CRITICAL".equals(w.getSeverity()));
-
+    private InteractionCheckResponse buildInteractionResponse(List<DrugInteractionWarningDto> warnings) {
+        List<DrugInteractionWarningDto> sorted = mergeInteractions(warnings, List.of(), List.of());
         return InteractionCheckResponse.builder()
-                .hasInteraction(hasInter)
-                .hasCritical(hasCrit)
-                .totalInteractions(warnings.size())
-                .interactions(warnings)
+                .hasInteraction(!sorted.isEmpty())
+                .hasCritical(hasSeverity(sorted, "CRITICAL"))
+                .totalInteractions(sorted.size())
+                .interactions(sorted)
                 .confidenceScore(new BigDecimal("0.90"))
                 .disclaimer(PrescriptionSafetyResponse.DEFAULT_DISCLAIMER)
                 .build();
     }
 
-    private AllergyCheckResponse fallbackCheckAllergies(List<PatientAllergyItemDto> allergies, List<DrugItemDto> drugs) {
-        List<AllergyWarningDto> alerts = new ArrayList<>();
-
-        for (DrugItemDto drug : drugs) {
-            String drugName = (drug.getName() != null ? drug.getName() : "").toLowerCase();
-            for (PatientAllergyItemDto allergy : allergies) {
-                String allergen = (allergy.getAllergen() != null ? allergy.getAllergen() : "").toLowerCase().trim();
-                if (!allergen.isEmpty() && drugName.contains(allergen)) {
-                    alerts.add(AllergyWarningDto.builder()
-                            .drugId(drug.getId())
-                            .drugName(drug.getName())
-                            .allergen(allergy.getAllergen())
-                            .reactionType("DIRECT_MATCH")
-                            .severity("CRITICAL")
-                            .description("Bệnh nhân có tiền sử dị ứng trực tiếp với " + allergy.getAllergen())
-                            .recommendation("Chống chỉ định thuốc này, chuyển sang nhóm thuốc thay thế.")
-                            .build());
+    /**
+     * Hợp nhất tương tác từ AI với bảng drug_interactions theo cặp thuốc (không phân biệt thứ tự A-B / B-A).
+     * Cặp đã có trong kết quả AI: giữ kết quả AI nếu mức độ ≥ DB, ngược lại thay bằng bản ghi DB (mức nặng hơn).
+     * Kết quả được sắp xếp CRITICAL > WARNING > INFO.
+     */
+    static List<DrugInteractionWarningDto> mergeInteractions(List<DrugInteractionWarningDto> aiInteractions,
+                                                             List<DrugInteractionWarningDto> dbInteractions,
+                                                             List<DrugItemDto> requestDrugs) {
+        Map<String, Long> idByName = new HashMap<>();
+        if (requestDrugs != null) {
+            for (DrugItemDto d : requestDrugs) {
+                if (d.getId() != null && d.getName() != null) {
+                    idByName.putIfAbsent(normalize(d.getName()), d.getId());
                 }
             }
         }
 
+        Map<String, List<DrugInteractionWarningDto>> byPair = new LinkedHashMap<>();
+        if (aiInteractions != null) {
+            for (DrugInteractionWarningDto w : aiInteractions) {
+                byPair.computeIfAbsent(pairKey(w, idByName), k -> new ArrayList<>()).add(w);
+            }
+        }
+        if (dbInteractions != null) {
+            for (DrugInteractionWarningDto w : dbInteractions) {
+                String key = pairKey(w, idByName);
+                List<DrugInteractionWarningDto> existing = byPair.get(key);
+                int existingMax = existing == null ? 0
+                        : existing.stream().mapToInt(x -> severityRank(x.getSeverity())).max().orElse(0);
+                if (existing == null || severityRank(w.getSeverity()) > existingMax) {
+                    byPair.put(key, new ArrayList<>(List.of(w)));
+                }
+            }
+        }
+
+        List<DrugInteractionWarningDto> merged = new ArrayList<>();
+        byPair.values().forEach(merged::addAll);
+        merged.sort(Comparator.comparingInt((DrugInteractionWarningDto w) -> severityRank(w.getSeverity())).reversed());
+        return merged;
+    }
+
+    private static String pairKey(DrugInteractionWarningDto w, Map<String, Long> idByName) {
+        String a = drugKey(w.getDrugAId(), w.getDrugAName(), idByName);
+        String b = drugKey(w.getDrugBId(), w.getDrugBName(), idByName);
+        return a.compareTo(b) <= 0 ? a + "|" + b : b + "|" + a;
+    }
+
+    private static String drugKey(Long id, String name, Map<String, Long> idByName) {
+        Long resolved = id != null ? id : idByName.get(normalize(name));
+        return resolved != null ? "id:" + resolved : "name:" + normalize(name);
+    }
+
+    // -------------------------------------------------------------------------
+    // Fallback dị ứng: chuẩn hóa (bỏ dấu, chính tả Việt hóa), so khớp 2 chiều theo NGUYÊN TỪ, họ thuốc
+    // -------------------------------------------------------------------------
+    private static final int MIN_ALLERGEN_LEN = 3;
+
+    /** Họ dị ứng: dị nguyên thuộc họ -> thuốc cùng họ (nguy cơ cao) và thuốc dị ứng chéo (nguy cơ thấp hơn). */
+    private record AllergyClass(String family, Pattern allergen, Pattern sameClassDrug, Pattern crossDrug) {
+    }
+
+    private static Pattern wordPattern(String alternatives) {
+        return Pattern.compile("(?<![a-z0-9])(?:" + alternatives + ")(?![a-z0-9])");
+    }
+
+    // Mẫu viết ở dạng chính tắc canon(): bỏ dấu, ph->f, th->t, y->i, bỏ chữ đôi, bỏ 'e' cuối
+    private static final String PENICILLIN = "\\w*cilin|augmentin|unasin|tazocin";
+    private static final String CEPHALOSPORIN = "cef\\w*";
+    private static final String CARBAPENEM = "\\w*penem";
+    private static final String NSAID_NON_SELECTIVE =
+            "nsaid|aspirin|acetilsalicilic|ibuprofen|diclofenac|naproxen|meloxicam|ketorolac|piroxicam|indometacin|ketoprofen";
+    private static final String SULFONAMIDE =
+            "sulfametoxazol|cotrimoxazol|bactrim|biseptol|sulfadiazin|sulfasalazin|sulfonamid|sulfamid";
+
+    private static final List<AllergyClass> ALLERGY_CLASSES = List.of(
+            new AllergyClass("Penicillin / Beta-lactam",
+                    wordPattern(PENICILLIN + "|betalactam|clavulanat|clavulanic"),
+                    wordPattern(PENICILLIN), wordPattern(CEPHALOSPORIN + "|" + CARBAPENEM)),
+            new AllergyClass("Cephalosporin",
+                    wordPattern(CEPHALOSPORIN + "|betalactam"),
+                    wordPattern(CEPHALOSPORIN), wordPattern(PENICILLIN + "|" + CARBAPENEM)),
+            new AllergyClass("NSAID / Aspirin",
+                    wordPattern(NSAID_NON_SELECTIVE + "|celecoxib|etoricoxib|khang viem khong steroid"),
+                    wordPattern(NSAID_NON_SELECTIVE), wordPattern("celecoxib|etoricoxib")),
+            new AllergyClass("Sulfonamide (Sulfa)",
+                    wordPattern(SULFONAMIDE + "|sulfa"),
+                    wordPattern(SULFONAMIDE), null)
+    );
+
+    /** Dạng chính tắc tên thuốc (đồng bộ với _canon() trong ai-service/services/clinical_alert_service.py). */
+    static String canonDrugText(String text) {
+        String t = stripDiacritics(normalize(text)).replace("-", "");
+        t = t.replace("ph", "f").replace("chl", "cl").replace("th", "t").replace("y", "i");
+        t = t.replaceAll("([a-z])\\1+", "$1");
+        return t.replaceAll("\\b([a-z]{4,})e\\b", "$1");
+    }
+
+    /** {@code needle} xuất hiện NGUYÊN TỪ trong {@code haystack} (cả hai đã canon). */
+    private static boolean containsWord(String haystack, String needle) {
+        if (needle.replace(" ", "").length() < MIN_ALLERGEN_LEN) {
+            return false;
+        }
+        return Pattern.compile("(?<![a-z0-9])" + Pattern.quote(needle) + "(?![a-z0-9])").matcher(haystack).find();
+    }
+
+    private AllergyCheckResponse fallbackCheckAllergies(List<PatientAllergyItemDto> allergies, List<DrugItemDto> drugs) {
+        List<AllergyWarningDto> alerts = new ArrayList<>();
+        if (allergies == null) {
+            allergies = List.of();
+        }
+
+        for (DrugItemDto drug : drugs) {
+            String drugName = canonDrugText(drug.getName());
+            String drugText = canonDrugText((drug.getName() != null ? drug.getName() : "") + " "
+                    + (drug.getActiveIngredient() != null ? drug.getActiveIngredient() : ""));
+            for (PatientAllergyItemDto allergy : allergies) {
+                String allergen = canonDrugText(allergy.getAllergen());
+                // Bỏ qua dị nguyên rỗng / quá ngắn (tránh khớp nhầm mọi thuốc)
+                if (allergen.replace(" ", "").length() < MIN_ALLERGEN_LEN) {
+                    continue;
+                }
+                boolean severe = "SEVERE".equalsIgnoreCase(allergy.getSeverity() != null ? allergy.getSeverity().trim() : "");
+
+                AllergyWarningDto alert = null;
+                // 1. Trùng trực tiếp, 2 chiều, theo nguyên từ ("Sulfa" KHÔNG khớp "Magnesium sulfate")
+                if (containsWord(drugText, allergen) || containsWord(allergen, drugName)) {
+                    alert = buildAllergyAlert(drug, allergy, "DIRECT_MATCH", "CRITICAL",
+                            "Bệnh nhân có tiền sử dị ứng trực tiếp với " + allergy.getAllergen(),
+                            "Chống chỉ định thuốc này, chuyển sang nhóm thuốc thay thế.");
+                } else {
+                    // 2. Theo họ thuốc
+                    for (AllergyClass cls : ALLERGY_CLASSES) {
+                        if (!cls.allergen().matcher(allergen).find()) {
+                            continue;
+                        }
+                        if (cls.sameClassDrug().matcher(drugText).find()) {
+                            alert = buildAllergyAlert(drug, allergy, "CROSS_REACTIVITY", "CRITICAL",
+                                    "Thuốc cùng họ " + cls.family() + " với dị nguyên '" + allergy.getAllergen()
+                                            + "' – nguy cơ dị ứng chéo cao.",
+                                    "Chống chỉ định cả nhóm " + cls.family() + ", chọn nhóm thuốc khác.");
+                            break;
+                        }
+                        if (cls.crossDrug() != null && cls.crossDrug().matcher(drugText).find()) {
+                            alert = buildAllergyAlert(drug, allergy, "CROSS_REACTIVITY", severe ? "CRITICAL" : "WARNING",
+                                    "Nguy cơ dị ứng chéo với họ " + cls.family() + " (dị nguyên '" + allergy.getAllergen() + "')"
+                                            + (severe ? ". Tiền sử dị ứng mức độ NẶNG nên nâng lên mức nghiêm trọng." : "."),
+                                    severe ? "Chống chỉ định do tiền sử dị ứng nặng; chọn nhóm thuốc khác."
+                                            : "Thận trọng, cân nhắc test da hoặc chọn nhóm thuốc khác.");
+                            break;
+                        }
+                    }
+                }
+                if (alert != null) {
+                    alerts.add(alert);
+                }
+            }
+        }
+
+        alerts.sort(Comparator.comparingInt((AllergyWarningDto a) -> severityRank(a.getSeverity())).reversed());
         boolean hasConflict = !alerts.isEmpty();
         return AllergyCheckResponse.builder()
                 .hasAllergyConflict(hasConflict)
-                .hasCritical(hasConflict)
+                .hasCritical(alerts.stream().anyMatch(a -> "CRITICAL".equals(a.getSeverity())))
                 .totalAlerts(alerts.size())
                 .alerts(alerts)
                 .confidenceScore(new BigDecimal("0.90"))
                 .disclaimer(PrescriptionSafetyResponse.DEFAULT_DISCLAIMER)
+                .build();
+    }
+
+    private static AllergyWarningDto buildAllergyAlert(DrugItemDto drug, PatientAllergyItemDto allergy, String reactionType,
+                                                       String severity, String description, String recommendation) {
+        return AllergyWarningDto.builder()
+                .drugId(drug.getId())
+                .drugName(drug.getName())
+                .allergen(allergy.getAllergen())
+                .reactionType(reactionType)
+                .severity(severity)
+                .description(description)
+                .recommendation(recommendation)
                 .build();
     }
 
@@ -353,8 +567,9 @@ public class AiClinicalServiceImpl implements AiClinicalService {
         return fallbackSuggestDiagnosis(request.getSymptoms());
     }
 
+    /** Cùng lý do với checkAndAuditPrescriptionSafety: không tham gia (và không làm hỏng) transaction của caller. */
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public DiagnosisSuggestionResponse suggestAndAuditDiagnosis(Long visitId, DiagnosisSuggestionRequest request) {
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lượt khám", "id", visitId));

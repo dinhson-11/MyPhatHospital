@@ -88,71 +88,67 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
+    /**
+     * Doanh thu theo NGÀY THU TIỀN (paidAt) – hóa đơn lập hôm trước, thu hôm nay được tính cho hôm nay.
+     * Doanh thu = tổng chi phí của hóa đơn đã thu (gồm phần BHYT phải thu từ BHXH);
+     * doanh thu theo phương thức = số tiền thực thu từ người bệnh. Hóa đơn đã hoàn tiền bị loại.
+     */
     @Override
     public RevenueSummaryResponse getRevenueSummary(LocalDate fromDate, LocalDate toDate) {
         LocalDate start = fromDate != null ? fromDate : LocalDate.now().minusDays(6);
         LocalDate end = toDate != null ? toDate : LocalDate.now();
 
         LocalDateTime startDt = start.atStartOfDay();
-        LocalDateTime endDt = end.atTime(23, 59, 59);
+        LocalDateTime endDt = end.plusDays(1).atStartOfDay().minusNanos(1);
 
         log.info("Lấy thống kê doanh thu từ {} đến {}", startDt, endDt);
 
-        List<Invoice> invoices = invoiceRepository.findByCreatedAtBetween(startDt, endDt);
+        List<Invoice> paidInvoices = invoiceRepository.findByStatusAndPaidAtBetween(InvoiceStatus.PAID, startDt, endDt);
+        List<Invoice> createdInvoices = invoiceRepository.findByCreatedAtBetween(startDt, endDt);
+        List<Invoice> refundedInvoices = invoiceRepository.findByStatusAndVoidedAtBetween(InvoiceStatus.REFUNDED, startDt, endDt);
 
-        List<Invoice> paidInvoices = invoices.stream()
-                .filter(i -> i.getStatus() == InvoiceStatus.PAID)
-                .toList();
+        long pendingCount = createdInvoices.stream().filter(i -> i.getStatus() == InvoiceStatus.PENDING).count();
 
-        BigDecimal totalRevenue = paidInvoices.stream()
-                .map(Invoice::getTotalAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long paidCount = paidInvoices.size();
-        long pendingCount = invoices.stream().filter(i -> i.getStatus() == InvoiceStatus.PENDING).count();
-
-        BigDecimal cashRevenue = paidInvoices.stream()
-                .filter(i -> i.getPaymentMethod() == PaymentMethod.CASH)
-                .map(Invoice::getTotalAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal vietQrRevenue = paidInvoices.stream()
-                .filter(i -> i.getPaymentMethod() == PaymentMethod.VIETQR)
-                .map(Invoice::getTotalAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Group by Date for chart
         Map<LocalDate, List<Invoice>> groupedByDate = paidInvoices.stream()
-                .filter(i -> i.getCreatedAt() != null)
-                .collect(Collectors.groupingBy(i -> i.getCreatedAt().toLocalDate()));
+                .filter(i -> i.getPaidAt() != null)
+                .collect(Collectors.groupingBy(i -> i.getPaidAt().toLocalDate()));
 
         List<RevenueSummaryResponse.DailyRevenueStat> dailyRevenues = new ArrayList<>();
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
             List<Invoice> dayInvoices = groupedByDate.getOrDefault(d, Collections.emptyList());
-            BigDecimal dayAmount = dayInvoices.stream()
-                    .map(Invoice::getTotalAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
             dailyRevenues.add(RevenueSummaryResponse.DailyRevenueStat.builder()
                     .date(d)
-                    .amount(dayAmount)
+                    .amount(sum(dayInvoices, Invoice::getTotalAmount))
                     .invoiceCount(dayInvoices.size())
                     .build());
         }
 
         return RevenueSummaryResponse.builder()
-                .totalRevenue(totalRevenue)
-                .totalInvoices(invoices.size())
-                .paidInvoicesCount(paidCount)
+                .totalRevenue(sum(paidInvoices, Invoice::getTotalAmount))
+                .insuranceAmount(sum(paidInvoices, Invoice::getInsuranceAmount))
+                .patientCollected(sum(paidInvoices, Invoice::getPatientAmount))
+                .totalInvoices(createdInvoices.size())
+                .paidInvoicesCount(paidInvoices.size())
                 .pendingInvoicesCount(pendingCount)
-                .cashRevenue(cashRevenue)
-                .vietQrRevenue(vietQrRevenue)
+                .refundedInvoicesCount(refundedInvoices.size())
+                .refundedAmount(sum(refundedInvoices, Invoice::getPatientAmount))
+                .cashRevenue(sumByMethod(paidInvoices, PaymentMethod.CASH))
+                .vietQrRevenue(sumByMethod(paidInvoices, PaymentMethod.VIETQR))
+                .bankTransferRevenue(sumByMethod(paidInvoices, PaymentMethod.BANK_TRANSFER))
+                .cardRevenue(sumByMethod(paidInvoices, PaymentMethod.CARD))
                 .dailyRevenues(dailyRevenues)
                 .build();
+    }
+
+    private static BigDecimal sumByMethod(List<Invoice> invoices, PaymentMethod method) {
+        return sum(invoices.stream().filter(i -> i.getPaymentMethod() == method).toList(), Invoice::getPatientAmount);
+    }
+
+    private static BigDecimal sum(List<Invoice> invoices, java.util.function.Function<Invoice, BigDecimal> field) {
+        return invoices.stream()
+                .map(field)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Override

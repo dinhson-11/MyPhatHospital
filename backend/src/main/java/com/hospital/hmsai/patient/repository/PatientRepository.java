@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -26,6 +27,13 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
     boolean existsByPatientCode(String patientCode);
 
     boolean existsByNationalId(String nationalId);
+
+    /** Hồ sơ bệnh nhân có liên kết với tài khoản (username) không – dùng cho kiểm tra quyền sở hữu. */
+    boolean existsByIdAndUser_UsernameIgnoreCase(Long id, String username);
+
+    /** ID hồ sơ bệnh nhân liên kết với tài khoản đăng nhập (username). */
+    @Query("SELECT p.id FROM Patient p WHERE LOWER(p.user.username) = LOWER(:username) ORDER BY p.id ASC")
+    List<Long> findIdsByUsername(@Param("username") String username);
 
     /**
      * Tìm kiếm bệnh nhân theo keyword (tên, SĐT, hoặc mã bệnh nhân).

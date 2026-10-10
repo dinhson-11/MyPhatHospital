@@ -1,7 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { reportService } from '../../services/reportService';
+import { reportService, getMethodBreakdown, formatPercent, formatCount } from '../../services/reportService';
 import { receptionService } from '../../services/receptionService';
+import { formatVND, formatDate, todayISO, APPOINTMENT_STATUS_LABELS } from '../../utils/format';
+import { useAsyncData } from '../reporting/useAsyncData';
+import { Icon, ErrorPanel, EmptyPanel, KpiCard, KpiSkeleton } from '../reporting/ReportStates';
+
+const QUEUE_STATUS = {
+  CHECKED_IN: { label: 'Đã vào khám', className: 'badge-success' },
+  CONFIRMED: { label: APPOINTMENT_STATUS_LABELS.CONFIRMED, className: 'badge-info' },
+  BOOKED: { label: 'Chờ xác nhận', className: 'badge-warning' },
+  COMPLETED: { label: APPOINTMENT_STATUS_LABELS.COMPLETED, className: 'badge-neutral' },
+  CANCELLED: { label: APPOINTMENT_STATUS_LABELS.CANCELLED, className: 'badge-error' },
+  NO_SHOW: { label: APPOINTMENT_STATUS_LABELS.NO_SHOW, className: 'badge-neutral' }
+};
 
 export default function WorkspaceDashboard({
   onOpenReception,
@@ -14,49 +26,26 @@ export default function WorkspaceDashboard({
   onOpenAdmin
 }) {
   const { user, isAdmin, isDoctor, isReceptionist, isNurse, isPharmacist, isAccountant } = useAuth();
-  const [kpi, setKpi] = useState({
-    totalPatients: 1284,
-    todayAppointments: 42,
-    todayVisits: 38,
-    todayRevenue: 28450000,
-    activeStaffCount: 48,
-    lowStockDrugsCount: 3,
-    aiAlertsCount: 64
-  });
-  const [queue, setQueue] = useState([]);
-  const [topDiagnoses, setTopDiagnoses] = useState([]);
-  const [_loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let mounted = true;
-    async function loadData() {
-      try {
-        const [kpiData, queueData, diagData] = await Promise.all([
-          reportService.getKpiSummary(),
-          receptionService.getTodayQueue(),
-          reportService.getTopDiagnoses(4)
-        ]);
-        if (mounted) {
-          if (kpiData) setKpi(kpiData);
-          if (Array.isArray(queueData)) setQueue(queueData.slice(0, 5));
-          if (Array.isArray(diagData)) setTopDiagnoses(diagData);
-        }
-      } catch (err) {
-        console.error('Lỗi khi tải dữ liệu dashboard:', err);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    loadData();
-    return () => { mounted = false; };
-  }, []);
+  // Chỉ gọi những API mà vai trò hiện tại có quyền (tránh lỗi 403 hiển thị vô nghĩa)
+  const canSeeKpi = isAdmin; // /reports/kpi-summary: ADMIN
+  const canSeeRevenue = isAdmin || isAccountant; // /reports/revenue: ADMIN, ACCOUNTANT
+  const canSeeDiagnoses = isAdmin || isDoctor; // /reports/top-diagnoses: ADMIN, DOCTOR
+  const canSeeQueue = isAdmin || isReceptionist || isNurse || isDoctor;
 
-  const formatVND = (num) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
-  };
+  const kpi = useAsyncData(() => reportService.getKpiSummary(), { enabled: canSeeKpi });
+  const revenueToday = useAsyncData(() => {
+    const today = todayISO();
+    return reportService.getRevenueSummary(today, today);
+  }, { enabled: canSeeRevenue });
+  const diagnoses = useAsyncData(() => reportService.getTopDiagnoses(5), { enabled: canSeeDiagnoses });
+  const queue = useAsyncData(async () => {
+    const list = await receptionService.getTodayQueue();
+    return Array.isArray(list) ? list : [];
+  }, { enabled: canSeeQueue });
 
   const roleTitle = isAdmin
-    ? 'Quản trị viên Hệ thống'
+    ? 'Quản trị viên hệ thống'
     : isDoctor
     ? 'Bác sĩ điều trị'
     : isReceptionist
@@ -69,484 +58,301 @@ export default function WorkspaceDashboard({
     ? 'Kế toán viện phí'
     : 'Nhân viên y tế';
 
+  const rev = revenueToday.data;
+  const topMethod = rev
+    ? getMethodBreakdown(rev)
+        .filter((m) => m.amount > 0)
+        .sort((a, b) => b.amount - a.amount)[0]
+    : null;
+
+  const revenueHint = (() => {
+    if (!rev) return 'Theo ngày thu tiền';
+    const parts = [`Thực thu người bệnh ${formatVND(rev.patientCollected)}`];
+    if (rev.insuranceAmount) parts.push(`BHYT ${formatVND(rev.insuranceAmount)}`);
+    return parts.join(' · ');
+  })();
+
+  const launchItems = [
+    { key: 'reception', show: isReceptionist, action: onOpenReception, icon: 'desk', tag: 'Lễ tân', title: 'Quầy tiếp đón', desc: 'Tiếp nhận ca khám, tạo hồ sơ bệnh nhân và check-in vào buồng khám' },
+    { key: 'nurse', show: isNurse, action: onOpenNurse, icon: 'vital_signs', tag: 'Điều dưỡng', title: 'Trạm điều dưỡng & xét nghiệm', desc: 'Đo sinh hiệu (huyết áp, mạch, BMI) và cập nhật kết quả cận lâm sàng' },
+    { key: 'clinical', show: isDoctor, action: onOpenClinical, icon: 'stethoscope', tag: 'Bác sĩ', title: 'Phòng khám bác sĩ', desc: 'Khám bệnh, tham khảo gợi ý ICD-10 của AI và kê đơn có kiểm tra an toàn' },
+    { key: 'pharmacy', show: isPharmacist, action: onOpenPharmacy, icon: 'medication', tag: 'Dược sĩ', title: 'Nhà thuốc & kho dược', desc: 'Cấp phát thuốc theo đơn điện tử và theo dõi tồn kho' },
+    { key: 'invoice', show: isAccountant, action: () => onOpenInvoice?.(), icon: 'receipt_long', tag: 'Kế toán', title: 'Hóa đơn & viện phí', desc: 'Thu viện phí (tiền mặt, VietQR, chuyển khoản, thẻ) và in phiếu thu' },
+    { key: 'reports', show: isAccountant || isAdmin, action: onOpenReports, icon: 'query_stats', tag: 'Báo cáo', title: 'Báo cáo & thống kê', desc: 'Lượt khám, doanh thu viện phí theo phương thức và mô hình bệnh ICD-10' },
+    { key: 'schedule', show: true, action: () => onOpenSchedule?.(), icon: 'calendar_month', tag: 'Nhân sự', title: 'Lịch trực tuần', desc: 'Xem ca trực sáng, chiều, đêm của bác sĩ và điều dưỡng' },
+    { key: 'admin', show: isAdmin, action: onOpenAdmin, icon: 'admin_panel_settings', tag: 'Quản trị', title: 'Quản trị hệ thống', desc: 'Quản lý lịch hẹn, tài khoản và danh mục của bệnh viện' }
+  ].filter((item) => item.show && item.action);
+
+  const queueItems = (queue.data || []).slice(0, 5);
+  const diagList = diagnoses.data || [];
+  const maxDiagCount = Math.max(1, ...diagList.map((d) => d.count || 0));
+
   return (
-    <div className="p-6 sm:p-8 space-y-8 max-w-7xl mx-auto w-full">
-      {/* Welcome Banner */}
-      <div className="card p-6 sm:p-8 bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 text-white relative overflow-hidden shadow-md">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-teal-500/20 to-transparent pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
+      {/* Lời chào */}
+      <section className="rounded-2xl p-6 sm:p-8 bg-gradient-to-r from-primary-dark via-primary to-primary-container text-white shadow-card">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-teal-200 text-xs font-semibold backdrop-blur-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>Mỹ Phát Hospital • 1170 Quang Trung, Chũ, Bắc Giang</span>
-            </div>
+            <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold">
+              <Icon name="calendar_today" className="text-[16px]" />
+              <span>Hôm nay {formatDate(new Date())} · Mỹ Phát Hospital</span>
+            </p>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              Xin chào, {user?.fullName || 'Đồng nghiệp'}!
+              Xin chào, {user?.fullName || 'đồng nghiệp'}!
             </h1>
-            <p className="text-sm text-teal-100/90 max-w-2xl leading-relaxed">
-              Phân hệ làm việc HMS-AI đang trực tuyến. Bạn đang đăng nhập với vai trò <strong className="text-white">{roleTitle}</strong>. Dưới đây là bức tranh hoạt động y tế hôm nay.
+            <p className="text-sm text-white/90 max-w-2xl leading-relaxed">
+              Bạn đang đăng nhập với vai trò <strong className="text-white">{roleTitle}</strong>. Chọn phân hệ bên dưới để bắt đầu công việc.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {isDoctor && (
-              <button
-                type="button"
-                onClick={onOpenClinical}
-                className="btn bg-white text-teal-900 hover:bg-teal-50 shadow-xs font-semibold"
-              >
-                <span className="material-symbols-outlined text-teal-700">stethoscope</span>
-                <span>Phòng khám Bác sĩ</span>
+            {isDoctor && onOpenClinical && (
+              <button type="button" onClick={onOpenClinical} className="btn bg-white text-primary hover:bg-primary-fixed font-semibold">
+                <Icon name="stethoscope" />
+                <span>Phòng khám bác sĩ</span>
               </button>
             )}
-            {isReceptionist && (
-              <button
-                type="button"
-                onClick={onOpenReception}
-                className="btn bg-white text-teal-900 hover:bg-teal-50 shadow-xs font-semibold"
-              >
-                <span className="material-symbols-outlined text-teal-700">desk</span>
-                <span>Quầy Tiếp đón</span>
+            {isReceptionist && onOpenReception && (
+              <button type="button" onClick={onOpenReception} className="btn bg-white text-primary hover:bg-primary-fixed font-semibold">
+                <Icon name="desk" />
+                <span>Quầy tiếp đón</span>
               </button>
             )}
-            <button
-              type="button"
-              onClick={onOpenSchedule}
-              className="btn bg-teal-700/80 hover:bg-teal-600 text-white border border-teal-500/40"
-            >
-              <span className="material-symbols-outlined text-teal-200">calendar_month</span>
-              <span>Lịch trực tuần</span>
-            </button>
+            {onOpenSchedule && (
+              <button
+                type="button"
+                onClick={() => onOpenSchedule()}
+                className="btn bg-white/10 hover:bg-white/20 text-white border border-white/30"
+              >
+                <Icon name="calendar_month" />
+                <span>Lịch trực tuần</span>
+              </button>
+            )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Metric 1 */}
-        <div className="card p-5 hover:shadow-card-hover transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Tổng Bệnh Nhân
-            </span>
-            <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center">
-              <span className="material-symbols-outlined">group</span>
+      {/* Chỉ số tổng quan – Quản trị viên */}
+      {canSeeKpi && (
+        <section aria-labelledby="ws-kpi-title" className="space-y-3">
+          <h2 id="ws-kpi-title" className="text-section-title">Chỉ số hôm nay</h2>
+          {kpi.status === 'loading' && <KpiSkeleton />}
+          {kpi.status === 'error' && (
+            <div className="card">
+              <ErrorPanel message={kpi.error} onRetry={kpi.reload} />
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-headline tabular-nums">
-              {kpi.totalPatients?.toLocaleString('vi-VN')}
-            </span>
-            <span className="badge badge-success text-[11px]">+12.4%</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-2">Hồ sơ điện tử lưu trữ an toàn</p>
-        </div>
+          )}
+          {kpi.status === 'success' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <KpiCard label="Tổng bệnh nhân" icon="group" value={formatCount(kpi.data.totalPatients)} hint="Hồ sơ bệnh nhân đang quản lý" />
+                <KpiCard label="Lượt khám hôm nay" icon="how_to_reg" value={formatCount(kpi.data.todayVisits)} hint="Tính theo thời điểm tiếp nhận" />
+                <KpiCard
+                  label="Doanh thu hôm nay"
+                  icon="payments"
+                  tone="success"
+                  valueClassName="text-xl"
+                  value={formatVND(rev ? rev.totalRevenue : kpi.data.todayRevenue)}
+                  hint={revenueToday.status === 'error' ? 'Không tải được chi tiết thu' : revenueHint}
+                />
+                <KpiCard
+                  label="Gợi ý lâm sàng AI"
+                  icon="smart_toy"
+                  tone="neutral"
+                  value={formatCount(kpi.data.aiAlertsCount)}
+                  hint="Tổng số lượt AI hỗ trợ chẩn đoán, kê đơn đã ghi nhận"
+                />
+              </div>
+              {kpi.data.lowStockDrugsCount > 0 && (
+                <div className="alert alert-warning" role="status">
+                  <Icon name="inventory_2" />
+                  <div className="flex-1">
+                    Có <strong>{formatCount(kpi.data.lowStockDrugsCount)}</strong> loại thuốc tồn kho thấp (≤ 20 đơn vị).
+                  </div>
+                  {isPharmacist && onOpenPharmacy && (
+                    <button type="button" onClick={onOpenPharmacy} className="btn btn-sm btn-secondary">
+                      Mở kho dược
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
 
-        {/* Metric 2 */}
-        <div className="card p-5 hover:shadow-card-hover transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Lượt Khám Hôm Nay
-            </span>
-            <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center">
-              <span className="material-symbols-outlined">how_to_reg</span>
+      {/* Doanh thu hôm nay – Kế toán (không phải quản trị) */}
+      {!canSeeKpi && canSeeRevenue && (
+        <section aria-labelledby="ws-revenue-title" className="space-y-3">
+          <h2 id="ws-revenue-title" className="text-section-title">Thu viện phí hôm nay</h2>
+          {revenueToday.status === 'loading' && <KpiSkeleton />}
+          {revenueToday.status === 'error' && (
+            <div className="card">
+              <ErrorPanel message={revenueToday.error} onRetry={revenueToday.reload} />
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-headline tabular-nums">
-              {kpi.todayVisits || kpi.todayAppointments}
-            </span>
-            <span className="text-xs font-medium text-slate-500">/ {kpi.todayAppointments} lịch hẹn</span>
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
-            <div className="bg-sky-600 h-1.5 rounded-full" style={{ width: '85%' }}></div>
-          </div>
-        </div>
-
-        {/* Metric 3 */}
-        <div className="card p-5 hover:shadow-card-hover transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Viện Phí Hôm Nay
-            </span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <span className="material-symbols-outlined">payments</span>
+          )}
+          {revenueToday.status === 'success' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <KpiCard label="Tổng doanh thu" icon="payments" tone="success" valueClassName="text-xl" value={formatVND(rev.totalRevenue)} hint="Tổng chi phí hóa đơn đã thu (gồm BHYT)" />
+              <KpiCard label="Thực thu người bệnh" icon="point_of_sale" valueClassName="text-xl" value={formatVND(rev.patientCollected)} hint={topMethod ? `Nhiều nhất: ${topMethod.label} (${formatPercent(topMethod.percent)})` : 'Chưa có khoản thu'} />
+              <KpiCard label="BHYT chi trả" icon="health_and_safety" tone="neutral" valueClassName="text-xl" value={formatVND(rev.insuranceAmount)} hint="Phải thu từ cơ quan BHXH" />
+              <KpiCard label="Hóa đơn chờ thu" icon="pending_actions" tone="warning" value={formatCount(rev.pendingInvoicesCount)} hint={`Đã thu: ${formatCount(rev.paidInvoicesCount)} hóa đơn`} />
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-xl font-extrabold text-slate-900 font-headline tabular-nums">
-              {formatVND(kpi.todayRevenue)}
-            </span>
-          </div>
-          <p className="text-xs text-emerald-700 font-medium mt-2 flex items-center gap-1">
-            <span className="material-symbols-outlined text-xs">qr_code_scanner</span>
-            VietQR chiếm 62%
-          </p>
+          )}
+        </section>
+      )}
+
+      {/* Truy cập nhanh các phân hệ */}
+      <section aria-labelledby="ws-launch-title">
+        <div className="mb-4">
+          <h2 id="ws-launch-title" className="text-section-title">Phân hệ nghiệp vụ</h2>
+          <p className="text-caption">Truy cập nhanh các nghiệp vụ theo quyền tài khoản của bạn</p>
         </div>
 
-        {/* Metric 4 */}
-        <div className="card p-5 hover:shadow-card-hover transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Cảnh Báo An Toàn AI
-            </span>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-              <span className="material-symbols-outlined">smart_toy</span>
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900 font-headline tabular-nums">
-              {kpi.aiAlertsCount || 64}
-            </span>
-            <span className="badge badge-warning text-[11px]">Bảo vệ kê đơn</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-2">Tương tác thuốc & tiền sử dị ứng</p>
-        </div>
-      </div>
-
-      {/* Quick Launchpad – 7 phân hệ nghiệp vụ */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-section-title">Phân Hệ Nghiệp Vụ Y Tế</h2>
-            <p className="text-caption">Truy cập nhanh các nghiệp vụ theo quyền tài khoản của bạn</p>
-          </div>
-          <span className="text-xs font-semibold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200/60">
-            HMS-AI Enterprise
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* Lễ tân */}
-          {(isReceptionist || isAdmin) && (
+        <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4">
+          {launchItems.map((item) => (
             <button
+              key={item.key}
               type="button"
-              onClick={onOpenReception}
+              onClick={item.action}
               className="card card-interactive p-4 text-left flex flex-col justify-between group"
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined">desk</span>
-                </div>
-                <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                  Lễ tân
+              <span className="flex items-center justify-between mb-3">
+                <span className="w-10 h-10 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+                  <Icon name={item.icon} />
                 </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                  Quầy Tiếp Đón
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  Tiếp nhận ca khám, tạo mã hồ sơ BN & check-in vào buồng khám
-                </p>
-              </div>
-            </button>
-          )}
-
-          {/* Điều dưỡng */}
-          {(isNurse || isAdmin) && (
-            <button
-              type="button"
-              onClick={onOpenNurse}
-              className="card card-interactive p-4 text-left flex flex-col justify-between group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined">vital_signs</span>
-                </div>
-                <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full">
-                  Điều dưỡng
-                </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                  Trạm Điều Dưỡng & Lab
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  Đo sinh hiệu huyết áp/mạch/BMI & cập nhật kết quả cận lâm sàng
-                </p>
-              </div>
-            </button>
-          )}
-
-          {/* Bác sĩ */}
-          {(isDoctor || isAdmin) && (
-            <button
-              type="button"
-              onClick={onOpenClinical}
-              className="card card-interactive p-4 text-left flex flex-col justify-between group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined">stethoscope</span>
-                </div>
-                <span className="text-[11px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
-                  Bác sĩ
-                </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                  Phòng Khám Bác Sĩ
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  Khám bệnh, tham vấn AI gợi ý ICD-10 & kê đơn có kiểm tra an toàn
-                </p>
-              </div>
-            </button>
-          )}
-
-          {/* Nhà thuốc */}
-          {(isPharmacist || isAdmin) && (
-            <button
-              type="button"
-              onClick={onOpenPharmacy}
-              className="card card-interactive p-4 text-left flex flex-col justify-between group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined">medication</span>
-                </div>
-                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                  Dược sĩ
-                </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                  Nhà Thuốc & Kho Dược
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  Cấp phát thuốc theo đơn điện tử và kiểm soát tồn kho tự động
-                </p>
-              </div>
-            </button>
-          )}
-
-          {/* Viện phí */}
-          {(isAccountant || isAdmin) && (
-            <button
-              type="button"
-              onClick={onOpenInvoice}
-              className="card card-interactive p-4 text-left flex flex-col justify-between group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined">receipt_long</span>
-                </div>
-                <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full">
-                  Kế toán
-                </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                  Hóa Đơn & Viện Phí
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  Thu viện phí, thanh toán VietQR và in bảng kê chi phí KCB
-                </p>
-              </div>
-            </button>
-          )}
-
-          {/* Báo cáo BI */}
-          {(isAccountant || isAdmin) && (
-            <button
-              type="button"
-              onClick={onOpenReports}
-              className="card card-interactive p-4 text-left flex flex-col justify-between group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined">query_stats</span>
-                </div>
-                <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
-                  BI Report
-                </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                  Báo Cáo & Thống Kê
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  Phân tích lượt khám, doanh số viện phí và mô hình bệnh ICD-10
-                </p>
-              </div>
-            </button>
-          )}
-
-          {/* Lịch trực */}
-          <button
-            type="button"
-            onClick={onOpenSchedule}
-            className="card card-interactive p-4 text-left flex flex-col justify-between group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined">calendar_month</span>
-              </div>
-              <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
-                Nhân sự
+                <span className="badge badge-neutral">{item.tag}</span>
               </span>
-            </div>
-            <div>
-              <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                Lịch Trực Tuần
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                Xem ca trực sáng/chiều/đêm của đội ngũ bác sĩ & điều dưỡng
-              </p>
-            </div>
-          </button>
-
-          {/* Admin */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={onOpenAdmin}
-              className="card card-interactive p-4 text-left flex flex-col justify-between group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined">admin_panel_settings</span>
-                </div>
-                <span className="text-[11px] font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-full">
-                  Admin
-                </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">
-                  Quản Trị Hệ Thống
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                  Quản lý danh sách lịch hẹn đặt trước, tài khoản & cơ sở dữ liệu
-                </p>
-              </div>
+              <span>
+                <span className="block font-bold text-sm text-slate-900 group-hover:text-primary transition-colors">{item.title}</span>
+                <span className="block text-xs text-slate-500 mt-1 line-clamp-2">{item.desc}</span>
+              </span>
             </button>
+          ))}
+        </div>
+      </section>
+
+      {(canSeeQueue || canSeeDiagnoses) && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Hàng đợi tiếp nhận hôm nay */}
+          {canSeeQueue && (
+            <section aria-labelledby="ws-queue-title" className={`${canSeeDiagnoses ? 'lg:col-span-7' : 'lg:col-span-12'} card overflow-hidden`}>
+              <div className="card-header">
+                <div>
+                  <h2 id="ws-queue-title" className="text-heading">Hàng đợi tiếp nhận hôm nay</h2>
+                  <p className="text-caption">Bệnh nhân đã đăng ký khám tại bệnh viện</p>
+                </div>
+                {isReceptionist && onOpenReception && (
+                  <button type="button" onClick={onOpenReception} className="btn btn-sm btn-secondary shrink-0">
+                    <span>Xem tất cả{queue.status === 'success' ? ` (${queue.data.length})` : ''}</span>
+                    <Icon name="arrow_forward" />
+                  </button>
+                )}
+              </div>
+
+              {queue.status === 'loading' && (
+                <div className="p-5 space-y-3" aria-busy="true" aria-label="Đang tải hàng đợi">
+                  {[0, 1, 2].map((i) => <div key={i} className="skeleton h-10 w-full" />)}
+                </div>
+              )}
+              {queue.status === 'error' && <ErrorPanel compact message={queue.error} onRetry={queue.reload} />}
+              {queue.status === 'success' && queueItems.length === 0 && (
+                <EmptyPanel icon="groups" title="Chưa có bệnh nhân trong hàng đợi" text="Bệnh nhân đặt lịch hoặc được tiếp nhận hôm nay sẽ hiển thị tại đây." />
+              )}
+              {queue.status === 'success' && queueItems.length > 0 && (
+                <div className="table-wrap border-0 rounded-none">
+                  <table className="table">
+                    <caption className="sr-only">5 bệnh nhân đầu tiên trong hàng đợi hôm nay</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Bệnh nhân</th>
+                        <th scope="col">Chuyên khoa</th>
+                        <th scope="col">Giờ hẹn</th>
+                        <th scope="col">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {queueItems.map((item) => {
+                        const status = QUEUE_STATUS[item.status] || { label: 'Chờ tiếp đón', className: 'badge-warning' };
+                        return (
+                          <tr key={item.id}>
+                            <td>
+                              <div className="cell-primary">{item.fullName}</div>
+                              <div className="cell-muted font-mono">{item.patientCode || '—'}</div>
+                            </td>
+                            <td>
+                              <div className="text-xs font-semibold text-slate-800">{item.departmentName || '—'}</div>
+                              <div className="cell-muted">{item.doctorName || ''}</div>
+                            </td>
+                            <td className="text-xs font-mono text-slate-600 whitespace-nowrap">{item.appointmentTime || '—'}</td>
+                            <td>
+                              <span className={`badge ${status.className}`}>{status.label}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Mô hình bệnh tật ICD-10 */}
+          {canSeeDiagnoses && (
+            <section aria-labelledby="ws-diag-title" className={`${canSeeQueue ? 'lg:col-span-5' : 'lg:col-span-12'} card overflow-hidden`}>
+              <div className="card-header">
+                <div>
+                  <h2 id="ws-diag-title" className="text-heading">Mô hình bệnh tật (ICD-10)</h2>
+                  <p className="text-caption">Chẩn đoán thường gặp nhất tại bệnh viện</p>
+                </div>
+                {isAdmin && onOpenReports && (
+                  <button type="button" onClick={onOpenReports} className="btn btn-sm btn-ghost text-primary shrink-0">
+                    <span>Xem báo cáo</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="card-body">
+                {diagnoses.status === 'loading' && (
+                  <div className="space-y-4" aria-busy="true" aria-label="Đang tải mô hình bệnh tật">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div key={i} className="space-y-2">
+                        <div className="skeleton h-3 w-3/4" />
+                        <div className="skeleton h-2 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {diagnoses.status === 'error' && <ErrorPanel compact message={diagnoses.error} onRetry={diagnoses.reload} />}
+                {diagnoses.status === 'success' && diagList.length === 0 && (
+                  <EmptyPanel icon="monitoring" title="Chưa có dữ liệu chẩn đoán" text="Số liệu sẽ xuất hiện khi bác sĩ hoàn tất khám và ghi mã ICD-10." />
+                )}
+                {diagnoses.status === 'success' && diagList.length > 0 && (
+                  <ul className="space-y-4">
+                    {diagList.map((d) => (
+                      <li key={d.icd10Code} className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <span className="font-semibold text-slate-800 truncate" title={d.diseaseName}>
+                            <span className="font-mono text-primary font-bold mr-1.5">{d.icd10Code}</span>
+                            {d.diseaseName}
+                          </span>
+                          <span className="text-slate-600 font-semibold whitespace-nowrap tabular-nums">
+                            {formatPercent(d.percentage)} · {formatCount(d.count)} ca
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden" aria-hidden="true">
+                          <div className="bg-secondary h-2 rounded-full" style={{ width: `${Math.round((d.count / maxDiagCount) * 100)}%` }} />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
           )}
         </div>
-      </div>
-
-      {/* Two-column Bottom Content: Live Queue & Top Diseases */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: Queue snapshot (7 cols) */}
-        <div className="lg:col-span-7 card overflow-hidden">
-          <div className="card-header">
-            <div>
-              <h3 className="text-heading">Hàng Đợi Tiếp Nhận Hôm Nay</h3>
-              <p className="text-caption">Bệnh nhân đã đăng ký khám tại cơ sở Mỹ Phát Hospital (1170 Quang Trung, Chũ, Bắc Giang)</p>
-            </div>
-            {(isReceptionist || isAdmin) && (
-              <button
-                type="button"
-                onClick={onOpenReception}
-                className="btn btn-sm btn-secondary"
-              >
-                <span>Xem tất cả ({queue.length})</span>
-                <span className="material-symbols-outlined text-xs">arrow_forward</span>
-              </button>
-            )}
-          </div>
-
-          <div className="table-wrap border-0 rounded-none">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Bệnh nhân</th>
-                  <th>Chuyên khoa</th>
-                  <th>Khung giờ</th>
-                  <th>Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {queue.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="text-center py-8 text-slate-400 text-xs">
-                      Chưa có bệnh nhân nào trong hàng đợi tiếp nhận
-                    </td>
-                  </tr>
-                ) : (
-                  queue.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        <div className="cell-primary">{item.fullName}</div>
-                        <div className="cell-muted font-mono">{item.patientCode || item.phone}</div>
-                      </td>
-                      <td>
-                        <div className="text-xs font-semibold text-slate-800">{item.departmentName}</div>
-                        <div className="cell-muted">{item.doctorName}</div>
-                      </td>
-                      <td className="text-xs font-mono text-slate-600">
-                        {item.appointmentTime}
-                      </td>
-                      <td>
-                        {item.status === 'CHECKED_IN' ? (
-                          <span className="badge badge-success text-[11px]">Đã vào khám</span>
-                        ) : item.status === 'CONFIRMED' ? (
-                          <span className="badge badge-info text-[11px]">Đã xác nhận</span>
-                        ) : (
-                          <span className="badge badge-warning text-[11px]">Chờ tiếp đón</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right: Top Diseases / ICD-10 (5 cols) */}
-        <div className="lg:col-span-5 card overflow-hidden">
-          <div className="card-header">
-            <div>
-              <h3 className="text-heading">Mô Hình Bệnh Tật (ICD-10)</h3>
-              <p className="text-caption">Thống kê dịch tễ học thường gặp tại bệnh viện</p>
-            </div>
-            {(isAccountant || isAdmin) && (
-              <button
-                type="button"
-                onClick={onOpenReports}
-                className="btn btn-sm btn-ghost text-teal-700"
-              >
-                <span>Báo cáo BI</span>
-              </button>
-            )}
-          </div>
-
-          <div className="card-body space-y-4">
-            {topDiagnoses.length === 0 ? (
-              <div className="text-xs text-slate-400 py-6 text-center">Đang nạp mô hình bệnh...</div>
-            ) : (
-              topDiagnoses.map((d) => (
-                <div key={d.icd10Code} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-800 truncate max-w-[220px]" title={d.diseaseName}>
-                      <span className="font-mono text-teal-700 font-bold mr-1.5">[{d.icd10Code}]</span>
-                      {d.diseaseName}
-                    </span>
-                    <span className="text-slate-500 font-bold">{d.percentage}% ({d.count} ca)</span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-teal-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, d.percentage * 2)}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))
-            )}
-
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 space-y-1 mt-4">
-              <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                <span className="material-symbols-outlined text-sm text-teal-700">verified</span>
-                <span>Tiêu chuẩn kết nối liên thông Bộ Y Tế</span>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Mã hóa ICD-10 tự động đồng bộ sang hồ sơ bảo hiểm y tế điện tử và hệ thống giám định BHYT trực tuyến.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

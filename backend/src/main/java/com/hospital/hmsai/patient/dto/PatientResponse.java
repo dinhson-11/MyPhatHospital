@@ -28,6 +28,9 @@ public class PatientResponse {
     private String address;
     private String phone;
     private String bloodType;
+    private String insuranceNumber;
+    private LocalDate insuranceValidFrom;
+    private LocalDate insuranceValidTo;
     private Long userId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

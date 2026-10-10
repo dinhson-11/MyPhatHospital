@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -46,4 +47,7 @@ public interface StaffScheduleRepository extends JpaRepository<StaffSchedule, Lo
             @Param("to") LocalDate to);
 
     boolean existsByStaffProfileIdAndWorkDateAndShift(Long staffId, LocalDate workDate, WorkShift shift);
+
+    /** Nhân viên đã có ca trực nào trong tập ca (chồng lấn) vào ngày làm việc chưa. */
+    boolean existsByStaffProfileIdAndWorkDateAndShiftIn(Long staffId, LocalDate workDate, Collection<WorkShift> shifts);
 }

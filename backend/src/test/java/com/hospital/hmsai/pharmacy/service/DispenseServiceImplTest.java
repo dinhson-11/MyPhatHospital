@@ -3,6 +3,7 @@ package com.hospital.hmsai.pharmacy.service;
 import com.hospital.hmsai.clinical.entity.Prescription;
 import com.hospital.hmsai.clinical.entity.PrescriptionItem;
 import com.hospital.hmsai.clinical.entity.Visit;
+import com.hospital.hmsai.clinical.entity.VisitStatus;
 import com.hospital.hmsai.clinical.repository.PrescriptionRepository;
 import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
@@ -26,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +56,7 @@ class DispenseServiceImplTest {
     private DispenseServiceImpl dispenseService;
 
     private Prescription prescription;
+    private Visit visit;
     private Drug paracetamol;
     private StaffProfile pharmacist;
 
@@ -77,10 +80,11 @@ class DispenseServiceImplTest {
         User doctorUser = User.builder().id(10L).fullName("BS. Lê Văn C").build();
         StaffProfile doctor = StaffProfile.builder().id(2L).user(doctorUser).specialty("Nội tổng quát").build();
 
-        Visit visit = Visit.builder()
+        visit = Visit.builder()
                 .id(100L)
                 .patient(patient)
                 .doctor(doctor)
+                .status(VisitStatus.COMPLETED)
                 .build();
 
         PrescriptionItem item = PrescriptionItem.builder()
@@ -104,12 +108,17 @@ class DispenseServiceImplTest {
         pharmacist = StaffProfile.builder().id(5L).user(pharmUser).specialty("Dược").build();
     }
 
+    private void stubLockedPrescription() {
+        when(prescriptionRepository.findByIdWithItemsForUpdate(50L)).thenReturn(Optional.of(prescription));
+        when(dispenseRepository.existsByPrescriptionId(50L)).thenReturn(false);
+    }
+
     @Test
     @DisplayName("Cấp phát thuốc thành công: trừ tồn kho và lưu bản ghi Dispense")
     void dispensePrescription_Success() {
-        when(prescriptionRepository.findByIdWithItems(50L)).thenReturn(Optional.of(prescription));
-        when(dispenseRepository.existsByPrescriptionId(50L)).thenReturn(false);
+        stubLockedPrescription();
         when(staffProfileRepository.findByUserId(20L)).thenReturn(Optional.of(pharmacist));
+        when(drugRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(paracetamol));
         when(drugRepository.save(any(Drug.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Dispense savedDispense = Dispense.builder()
@@ -125,10 +134,12 @@ class DispenseServiceImplTest {
         assertNotNull(response);
         assertEquals(50L, response.getPrescriptionId());
         assertEquals("Nguyễn Văn A", response.getPatientName());
+        assertEquals("DS. Đỗ Thị Mai", response.getDispensedByName());
         assertEquals(1, response.getItems().size());
         assertEquals(90, response.getItems().get(0).getRemainingStock()); // 100 - 10 = 90
         assertEquals(90, paracetamol.getStockQuantity());
 
+        verify(drugRepository).findByIdForUpdate(1L);
         verify(drugRepository).save(paracetamol);
         verify(dispenseRepository).save(any(Dispense.class));
     }
@@ -136,7 +147,7 @@ class DispenseServiceImplTest {
     @Test
     @DisplayName("Cấp phát thất bại khi không tìm thấy đơn thuốc")
     void dispensePrescription_NotFound_ThrowsException() {
-        when(prescriptionRepository.findByIdWithItems(999L)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdWithItemsForUpdate(999L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () ->
                 dispenseService.dispensePrescription(999L, null, 20L));
@@ -145,7 +156,7 @@ class DispenseServiceImplTest {
     @Test
     @DisplayName("Cấp phát thất bại khi đơn thuốc đã được cấp phát trước đó")
     void dispensePrescription_AlreadyDispensed_ThrowsBusinessException() {
-        when(prescriptionRepository.findByIdWithItems(50L)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdWithItemsForUpdate(50L)).thenReturn(Optional.of(prescription));
         when(dispenseRepository.existsByPrescriptionId(50L)).thenReturn(true);
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
@@ -158,12 +169,94 @@ class DispenseServiceImplTest {
     void dispensePrescription_InsufficientStock_ThrowsBusinessException() {
         paracetamol.setStockQuantity(5); // Chỉ còn 5 nhưng đơn yêu cầu 10
 
-        when(prescriptionRepository.findByIdWithItems(50L)).thenReturn(Optional.of(prescription));
-        when(dispenseRepository.existsByPrescriptionId(50L)).thenReturn(false);
+        stubLockedPrescription();
+        when(staffProfileRepository.findByUserId(20L)).thenReturn(Optional.of(pharmacist));
+        when(drugRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(paracetamol));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 dispenseService.dispensePrescription(50L, null, 20L));
         assertTrue(ex.getMessage().contains("không đủ tồn kho"));
+        verify(drugRepository, never()).save(any());
+        verify(dispenseRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Hai dòng cùng một thuốc được cộng dồn khi kiểm tra tồn kho (không để tồn kho âm)")
+    void dispensePrescription_DuplicateLinesAggregated_InsufficientStock() {
+        paracetamol.setStockQuantity(15); // mỗi dòng 10 (≤ 15) nhưng tổng 20 > 15
+        prescription.getItems().add(PrescriptionItem.builder()
+                .id(11L).drug(paracetamol).dosage("500mg").quantity(10).build());
+
+        stubLockedPrescription();
+        when(staffProfileRepository.findByUserId(20L)).thenReturn(Optional.of(pharmacist));
+        when(drugRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(paracetamol));
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                dispenseService.dispensePrescription(50L, null, 20L));
+        assertTrue(ex.getMessage().contains("Cần cấp: 20"));
+        assertEquals(15, paracetamol.getStockQuantity());
+        verify(drugRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Hai dòng cùng một thuốc: khóa thuốc một lần, trừ kho đúng tổng số lượng")
+    void dispensePrescription_DuplicateLinesAggregated_Success() {
+        prescription.getItems().add(PrescriptionItem.builder()
+                .id(11L).drug(paracetamol).dosage("500mg").quantity(5).build());
+
+        stubLockedPrescription();
+        when(staffProfileRepository.findByUserId(20L)).thenReturn(Optional.of(pharmacist));
+        when(drugRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(paracetamol));
+        when(dispenseRepository.save(any(Dispense.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DispenseResponse response = dispenseService.dispensePrescription(50L, null, 20L);
+
+        assertEquals(85, paracetamol.getStockQuantity()); // 100 - (10 + 5)
+        assertEquals(2, response.getItems().size());
+        verify(drugRepository, times(1)).findByIdForUpdate(1L);
+        verify(drugRepository, times(1)).save(paracetamol);
+    }
+
+    @Test
+    @DisplayName("Không cấp phát thuốc đã hết hạn")
+    void dispensePrescription_ExpiredDrug_Rejected() {
+        paracetamol.setExpiryDate(LocalDate.now().minusDays(1));
+
+        stubLockedPrescription();
+        when(staffProfileRepository.findByUserId(20L)).thenReturn(Optional.of(pharmacist));
+        when(drugRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(paracetamol));
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                dispenseService.dispensePrescription(50L, null, 20L));
+        assertTrue(ex.getMessage().contains("hết hạn"));
+        assertEquals(100, paracetamol.getStockQuantity());
+        verify(dispenseRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Không cấp phát khi ca khám chưa hoàn tất (bác sĩ chưa chốt đơn)")
+    void dispensePrescription_VisitNotCompleted_Rejected() {
+        visit.setStatus(VisitStatus.IN_PROGRESS);
+        stubLockedPrescription();
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                dispenseService.dispensePrescription(50L, null, 20L));
+        assertTrue(ex.getMessage().contains("chưa hoàn tất"));
+        verifyNoInteractions(drugRepository);
+    }
+
+    @Test
+    @DisplayName("Không cấp phát khi tài khoản không có hồ sơ dược sĩ (không ghi nhận thay người khác)")
+    void dispensePrescription_MissingPharmacistProfile_Rejected() {
+        stubLockedPrescription();
+        when(staffProfileRepository.findByUserId(20L)).thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                dispenseService.dispensePrescription(50L, null, 20L));
+        assertTrue(ex.getMessage().contains("hồ sơ nhân viên"));
+        verify(staffProfileRepository, never()).findAll();
+        verifyNoInteractions(drugRepository);
+        verify(dispenseRepository, never()).save(any());
     }
 
     @Test

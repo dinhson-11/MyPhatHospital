@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
-import { ToastProvider } from './context/ToastContext';
+import React, { useCallback, useState, useSyncExternalStore } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider, useToast } from './context/ToastContext';
+import { ConfirmProvider } from './components/common/ConfirmDialog';
+import Modal from './components/common/Modal';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import HeroSection from './components/home/HeroSection';
@@ -32,127 +34,192 @@ import NurseStationModal from './components/nurse/NurseStationModal';
 import StatisticsDashboardModal from './components/reporting/StatisticsDashboardModal';
 import StaffWorkspace from './components/workspace/StaffWorkspace';
 import AutoLogoutTimer from './components/common/AutoLogoutTimer';
-import { useToast } from './context/ToastContext';
-import { useAuth } from './context/AuthContext';
+import { getCatalogStatus, getCatalogVersion, subscribeCatalog } from './services/dataService';
+
+/** Phân hệ nghiệp vụ của nhân viên – chứa dữ liệu bệnh nhân/tài chính, chỉ mở khi đăng nhập đúng vai trò. */
+const STAFF_MODULES = ['reception', 'nurse', 'clinical', 'pharmacy', 'invoice', 'reports', 'schedule', 'admin'];
+/** Cửa sổ chỉ dành cho người đã đăng nhập – đóng toàn bộ khi đăng xuất / hết phiên / đổi tài khoản. */
+const AUTH_ONLY_MODALS = new Set([...STAFF_MODULES, 'profile', 'patientProfile']);
+
+let modalSeq = 0;
+
+/**
+ * Trạng thái các cửa sổ: { [tên]: payload } – có mặt nghĩa là đang mở.
+ * Cho phép nhiều cửa sổ mở chồng nhau (VD: Lịch khám của tôi → Đặt lịch).
+ */
+function useModalRegistry() {
+  const [modals, setModals] = useState({});
+
+  const openModal = useCallback((name, payload = {}) => {
+    modalSeq += 1;
+    setModals((prev) => ({ ...prev, [name]: { ...payload, seq: modalSeq } }));
+  }, []);
+
+  const closeModal = useCallback((name) => {
+    setModals((prev) => {
+      if (!(name in prev)) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  }, []);
+
+  const closeWhere = useCallback((predicate) => {
+    setModals((prev) => {
+      const keys = Object.keys(prev).filter(predicate);
+      if (keys.length === 0) return prev;
+      const next = { ...prev };
+      keys.forEach((k) => delete next[k]);
+      return next;
+    });
+  }, []);
+
+  return { modals, openModal, closeModal, closeWhere };
+}
 
 function MainApp() {
   const { showToast } = useToast();
-  const { isAuthenticated, isDoctor, isReceptionist, isNurse, isPharmacist, isAccountant, isAdmin } = useAuth();
-  const isStaff = isDoctor || isReceptionist || isNurse || isPharmacist || isAccountant || isAdmin;
+  const {
+    user,
+    isAuthenticated,
+    isStaff,
+    isDoctor,
+    isReceptionist,
+    isNurse,
+    isPharmacist,
+    isAccountant,
+    isAdmin
+  } = useAuth();
 
-  // View mode: 'portal' (public hospital website) or 'workspace' (staff executive console)
+  // 'portal' (website công khai) hoặc 'workspace' (không gian làm việc của nhân viên)
   const [viewMode, setViewMode] = useState('portal');
+  const { modals, openModal, closeModal, closeWhere } = useModalRegistry();
 
-  // Modal states
-  const [authModal, setAuthModal] = useState({ open: false, tab: 'login' });
-  const [bookingModal, setBookingModal] = useState({ open: false, initialData: {} });
-  const [appointmentsModalOpen, setAppointmentsModalOpen] = useState(false);
-  const [departmentsModalOpen, setDepartmentsModalOpen] = useState(false);
-  const [aboutModalOpen, setAboutModalOpen] = useState(false);
-  const [contactModalOpen, setContactModalOpen] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [patientProfileModalOpen, setPatientProfileModalOpen] = useState(false);
-  const [adminModalOpen, setAdminModalOpen] = useState(false);
-  const [clinicalModalOpen, setClinicalModalOpen] = useState(false);
-  const [pharmacyModalOpen, setPharmacyModalOpen] = useState(false);
-  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
-  const [scheduleModalState, setScheduleModalState] = useState({ open: false, departmentId: '', staffId: '' });
-  const [receptionModalOpen, setReceptionModalOpen] = useState(false);
-  const [nurseModalOpen, setNurseModalOpen] = useState(false);
-  const [reportsModalOpen, setReportsModalOpen] = useState(false);
+  // Danh mục bác sĩ đồng bộ nền từ backend (main.jsx) – đặt lịch chờ đồng bộ xong để dùng đúng mã bác sĩ
+  const catalogStatus = useSyncExternalStore(subscribeCatalog, getCatalogStatus, getCatalogStatus);
+  const catalogVersion = useSyncExternalStore(subscribeCatalog, getCatalogVersion, getCatalogVersion);
+  const catalogPending = catalogStatus === 'pending';
+
+  // Quyền mở từng cửa sổ (Admin có mọi vai trò nghiệp vụ – xem AuthContext)
+  const access = {
+    reception: isAuthenticated && isReceptionist,
+    nurse: isAuthenticated && isNurse,
+    clinical: isAuthenticated && isDoctor,
+    pharmacy: isAuthenticated && isPharmacist,
+    invoice: isAuthenticated && isAccountant,
+    reports: isAuthenticated && (isAccountant || isAdmin),
+    schedule: isStaff,
+    admin: isAuthenticated && isAdmin,
+    profile: isAuthenticated,
+    patientProfile: isAuthenticated
+  };
+  const isOpen = (name) => Boolean(modals[name]) && (access[name] ?? true);
+
+  // Đăng xuất (thủ công, tự động hết phiên, 401) hoặc đổi tài khoản → đóng mọi cửa sổ chứa dữ liệu
+  // bệnh nhân / tài chính và quay về cổng thông tin. Việc chặn hiển thị theo quyền ở trên có hiệu lực ngay
+  // trong cùng lần render; effect này dọn trạng thái để cửa sổ không tự mở lại khi đăng nhập lần sau.
+  // (Cập nhật trạng thái ngay trong lần render phát hiện thay đổi phiên – mẫu "lưu giá trị của lần render trước".)
+  const sessionKey = isAuthenticated ? `${user?.id ?? ''}:${user?.username ?? ''}` : null;
+  const [previousSessionKey, setPreviousSessionKey] = useState(sessionKey);
+  if (previousSessionKey !== sessionKey) {
+    setPreviousSessionKey(sessionKey);
+    closeWhere((name) => AUTH_ONLY_MODALS.has(name));
+    if (!sessionKey) setViewMode('portal');
+  }
 
   // Handlers
-  const handleOpenAuth = (tab = 'login') => {
-    setAuthModal({ open: true, tab });
-  };
-
+  const handleOpenAuth = (tab = 'login') => openModal('auth', { tab });
   const handleOpenBooking = (initialData = {}) => {
-    setBookingModal({ open: true, initialData });
+    // Bỏ qua đối tượng sự kiện khi handler được gắn thẳng vào onClick
+    const data = initialData && typeof initialData === 'object' && !('nativeEvent' in initialData) ? initialData : {};
+    openModal('booking', { initialData: data });
   };
-
-  const handleOpenSchedule = (opts = {}) => {
-    setScheduleModalState({
-      open: true,
+  const handleOpenSchedule = (opts) => {
+    openModal('schedule', {
       departmentId: opts?.departmentId ? String(opts.departmentId) : '',
       staffId: opts?.staffId ? String(opts.staffId) : ''
     });
   };
-
+  const handleOpenInvoice = (opts) => openModal('invoice', { visitId: opts?.visitId ?? undefined });
   const handleOpenAITriage = () => {
-    const el = document.getElementById('ai-triage');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
+    document.getElementById('ai-triage')?.scrollIntoView({ behavior: 'smooth' });
   };
-
   const handleSelectDepartmentFromModal = (deptId) => {
-    setDepartmentsModalOpen(false);
+    closeModal('departments');
     handleOpenBooking({ departmentId: deptId });
   };
 
-  const isStaffWorkspaceActive = viewMode === 'workspace' && isAuthenticated && isStaff;
+  const moduleHandlers = {
+    onOpenReception: () => openModal('reception'),
+    onOpenClinical: () => openModal('clinical'),
+    onOpenNurse: () => openModal('nurse'),
+    onOpenPharmacy: () => openModal('pharmacy'),
+    onOpenInvoice: handleOpenInvoice,
+    onOpenReports: () => openModal('reports'),
+    onOpenSchedule: handleOpenSchedule,
+    onOpenAdmin: () => openModal('admin'),
+    onOpenProfile: () => openModal('profile'),
+    onOpenPatientProfile: () => openModal('patientProfile')
+  };
+
+  // Phân hệ đang mở trên cùng → làm nổi mục tương ứng ở thanh bên của workspace
+  const activeModule = STAFF_MODULES
+    .filter((name) => isOpen(name))
+    .sort((a, b) => (modals[b]?.seq ?? 0) - (modals[a]?.seq ?? 0))[0] || null;
+
+  const isStaffWorkspaceActive = viewMode === 'workspace' && isStaff;
 
   return (
-    <div className="min-h-screen bg-canvas flex flex-col font-sans text-slate-800 antialiased selection:bg-teal-600 selection:text-white">
+    <div className="min-h-screen bg-canvas flex flex-col font-sans text-slate-800 antialiased">
       {isStaffWorkspaceActive ? (
         <StaffWorkspace
+          {...moduleHandlers}
+          activeModule={activeModule}
           onSwitchToPortal={() => setViewMode('portal')}
-          onOpenReception={() => setReceptionModalOpen(true)}
-          onOpenClinical={() => setClinicalModalOpen(true)}
-          onOpenNurse={() => setNurseModalOpen(true)}
-          onOpenPharmacy={() => setPharmacyModalOpen(true)}
-          onOpenInvoice={() => setInvoiceModalOpen(true)}
-          onOpenReports={() => setReportsModalOpen(true)}
-          onOpenSchedule={handleOpenSchedule}
-          onOpenAdmin={() => setAdminModalOpen(true)}
-          onOpenProfile={() => setProfileModalOpen(true)}
-          onOpenPatientProfile={() => setPatientProfileModalOpen(true)}
         />
       ) : (
         <>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-white focus:text-sm focus:font-semibold"
+          >
+            Bỏ qua đến nội dung chính
+          </a>
+
           {/* Top Navigation */}
           <Navbar
+            {...moduleHandlers}
             onOpenAuth={handleOpenAuth}
             onOpenBooking={() => handleOpenBooking()}
-            onOpenMyAppointments={() => setAppointmentsModalOpen(true)}
-            onOpenProfile={() => setProfileModalOpen(true)}
-            onOpenPatientProfile={() => setPatientProfileModalOpen(true)}
-            onOpenAdmin={() => setAdminModalOpen(true)}
-            onOpenAbout={() => setAboutModalOpen(true)}
-            onOpenContact={() => setContactModalOpen(true)}
-            onOpenClinical={() => setClinicalModalOpen(true)}
-            onOpenPharmacy={() => setPharmacyModalOpen(true)}
-            onOpenInvoice={() => setInvoiceModalOpen(true)}
-            onOpenReception={() => setReceptionModalOpen(true)}
-            onOpenNurse={() => setNurseModalOpen(true)}
-            onOpenReports={() => setReportsModalOpen(true)}
+            onOpenMyAppointments={() => openModal('appointments')}
+            onOpenAbout={() => openModal('about')}
+            onOpenContact={() => openModal('contact')}
             onOpenWorkspace={() => setViewMode('workspace')}
           />
 
           {/* Main Content */}
-          <main className="flex-1 pt-20 w-full">
+          <main id="main-content" tabIndex={-1} className="flex-1 pt-16 w-full outline-none">
             <HeroSection
               onOpenBooking={handleOpenBooking}
-              onOpenAllDepartments={() => setDepartmentsModalOpen(true)}
+              onOpenAllDepartments={() => openModal('departments')}
               onScrollToAI={handleOpenAITriage}
-              onOpenMyAppointments={() => setAppointmentsModalOpen(true)}
+              onOpenMyAppointments={() => openModal('appointments')}
             />
 
             <FeaturesSection
               onOpenAITriage={handleOpenAITriage}
               onOpenBooking={() => handleOpenBooking()}
-              onOpenAllDepartments={() => setDepartmentsModalOpen(true)}
-              onOpenMyAppointments={() => setAppointmentsModalOpen(true)}
+              onOpenAllDepartments={() => openModal('departments')}
+              onOpenMyAppointments={() => openModal('appointments')}
             />
 
             <DepartmentsSection
               onOpenBooking={handleOpenBooking}
-              onOpenAllDepartments={() => setDepartmentsModalOpen(true)}
+              onOpenAllDepartments={() => openModal('departments')}
             />
 
-            <DoctorsSection
-              onOpenBooking={handleOpenBooking}
-            />
+            {/* key: vẽ lại khi danh mục bác sĩ đồng bộ xong (mã bác sĩ / trạng thái nhận lịch) */}
+            <DoctorsSection key={`doctors-${catalogVersion}`} onOpenBooking={handleOpenBooking} />
 
             <AITriageSection onOpenBooking={handleOpenBooking} />
 
@@ -160,7 +227,7 @@ function MainApp() {
 
             <QuickCtaSection
               onOpenBooking={() => handleOpenBooking()}
-              onOpenContact={() => setContactModalOpen(true)}
+              onOpenContact={() => openModal('contact')}
             />
 
             <HospitalMapSection />
@@ -168,118 +235,137 @@ function MainApp() {
 
           {/* Footer */}
           <Footer
-            onOpenAbout={() => setAboutModalOpen(true)}
-            onOpenContact={() => setContactModalOpen(true)}
-            onOpenAllDepts={() => setDepartmentsModalOpen(true)}
+            onOpenAbout={() => openModal('about')}
+            onOpenContact={() => openModal('contact')}
+            onOpenAllDepts={() => openModal('departments')}
             onOpenBooking={() => handleOpenBooking()}
-            onOpenMyAppointments={() => setAppointmentsModalOpen(true)}
+            onOpenMyAppointments={() => openModal('appointments')}
             onFilterDept={(deptId) => handleOpenBooking({ departmentId: deptId })}
           />
         </>
       )}
 
-
-
-      {/* Interactive Modals */}
+      {/* ===== Cửa sổ công khai ===== */}
       <AuthModal
-        isOpen={authModal.open}
-        initialTab={authModal.tab}
-        onClose={() => setAuthModal({ open: false, tab: 'login' })}
+        isOpen={isOpen('auth')}
+        initialTab={modals.auth?.tab || 'login'}
+        onClose={() => closeModal('auth')}
       />
 
       <BookingModal
-        isOpen={bookingModal.open}
-        initialData={bookingModal.initialData}
-        onClose={() => setBookingModal({ open: false, initialData: {} })}
-        onViewAppointments={() => setAppointmentsModalOpen(true)}
+        isOpen={isOpen('booking') && !catalogPending}
+        initialData={modals.booking?.initialData || {}}
+        onClose={() => closeModal('booking')}
+        onViewAppointments={() => openModal('appointments')}
       />
 
+      {/* Đặt lịch được yêu cầu khi danh mục bác sĩ còn đang đồng bộ (tối đa ~3 giây) */}
+      <Modal
+        isOpen={isOpen('booking') && catalogPending}
+        onClose={() => closeModal('booking')}
+        title="Đặt lịch khám"
+        icon="event_available"
+        size="sm"
+      >
+        <div className="flex items-center gap-3 py-4" role="status">
+          <span className="spinner" aria-hidden="true" />
+          <span className="text-sm text-slate-600">Đang tải danh sách bác sĩ, vui lòng chờ trong giây lát…</span>
+        </div>
+      </Modal>
+
       <MyAppointmentsModal
-        isOpen={appointmentsModalOpen}
-        onClose={() => setAppointmentsModalOpen(false)}
+        isOpen={isOpen('appointments')}
+        onClose={() => closeModal('appointments')}
         onOpenBooking={() => handleOpenBooking()}
       />
 
       <AllDepartmentsModal
-        isOpen={departmentsModalOpen}
-        onClose={() => setDepartmentsModalOpen(false)}
+        isOpen={isOpen('departments')}
+        onClose={() => closeModal('departments')}
         onSelectDepartment={handleSelectDepartmentFromModal}
       />
 
-      <AboutModal
-        isOpen={aboutModalOpen}
-        onClose={() => setAboutModalOpen(false)}
-      />
+      <AboutModal isOpen={isOpen('about')} onClose={() => closeModal('about')} />
 
-      <ContactModal
-        isOpen={contactModalOpen}
-        onClose={() => setContactModalOpen(false)}
-      />
+      <ContactModal isOpen={isOpen('contact')} onClose={() => closeModal('contact')} />
 
+      {/* ===== Cửa sổ cần đăng nhập ===== */}
       <UserProfileModal
-        isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        onOpenAppointments={() => setAppointmentsModalOpen(true)}
-        onOpenPatientProfile={() => setPatientProfileModalOpen(true)}
+        isOpen={isOpen('profile')}
+        onClose={() => closeModal('profile')}
+        onOpenAppointments={() => openModal('appointments')}
+        onOpenPatientProfile={() => openModal('patientProfile')}
       />
 
       <PatientProfileModal
-        isOpen={patientProfileModalOpen}
-        onClose={() => setPatientProfileModalOpen(false)}
+        isOpen={isOpen('patientProfile')}
+        onClose={() => closeModal('patientProfile')}
       />
 
-      <AdminPanelModal
-        isOpen={adminModalOpen}
-        onClose={() => setAdminModalOpen(false)}
-      />
+      {/* ===== Phân hệ nhân viên – chỉ render khi đúng vai trò ===== */}
+      {access.admin && (
+        <AdminPanelModal isOpen={isOpen('admin')} onClose={() => closeModal('admin')} />
+      )}
 
-      <VisitDashboard
-        isOpen={clinicalModalOpen}
-        onClose={() => setClinicalModalOpen(false)}
-      />
+      {access.clinical && (
+        <VisitDashboard isOpen={isOpen('clinical')} onClose={() => closeModal('clinical')} />
+      )}
 
-      <PharmacyDispenseModal
-        isOpen={pharmacyModalOpen}
-        onClose={() => setPharmacyModalOpen(false)}
-        onShowToast={showToast}
-      />
+      {access.pharmacy && (
+        <PharmacyDispenseModal
+          isOpen={isOpen('pharmacy')}
+          onClose={() => closeModal('pharmacy')}
+          onShowToast={showToast}
+        />
+      )}
 
-      <InvoiceModal
-        isOpen={invoiceModalOpen}
-        onClose={() => setInvoiceModalOpen(false)}
-        onShowToast={showToast}
-      />
+      {access.invoice && (
+        <InvoiceModal
+          isOpen={isOpen('invoice')}
+          onClose={() => closeModal('invoice')}
+          onShowToast={showToast}
+          defaultVisitId={modals.invoice?.visitId}
+        />
+      )}
 
-      <StaffScheduleModal
-        isOpen={scheduleModalState.open && isAuthenticated && isStaff}
-        onClose={() => setScheduleModalState({ open: false, departmentId: '', staffId: '' })}
-        onShowToast={showToast}
-        initialDeptId={scheduleModalState.departmentId}
-        initialStaffId={scheduleModalState.staffId}
-      />
+      {access.schedule && (
+        <StaffScheduleModal
+          isOpen={isOpen('schedule')}
+          onClose={() => closeModal('schedule')}
+          onShowToast={showToast}
+          initialDeptId={modals.schedule?.departmentId || ''}
+          initialStaffId={modals.schedule?.staffId || ''}
+        />
+      )}
 
-      <ReceptionDashboardModal
-        isOpen={receptionModalOpen}
-        onClose={() => setReceptionModalOpen(false)}
-        onShowToast={showToast}
-      />
+      {access.reception && (
+        <ReceptionDashboardModal
+          isOpen={isOpen('reception')}
+          onClose={() => closeModal('reception')}
+          onShowToast={showToast}
+        />
+      )}
 
-      <NurseStationModal
-        isOpen={nurseModalOpen}
-        onClose={() => setNurseModalOpen(false)}
-        onShowToast={showToast}
-      />
+      {access.nurse && (
+        <NurseStationModal
+          isOpen={isOpen('nurse')}
+          onClose={() => closeModal('nurse')}
+          onShowToast={showToast}
+        />
+      )}
 
-      <StatisticsDashboardModal
-        isOpen={reportsModalOpen}
-        onClose={() => setReportsModalOpen(false)}
-        onShowToast={showToast}
-      />
+      {access.reports && (
+        <StatisticsDashboardModal
+          isOpen={isOpen('reports')}
+          onClose={() => closeModal('reports')}
+          onShowToast={showToast}
+        />
+      )}
 
-      {/* Floating 24/7 AI Medical Chat Assistant */}
+      {/* Trợ lý AI y tế 24/7 */}
       <ChatWidget onOpenBooking={handleOpenBooking} />
 
-      {/* Security Auto-Logout Timer */}
+      {/* Tự động đăng xuất khi không thao tác */}
       <AutoLogoutTimer />
     </div>
   );
@@ -289,7 +375,9 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <MainApp />
+        <ConfirmProvider>
+          <MainApp />
+        </ConfirmProvider>
       </ToastProvider>
     </AuthProvider>
   );

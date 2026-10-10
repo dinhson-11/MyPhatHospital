@@ -1,20 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DEPARTMENTS, DOCTORS } from '../../services/dataService';
 import { getTimeSlots, parseLocalDate } from '../../services/hospitalHours';
 import { appointmentService } from '../../services/appointmentService';
+import { VN_MOBILE_REGEX } from '../../services/patientService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import logoHospital from '../../assets/logo.png';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import Modal from '../common/Modal';
+import { APPOINTMENT_STATUS_LABELS, formatDate, labelOf, todayISO } from '../../utils/format';
 
-export default function BookingModal({
-  isOpen,
-  onClose,
-  initialData = {},
-  onViewAppointments
-}) {
-  useEscapeKey(isOpen, onClose);
-  const { user, isAuthenticated } = useAuth();
+const tomorrowISO = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const cleanPhone = (v) => String(v || '').replace(/[\s.-]/g, '');
+
+/** Khung giờ đã qua (với ngày hôm nay) thì không cho chọn. */
+const isPastSlot = (dateStr, slot, now = new Date()) => {
+  if (dateStr !== todayISO()) return false;
+  const [h, m] = String(slot).split('-')[0].trim().split(':').map(Number);
+  return h * 60 + m <= now.getHours() * 60 + now.getMinutes();
+};
+
+/**
+ * Đặt lịch khám: kiểm tra số điện thoại di động Việt Nam, ngày theo giờ địa phương,
+ * chỉ hiển thị phiếu khi máy chủ đã ghi nhận lịch hẹn (trạng thái thật từ máy chủ).
+ */
+export default function BookingModal({ isOpen, onClose, initialData = {}, onViewAppointments }) {
+  const { user } = useAuth();
   const { showToast } = useToast();
 
   const [departmentId, setDepartmentId] = useState('');
@@ -24,429 +38,271 @@ export default function BookingModal({
   const [appointmentDate, setAppointmentDate] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
   const [notes, setNotes] = useState('');
+  const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ticket, setTicket] = useState(null); // When booking succeeds, show ticket view
+  const [ticket, setTicket] = useState(null);
 
-  // Prefill initial data when opened
   useEffect(() => {
     if (!isOpen) {
       setTicket(null);
       return;
     }
-
-    if (user) {
-      setPatientName(user.fullName || '');
-      setPhoneNumber(user.phoneNumber || '');
-    } else {
-      setPatientName('');
-      setPhoneNumber('');
-    }
+    setErrors({});
+    setSubmitError('');
+    setPatientName(user?.fullName || '');
+    setPhoneNumber(user?.phoneNumber || user?.phone || '');
 
     const bookableDepts = DEPARTMENTS.filter((dept) => dept.canBook !== false);
     if (initialData.departmentId && bookableDepts.some((dept) => dept.id === Number(initialData.departmentId))) {
       setDepartmentId(String(initialData.departmentId));
     } else {
-      setDepartmentId(String(bookableDepts[0]?.id || '1'));
+      setDepartmentId(String(bookableDepts[0]?.id || ''));
     }
-
-    if (initialData.doctorId) {
-      const targetDoc = DOCTORS.find((d) => d.id === Number(initialData.doctorId));
-      if (targetDoc && targetDoc.canBook !== false) {
-        setDoctorId(String(initialData.doctorId));
-      } else {
-        setDoctorId('');
-      }
-    } else {
-      setDoctorId('');
-    }
-
-    if (initialData.notes) {
-      setNotes(initialData.notes);
-    } else {
-      setNotes('');
-    }
-
-    // Default tomorrow's date or today
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
-    setAppointmentDate(dateStr);
+    const targetDoc = initialData.doctorId ? DOCTORS.find((d) => d.id === Number(initialData.doctorId)) : null;
+    setDoctorId(targetDoc && targetDoc.canBook !== false ? String(initialData.doctorId) : '');
+    setNotes(initialData.notes || '');
+    setAppointmentDate(tomorrowISO());
+    setTimeSlot('');
   }, [isOpen, initialData, user]);
 
-  if (!isOpen) return null;
-
-  // Khung giờ khám theo mùa (hè/đông) của ngày được chọn
   const timeSlots = getTimeSlots(parseLocalDate(appointmentDate));
-  const selectedSlot = timeSlots.includes(timeSlot) ? timeSlot : timeSlots[0];
+  const availableSlots = timeSlots.filter((s) => !isPastSlot(appointmentDate, s));
+  const selectedSlot = availableSlots.includes(timeSlot) ? timeSlot : (availableSlots[0] || '');
 
-  // Filter available doctors for the selected department (only bookable examining doctors)
   const availableDoctors = DOCTORS.filter(
     (d) => (!departmentId || d.departmentId === Number(departmentId)) && d.canBook !== false
   );
 
+  const validate = () => {
+    const e = {};
+    if (!patientName.trim()) e.patientName = 'Vui lòng nhập họ tên người khám';
+    const phone = cleanPhone(phoneNumber);
+    if (!phone) e.phoneNumber = 'Vui lòng nhập số điện thoại';
+    else if (!VN_MOBILE_REGEX.test(phone)) e.phoneNumber = 'Số điện thoại không hợp lệ (10–11 chữ số, bắt đầu bằng 0)';
+    if (!departmentId) e.departmentId = 'Vui lòng chọn chuyên khoa';
+    if (!appointmentDate) e.appointmentDate = 'Vui lòng chọn ngày khám';
+    else if (appointmentDate < todayISO()) e.appointmentDate = 'Ngày khám không được ở quá khứ';
+    if (!selectedSlot) e.timeSlot = 'Không còn khung giờ trống trong ngày đã chọn – vui lòng chọn ngày khác';
+    return e;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!patientName.trim() || !phoneNumber.trim() || !appointmentDate || !departmentId) {
-      showToast('Vui lòng điền đầy đủ các thông tin bắt buộc', 'warning');
-      return;
-    }
+    if (loading) return;
+    const v = validate();
+    setErrors(v);
+    setSubmitError('');
+    if (Object.keys(v).length > 0) return;
 
     const selectedDept = DEPARTMENTS.find((d) => d.id === Number(departmentId));
     const selectedDoc = DOCTORS.find((d) => d.id === Number(doctorId));
-
     setLoading(true);
     try {
-      const payload = {
-        patientName,
-        phoneNumber,
+      const result = await appointmentService.createAppointment({
+        patientName: patientName.trim(),
+        phoneNumber: cleanPhone(phoneNumber),
         departmentId: Number(departmentId),
-        departmentName: selectedDept ? selectedDept.name : 'Đa khoa',
+        departmentName: selectedDept?.name || '',
         doctorId: doctorId ? Number(doctorId) : null,
-        doctorName: selectedDoc ? selectedDoc.name : 'Bác sĩ trực chuyên khoa',
-        room: selectedDoc ? selectedDoc.room : (selectedDept ? selectedDept.room : 'Phòng tiếp đón Tầng 1'),
+        doctorName: selectedDoc?.name || '',
+        room: selectedDoc?.room || selectedDept?.room || '',
         appointmentDate,
         timeSlot: selectedSlot,
-        notes
-      };
-
-      const result = await appointmentService.createAppointment(payload);
+        notes: notes.trim()
+      });
       setTicket(result);
-      showToast('Đặt lịch khám thành công! Mã số khám của bạn đã được tạo.', 'success');
+      showToast('Đặt lịch khám thành công.', 'success');
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Không thể đặt lịch khám lúc này';
-      showToast(msg, 'error');
+      setSubmitError(err.message || 'Không thể đặt lịch khám lúc này');
+      showToast(err.message || 'Không thể đặt lịch khám lúc này', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const fieldProps = (name) => ({
+    'aria-invalid': errors[name] ? 'true' : undefined,
+    'aria-describedby': errors[name] ? `booking-${name}-error` : undefined
+  });
+  const errorOf = (name) => (errors[name]
+    ? <p id={`booking-${name}-error`} className="form-error">{errors[name]}</p>
+    : null);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div
-        className="bg-white rounded-3xl w-full max-w-xl shadow-2xl border border-slate-100 overflow-hidden relative my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="p-6 pb-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shadow-xs shrink-0">
-              <img
-                src={logoHospital}
-                alt="Logo Mỹ Phát Hospital"
-                className="w-full h-full object-contain rounded-full"
-                onError={(e) => {
-                  e.currentTarget.src = '/logo.png';
-                }}
-              />
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={ticket ? 'Phiếu khám bệnh điện tử' : 'Đặt lịch khám'}
+      subtitle={ticket ? 'Bệnh viện Mỹ Phát đã ghi nhận lịch hẹn của bạn' : 'Đặt trước để giảm thời gian chờ tại bệnh viện'}
+      icon={ticket ? 'confirmation_number' : 'event_available'}
+      size="md"
+    >
+      {ticket ? (
+        <div id="appointment-ticket-content">
+          <article className="border-2 border-dashed border-primary/40 rounded-2xl p-5 bg-primary-fixed/40" aria-labelledby="booking-ticket-code">
+            <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-200 flex-wrap">
+              <div>
+                <p className="text-xs font-semibold text-primary">Mã phiếu khám</p>
+                <p id="booking-ticket-code" className="text-2xl font-black text-slate-900 font-mono tracking-wider">{ticket.ticketCode}</p>
+              </div>
+              <span className="badge badge-primary">{labelOf(APPOINTMENT_STATUS_LABELS, ticket.status, 'Đã ghi nhận')}</span>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 leading-snug">
-                {ticket ? 'Phiếu Khám Bệnh Điện Tử' : 'Đăng Ký Đặt Lịch Khám'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                {ticket ? 'Mã phiếu khám hợp lệ tại Mỹ Phát Hospital' : 'Tiết kiệm thời gian, không cần xếp hàng bốc số'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
-              ESC
-            </span>
+
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-sm border-b border-slate-200">
+              <div><dt className="text-xs text-slate-600">Bệnh nhân</dt><dd className="font-bold text-slate-900">{ticket.patientName}</dd></div>
+              <div><dt className="text-xs text-slate-600">Số điện thoại</dt><dd className="font-bold text-slate-900">{ticket.patientPhone}</dd></div>
+              <div><dt className="text-xs text-slate-600">Chuyên khoa</dt><dd className="font-bold text-primary">{ticket.departmentName || '—'}</dd></div>
+              <div><dt className="text-xs text-slate-600">Bác sĩ</dt><dd className="font-bold text-slate-900">{ticket.doctorName || 'Bệnh viện sẽ phân công'}</dd></div>
+              <div><dt className="text-xs text-slate-600">Ngày khám</dt><dd className="font-bold text-slate-900">{formatDate(ticket.appointmentDate)}</dd></div>
+              <div><dt className="text-xs text-slate-600">Khung giờ</dt><dd className="font-bold text-slate-900">{ticket.timeSlot}</dd></div>
+            </dl>
+
+            <p className="pt-3 text-[13px] text-slate-700">
+              {ticket.status === 'BOOKED'
+                ? 'Lịch hẹn đang chờ bệnh viện xác nhận. '
+                : ''}
+              Vui lòng đến quầy tiếp đón tầng 1 trước giờ hẹn 15 phút và đọc mã phiếu khám.
+              Địa chỉ: 1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0789 065 493.
+            </p>
+          </article>
+
+          <div className="mt-5 flex flex-col sm:flex-row gap-3">
+            <button type="button" id="btn-print-ticket" onClick={() => window.print()} className="btn btn-secondary flex-1">
+              <span className="material-symbols-outlined" aria-hidden="true">print</span>
+              In / lưu phiếu khám
+            </button>
             <button
               type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-              title="Đóng (Esc)"
+              id="btn-view-my-appointments-ticket"
+              onClick={() => { onClose?.(); onViewAppointments?.(); }}
+              className="btn btn-primary flex-1"
             >
-              <span className="material-symbols-outlined text-lg">close</span>
+              <span className="material-symbols-outlined" aria-hidden="true">list_alt</span>
+              Xem lịch khám của tôi
             </button>
           </div>
         </div>
-
-        {/* Content Body */}
-        {ticket ? (
-          /* TICKET CONFIRMATION VIEW */
-          <div className="p-6 sm:p-8" id="appointment-ticket-content">
-            <div className="border-2 border-dashed border-emerald-500/40 rounded-2xl p-6 bg-emerald-50/30 relative">
-              <div className="flex items-center justify-between pb-4 border-b border-emerald-200">
-                <div>
-                  <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-                    MÃ SỐ PHIẾU KHÁM
-                  </span>
-                  <p className="text-2xl font-black text-slate-900 font-mono tracking-wider">
-                    {ticket.ticketCode}
-                  </p>
-                </div>
-                <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full border border-emerald-300">
-                  Đã Xác Nhận
-                </span>
-              </div>
-
-              {/* Ticket Details */}
-              <div className="grid grid-cols-2 gap-4 py-4 text-sm border-b border-emerald-100">
-                <div>
-                  <p className="text-xs text-slate-500">Bệnh nhân:</p>
-                  <p className="font-bold text-slate-900">{ticket.patientName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Số điện thoại:</p>
-                  <p className="font-bold text-slate-900">{ticket.phoneNumber}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Chuyên khoa:</p>
-                  <p className="font-bold text-primary">{ticket.departmentName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Bác sĩ phụ trách:</p>
-                  <p className="font-bold text-slate-900">{ticket.doctorName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Ngày khám (dd/mm/yyyy):</p>
-                  <p className="font-bold text-slate-900">
-                    {ticket.appointmentDate ? ticket.appointmentDate.split('-').reverse().join('/') : ''}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Khung giờ:</p>
-                  <p className="font-bold text-slate-900">{ticket.timeSlot}</p>
-                </div>
-              </div>
-
-              <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <p className="text-xs text-slate-500">Địa điểm / Phòng khám:</p>
-                  <p className="text-xs font-bold text-teal-800 mt-0.5">{ticket.room}</p>
-                </div>
-                <div className="text-xs text-slate-500">
-                  <span>Trạng thái: </span>
-                  <span className="font-semibold text-emerald-700">Chờ tiếp đón tại quầy Tầng 1</span>
-                </div>
-              </div>
-
-              {/* Barcode Mock */}
-              <div className="mt-5 pt-4 border-t border-dashed border-emerald-200 text-center">
-                <div className="inline-block bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
-                  <div className="h-10 flex items-center justify-center gap-1">
-                    {[12, 24, 8, 16, 28, 6, 20, 14, 26, 10, 30, 8, 22, 18, 12, 26, 8, 24, 16].map(
-                      (h, i) => (
-                        <div
-                          key={i}
-                          className="bg-slate-900 w-1 rounded-full"
-                          style={{ height: `${h + 10}px` }}
-                        ></div>
-                      )
-                    )}
-                  </div>
-                  <span className="text-[11px] text-slate-600 font-mono font-bold tracking-widest mt-1 block">
-                    {ticket.ticketCode}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mt-2 font-medium">
-                  Quý khách vui lòng xuất trình mã vé tại Quầy tiếp đón – Mỹ Phát Hospital (1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang). Hotline: 0789 065 493.
-                </p>
-              </div>
+      ) : (
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="form-field">
+              <label htmlFor="booking-patient-name" className="form-label">Họ và tên người khám <span className="required">*</span></label>
+              <input
+                id="booking-patient-name"
+                type="text"
+                autoComplete="name"
+                value={patientName}
+                onChange={(e) => { setPatientName(e.target.value); setErrors((p) => ({ ...p, patientName: undefined })); }}
+                className={`input ${errors.patientName ? 'is-error' : ''}`}
+                {...fieldProps('patientName')}
+              />
+              {errorOf('patientName')}
             </div>
-
-            {/* Ticket Actions */}
-            <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <button
-                type="button"
-                id="btn-print-ticket"
-                onClick={handlePrint}
-                className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-lg">print</span>
-                In / Lưu Phiếu Khám
-              </button>
-
-              <button
-                type="button"
-                id="btn-view-my-appointments-ticket"
-                onClick={() => {
-                  onClose();
-                  if (onViewAppointments) onViewAppointments();
+            <div className="form-field">
+              <label htmlFor="booking-phone-number" className="form-label">Số điện thoại di động <span className="required">*</span></label>
+              <input
+                id="booking-phone-number"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={phoneNumber}
+                onChange={(e) => { setPhoneNumber(e.target.value); setErrors((p) => ({ ...p, phoneNumber: undefined })); }}
+                onBlur={() => {
+                  const phone = cleanPhone(phoneNumber);
+                  if (phone && !VN_MOBILE_REGEX.test(phone)) {
+                    setErrors((p) => ({ ...p, phoneNumber: 'Số điện thoại không hợp lệ (10–11 chữ số, bắt đầu bằng 0)' }));
+                  }
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-lg">list_alt</span>
-                Xem Lịch Khám Của Tôi
-              </button>
+                placeholder="VD: 0912 345 678"
+                className={`input ${errors.phoneNumber ? 'is-error' : ''}`}
+                {...fieldProps('phoneNumber')}
+              />
+              {errorOf('phoneNumber')}
             </div>
           </div>
-        ) : (
-          /* BOOKING FORM WITH STEPPER */
-          <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
-            {/* Visual Stepper */}
-            <div className="grid grid-cols-3 gap-2 pb-2 border-b border-slate-100 text-center">
-              <div className="flex flex-col items-center">
-                <span className="w-6 h-6 rounded-full bg-teal-700 text-white text-xs font-bold flex items-center justify-center mb-1">
-                  1
-                </span>
-                <span className="text-[11px] font-bold text-teal-800">Chuyên khoa</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="w-6 h-6 rounded-full bg-teal-700 text-white text-xs font-bold flex items-center justify-center mb-1">
-                  2
-                </span>
-                <span className="text-[11px] font-bold text-teal-800">Thời gian</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="w-6 h-6 rounded-full bg-teal-700 text-white text-xs font-bold flex items-center justify-center mb-1">
-                  3
-                </span>
-                <span className="text-[11px] font-bold text-teal-800">Người khám</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Họ và tên người khám *
-                </label>
-                <input
-                  type="text"
-                  required
-                  id="booking-patient-name"
-                  value={patientName}
-                  onChange={(e) => setPatientName(e.target.value)}
-                  placeholder="Ví dụ: Nguyễn Văn An"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                />
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Số điện thoại liên hệ *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  id="booking-phone-number"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="0912 345 678"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Chuyên khoa cần khám *
-                </label>
-                <select
-                  id="booking-department"
-                  value={departmentId}
-                  onChange={(e) => {
-                    setDepartmentId(e.target.value);
-                    setDoctorId(''); // Reset doctor when dept changes
-                  }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                >
-                  {DEPARTMENTS.filter((d) => d.canBook !== false).map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bác sĩ mong muốn (Tùy chọn)
-                </label>
-                <select
-                  id="booking-doctor"
-                  value={doctorId}
-                  onChange={(e) => setDoctorId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                >
-                  <option value="">Bệnh viện chỉ định bác sĩ phù hợp</option>
-                  {availableDoctors.map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.name} ({doc.title})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Ngày hẹn khám *
-                </label>
-                <input
-                  type="date"
-                  required
-                  id="booking-date"
-                  value={appointmentDate}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={(e) => setAppointmentDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Khung giờ dự kiến *
-                </label>
-                <select
-                  id="booking-time-slot"
-                  value={selectedSlot}
-                  onChange={(e) => setTimeSlot(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                >
-                  {timeSlots.map((slot, idx) => (
-                    <option key={idx} value={slot}>
-                      {slot}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Lý do khám / Triệu chứng bệnh lý
-              </label>
-              <textarea
-                id="booking-notes"
-                rows="3"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Mô tả ngắn gọn triệu chứng để bác sĩ chuẩn bị hồ sơ tốt nhất..."
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none"
-              />
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="submit"
-                id="btn-confirm-booking"
-                disabled={loading}
-                className="w-full py-3.5 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl text-sm shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="form-field">
+              <label htmlFor="booking-department" className="form-label">Chuyên khoa <span className="required">*</span></label>
+              <select
+                id="booking-department"
+                value={departmentId}
+                onChange={(e) => { setDepartmentId(e.target.value); setDoctorId(''); }}
+                className={`select ${errors.departmentId ? 'is-error' : ''}`}
+                {...fieldProps('departmentId')}
               >
-                {loading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Đang khởi tạo phiếu khám...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-lg">verified</span>
-                    <span>Xác Nhận Đặt Lịch Hẹn Khám</span>
-                  </>
-                )}
-              </button>
+                {DEPARTMENTS.filter((d) => d.canBook !== false).map((dept) => (
+                  <option key={dept.id} value={dept.id}>{dept.name}</option>
+                ))}
+              </select>
+              {errorOf('departmentId')}
             </div>
-          </form>
-        )}
-      </div>
-    </div>
+            <div className="form-field">
+              <label htmlFor="booking-doctor" className="form-label">Bác sĩ mong muốn (không bắt buộc)</label>
+              <select id="booking-doctor" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} className="select">
+                <option value="">Bệnh viện phân công bác sĩ phù hợp</option>
+                {availableDoctors.map((doc) => (
+                  <option key={doc.id} value={doc.id}>{doc.name}{doc.title ? ` (${doc.title})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="form-field">
+              <label htmlFor="booking-date" className="form-label">Ngày khám <span className="required">*</span></label>
+              <input
+                id="booking-date"
+                type="date"
+                value={appointmentDate}
+                min={todayISO()}
+                onChange={(e) => { setAppointmentDate(e.target.value); setErrors((p) => ({ ...p, appointmentDate: undefined, timeSlot: undefined })); }}
+                className={`input ${errors.appointmentDate ? 'is-error' : ''}`}
+                {...fieldProps('appointmentDate')}
+              />
+              {errorOf('appointmentDate')}
+            </div>
+            <div className="form-field">
+              <label htmlFor="booking-time-slot" className="form-label">Khung giờ <span className="required">*</span></label>
+              <select
+                id="booking-time-slot"
+                value={selectedSlot}
+                onChange={(e) => setTimeSlot(e.target.value)}
+                disabled={availableSlots.length === 0}
+                className={`select ${errors.timeSlot ? 'is-error' : ''}`}
+                {...fieldProps('timeSlot')}
+              >
+                {availableSlots.length === 0 && <option value="">Hết khung giờ trong ngày</option>}
+                {availableSlots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}
+              </select>
+              {errorOf('timeSlot')}
+            </div>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="booking-notes" className="form-label">Lý do khám / triệu chứng</label>
+            <textarea
+              id="booking-notes"
+              rows={3}
+              maxLength={500}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Mô tả ngắn gọn triệu chứng để bác sĩ chuẩn bị tốt hơn"
+              className="textarea"
+            />
+          </div>
+
+          {submitError && (
+            <p role="alert" className="text-sm p-3 rounded-xl bg-red-50 border border-red-200 text-red-900">{submitError}</p>
+          )}
+
+          <button type="submit" id="btn-confirm-booking" disabled={loading} className="btn btn-primary btn-lg btn-block">
+            <span className="material-symbols-outlined" aria-hidden="true">{loading ? 'progress_activity' : 'event_available'}</span>
+            {loading ? 'Đang gửi lịch hẹn…' : 'Xác nhận đặt lịch'}
+          </button>
+        </form>
+      )}
+    </Modal>
   );
 }

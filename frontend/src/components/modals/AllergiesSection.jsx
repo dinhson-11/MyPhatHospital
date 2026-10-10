@@ -1,214 +1,206 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../common/ConfirmDialog';
 import { patientService } from '../../services/patientService';
 
 /**
- * AllergiesSection – Quản lý danh sách dị ứng bệnh nhân.
- * Hiển thị, thêm mới và xóa dị ứng (thuốc, thức ăn, môi trường).
- * Dữ liệu đầu vào quan trọng cho AI cảnh báo dị ứng thuốc (FR-11.2).
+ * AllergiesSection – danh sách dị ứng của bệnh nhân (thuốc, thức ăn, môi trường).
+ * Dữ liệu này được bác sĩ dùng để cảnh báo khi kê đơn nên:
+ *  - không tải được → hiển thị lỗi + Thử lại (không hiển thị "chưa ghi nhận dị ứng");
+ *  - xóa dị ứng phải xác nhận.
  */
-
 const SEVERITY_CONFIG = {
-  SEVERE: { label: 'Nghiêm trọng', color: 'bg-rose-100 text-rose-700 border-rose-200', icon: 'error', dot: 'bg-rose-500' },
-  MODERATE: { label: 'Trung bình', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: 'warning', dot: 'bg-amber-500' },
-  MILD: { label: 'Nhẹ', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: 'info', dot: 'bg-blue-500' }
+  SEVERE: { label: 'Nghiêm trọng', color: 'bg-red-50 text-red-900 border-red-300', dot: 'bg-red-600' },
+  MODERATE: { label: 'Trung bình', color: 'bg-amber-50 text-amber-900 border-amber-300', dot: 'bg-amber-500' },
+  MILD: { label: 'Nhẹ', color: 'bg-sky-50 text-sky-900 border-sky-200', dot: 'bg-sky-500' }
 };
 
 export default function AllergiesSection({ patientId }) {
   const { showToast } = useToast();
-  const [allergies, setAllergies] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const confirm = useConfirm();
+  const [state, setState] = useState({ status: 'idle', items: [], error: '' });
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAllergy, setNewAllergy] = useState({ allergen: '', severity: 'MILD', note: '' });
+  const [addError, setAddError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
-    if (patientId) loadAllergies();
+  const loadAllergies = useCallback(async () => {
+    if (!patientId) return;
+    setState((prev) => ({ ...prev, status: 'loading', error: '' }));
+    try {
+      const items = await patientService.getAllergies(patientId);
+      setState({ status: 'ready', items, error: '' });
+    } catch (err) {
+      setState({ status: 'error', items: [], error: err.message });
+    }
   }, [patientId]);
 
-  const loadAllergies = async () => {
-    setLoading(true);
-    try {
-      const data = await patientService.getMyAllergies();
-      setAllergies(data || []);
-    } catch {
-      showToast('Không thể tải thông tin dị ứng', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    loadAllergies();
+  }, [loadAllergies]);
 
-  const handleAdd = async () => {
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (adding) return;
     if (!newAllergy.allergen.trim()) {
-      showToast('Vui lòng nhập tên dị ứng', 'warning');
+      setAddError('Vui lòng nhập tên chất gây dị ứng');
       return;
     }
-
     setAdding(true);
+    setAddError('');
     try {
       const added = await patientService.addAllergy(patientId, newAllergy);
-      setAllergies(prev => [...prev, added]);
+      setState((prev) => ({ ...prev, items: [...prev.items, added] }));
       setNewAllergy({ allergen: '', severity: 'MILD', note: '' });
       setShowAddForm(false);
-      showToast(`Đã thêm dị ứng "${added.allergen}"`, 'success');
-    } catch {
-      showToast('Không thể thêm dị ứng. Vui lòng thử lại.', 'error');
+      showToast(`Đã thêm dị ứng "${added?.allergen || newAllergy.allergen}".`, 'success');
+    } catch (err) {
+      setAddError(err.message);
+      showToast(err.message || 'Không thêm được dị ứng', 'error');
     } finally {
       setAdding(false);
     }
   };
 
   const handleDelete = async (allergy) => {
-    if (!confirm(`Xác nhận xóa dị ứng "${allergy.allergen}"?`)) return;
-
+    if (deletingId) return;
+    const ok = await confirm({
+      title: 'Xóa thông tin dị ứng?',
+      message: `Bác sĩ sẽ không còn được cảnh báo về dị ứng "${allergy.allergen}" khi kê đơn.`,
+      tone: 'danger',
+      confirmText: 'Xóa dị ứng'
+    });
+    if (!ok) return;
+    setDeletingId(allergy.id);
     try {
       await patientService.deleteAllergy(patientId, allergy.id);
-      setAllergies(prev => prev.filter(a => a.id !== allergy.id));
-      showToast(`Đã xóa dị ứng "${allergy.allergen}"`, 'info');
-    } catch {
-      showToast('Không thể xóa dị ứng', 'error');
+      setState((prev) => ({ ...prev, items: prev.items.filter((a) => a.id !== allergy.id) }));
+      showToast(`Đã xóa dị ứng "${allergy.allergen}".`, 'success');
+    } catch (err) {
+      showToast(err.message || 'Không xóa được dị ứng', 'error');
+    } finally {
+      setDeletingId(null);
     }
   };
 
+  const items = state.items;
+
   return (
-    <div className="space-y-3">
-      {/* Section Header */}
+    <section className="space-y-3" aria-labelledby="allergy-title">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-          <span className="material-symbols-outlined text-base text-rose-500">allergies</span>
+        <h4 id="allergy-title" className="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <span className="material-symbols-outlined text-base text-red-700" aria-hidden="true">allergies</span>
           Thông tin dị ứng
-          {allergies.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600 text-[10px] font-bold">
-              {allergies.length}
-            </span>
-          )}
+          {items.length > 0 && <span className="badge badge-error">{items.length}</span>}
         </h4>
         <button
           type="button"
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="px-3 py-1 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold hover:bg-rose-100 transition-colors flex items-center gap-1"
+          onClick={() => { setShowAddForm((v) => !v); setAddError(''); }}
+          aria-expanded={showAddForm}
+          aria-controls="allergy-add-form"
+          className="btn btn-soft btn-sm"
         >
-          <span className="material-symbols-outlined text-sm">
-            {showAddForm ? 'close' : 'add_circle'}
-          </span>
+          <span className="material-symbols-outlined" aria-hidden="true">{showAddForm ? 'close' : 'add_circle'}</span>
           {showAddForm ? 'Đóng' : 'Thêm'}
         </button>
       </div>
 
-      {/* Add Form */}
       {showAddForm && (
-        <div className="p-4 rounded-2xl bg-rose-50/50 border border-rose-100 space-y-3 animate-fade-in">
-          <div>
-            <label className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
-              Tên dị ứng <span className="text-rose-500">*</span>
-            </label>
+        <form id="allergy-add-form" onSubmit={handleAdd} noValidate className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div className="form-field">
+            <label htmlFor="allergy-allergen" className="form-label">Chất gây dị ứng <span className="required">*</span></label>
             <input
+              id="allergy-allergen"
               type="text"
               value={newAllergy.allergen}
-              onChange={(e) => setNewAllergy(prev => ({ ...prev, allergen: e.target.value }))}
-              placeholder="VD: Penicillin, Hải sản, Phấn hoa..."
-              className="w-full mt-1 px-3 py-2 rounded-xl bg-white border border-rose-200 text-sm text-slate-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all placeholder:text-slate-400"
+              onChange={(e) => { setNewAllergy((prev) => ({ ...prev, allergen: e.target.value })); setAddError(''); }}
+              placeholder="VD: Penicillin, hải sản, phấn hoa…"
+              aria-invalid={addError ? 'true' : undefined}
+              aria-describedby={addError ? 'allergy-add-error' : undefined}
+              className={`input ${addError ? 'is-error' : ''}`}
             />
           </div>
-
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
-                Mức độ
-              </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="form-field">
+              <label htmlFor="allergy-severity" className="form-label">Mức độ</label>
               <select
+                id="allergy-severity"
                 value={newAllergy.severity}
-                onChange={(e) => setNewAllergy(prev => ({ ...prev, severity: e.target.value }))}
-                className="w-full mt-1 px-3 py-2 rounded-xl bg-white border border-rose-200 text-sm text-slate-800 outline-none focus:border-rose-400 transition-all"
+                onChange={(e) => setNewAllergy((prev) => ({ ...prev, severity: e.target.value }))}
+                className="select"
               >
                 <option value="MILD">Nhẹ</option>
                 <option value="MODERATE">Trung bình</option>
                 <option value="SEVERE">Nghiêm trọng</option>
               </select>
             </div>
-            <div className="flex-1">
-              <label className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
-                Ghi chú
-              </label>
+            <div className="form-field">
+              <label htmlFor="allergy-note" className="form-label">Biểu hiện / ghi chú</label>
               <input
+                id="allergy-note"
                 type="text"
                 value={newAllergy.note}
-                onChange={(e) => setNewAllergy(prev => ({ ...prev, note: e.target.value }))}
-                placeholder="Triệu chứng..."
-                className="w-full mt-1 px-3 py-2 rounded-xl bg-white border border-rose-200 text-sm text-slate-800 outline-none focus:border-rose-400 transition-all placeholder:text-slate-400"
+                onChange={(e) => setNewAllergy((prev) => ({ ...prev, note: e.target.value }))}
+                placeholder="VD: nổi mề đay, khó thở"
+                className="input"
               />
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={adding || !newAllergy.allergen.trim()}
-            className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {adding ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <span className="material-symbols-outlined text-sm">add</span>
-            )}
-            Thêm dị ứng
+          {addError && <p id="allergy-add-error" role="alert" className="form-error">{addError}</p>}
+          <button type="submit" disabled={adding} className="btn btn-primary btn-block">
+            <span className="material-symbols-outlined" aria-hidden="true">add</span>
+            {adding ? 'Đang lưu…' : 'Thêm dị ứng'}
           </button>
-        </div>
+        </form>
       )}
 
-      {/* Allergy List */}
-      {loading ? (
-        <div className="flex items-center justify-center py-6">
-          <div className="w-6 h-6 border-2 border-rose-200 border-t-rose-500 rounded-full animate-spin" />
-          <span className="ml-2 text-xs text-slate-500">Đang tải...</span>
+      {state.status === 'loading' || state.status === 'idle' ? (
+        <p className="py-6 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải thông tin dị ứng…</p>
+      ) : state.status === 'error' ? (
+        <div role="alert" className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-[13px] space-y-2">
+          <p>{state.error || 'Không tải được thông tin dị ứng.'}</p>
+          <button type="button" onClick={loadAllergies} className="btn btn-secondary btn-sm">
+            <span className="material-symbols-outlined" aria-hidden="true">refresh</span>
+            Thử lại
+          </button>
         </div>
-      ) : allergies.length === 0 ? (
-        <div className="text-center py-6 bg-slate-50 rounded-2xl">
-          <span className="material-symbols-outlined text-3xl text-slate-300">check_circle</span>
-          <p className="text-xs text-slate-500 mt-1">Chưa ghi nhận dị ứng nào</p>
-        </div>
+      ) : items.length === 0 ? (
+        <p className="text-center py-5 bg-slate-50 rounded-2xl text-[13px] text-slate-600">Chưa ghi nhận dị ứng nào.</p>
       ) : (
-        <div className="space-y-2">
-          {allergies.map(allergy => {
+        <ul className="space-y-2">
+          {items.map((allergy) => {
             const config = SEVERITY_CONFIG[allergy.severity] || SEVERITY_CONFIG.MILD;
             return (
-              <div
-                key={allergy.id}
-                className={`flex items-center gap-3 p-3 rounded-xl border ${config.color} transition-all hover:shadow-sm group`}
-              >
-                <div className={`w-2.5 h-2.5 rounded-full ${config.dot} flex-shrink-0`} />
+              <li key={allergy.id} className={`flex items-center gap-3 p-3 rounded-xl border ${config.color}`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${config.dot} shrink-0`} aria-hidden="true" />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold truncate">{allergy.allergen}</span>
-                    <span className="text-[10px] font-medium opacity-75 flex-shrink-0">
-                      {config.label}
-                    </span>
-                  </div>
-                  {allergy.note && (
-                    <p className="text-[11px] opacity-70 mt-0.5 truncate">{allergy.note}</p>
-                  )}
+                  <p className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold">{allergy.allergen}</span>
+                    <span className="text-xs font-semibold">{config.label}</span>
+                  </p>
+                  {allergy.note && <p className="text-xs mt-0.5">{allergy.note}</p>}
                 </div>
                 <button
                   type="button"
                   onClick={() => handleDelete(allergy)}
-                  className="w-7 h-7 rounded-lg bg-white/60 hover:bg-white text-current opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all flex-shrink-0"
+                  disabled={Boolean(deletingId)}
+                  className="btn btn-ghost btn-sm btn-icon"
+                  aria-label={`Xóa dị ứng ${allergy.allergen}`}
                   title="Xóa dị ứng"
                 >
-                  <span className="material-symbols-outlined text-sm">delete</span>
+                  <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                 </button>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
-      {/* Disclaimer */}
-      {allergies.length > 0 && (
-        <p className="text-[10px] text-slate-400 flex items-start gap-1 pt-1">
-          <span className="material-symbols-outlined text-xs mt-px">info</span>
-          Thông tin dị ứng được sử dụng bởi hệ thống AI để cảnh báo khi kê đơn thuốc.
-        </p>
-      )}
-    </div>
+      <p className="text-xs text-slate-600 flex items-start gap-1 pt-1">
+        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">info</span>
+        Thông tin dị ứng được dùng để cảnh báo bác sĩ khi kê đơn thuốc.
+      </p>
+    </section>
   );
 }

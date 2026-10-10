@@ -1,10 +1,27 @@
 import React, { useState } from 'react';
 import { AI_DISCLAIMER_TEXT } from '../../services/aiAlertService';
+import { SEVERITY_LABELS, severityLevel } from '../../utils/format';
 
 /**
- * DrugInteractionAlert (Sprint 5 - FR-11.1, FR-11.2, NFR-8)
- * Component hiển thị cảnh báo tương tác thuốc và dị ứng do AI phân tích.
+ * DrugInteractionAlert – hiển thị cảnh báo tương tác thuốc & dị ứng.
+ *
+ * - Mức độ chuẩn hóa bằng severityLevel(): CRITICAL/SEVERE = nghiêm trọng (đỏ), WARNING/MODERATE = thận trọng (vàng).
+ * - Cảnh báo nghiêm trọng: role="alert", luôn hiển thị chi tiết (không cho thu gọn).
+ * - Kết quả từ quy tắc cục bộ (dịch vụ AI không phản hồi) được ghi chú rõ.
  */
+const LEVEL_BADGE = {
+  critical: 'bg-red-700 text-white',
+  warning: 'bg-amber-600 text-white',
+  info: 'bg-slate-600 text-white'
+};
+
+const REACTION_LABELS = {
+  DIRECT_MATCH: 'Dị ứng trực tiếp',
+  CROSS_REACTIVITY: 'Dị ứng chéo'
+};
+
+const severityText = (sev) => SEVERITY_LABELS[String(sev || '').toUpperCase()] || 'Cần lưu ý';
+
 export default function DrugInteractionAlert({
   safetyData = null,
   interactions = [],
@@ -15,241 +32,213 @@ export default function DrugInteractionAlert({
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Chuẩn hóa dữ liệu đầu vào (từ safetyData hoặc props riêng lẻ)
   const allInteractions = safetyData?.interactions || interactions || [];
   const allAllergies = safetyData?.allergy_alerts || allergyAlerts || [];
   const displayDisclaimer = safetyData?.disclaimer || disclaimer || AI_DISCLAIMER_TEXT;
+  const isLocal = safetyData?.source === 'local';
 
   const interactionCount = allInteractions.length;
   const allergyCount = allAllergies.length;
   const totalWarnings = interactionCount + allergyCount;
 
-  // Xác định mức độ nghiêm trọng cao nhất
   const hasCritical =
-    allInteractions.some(i => i.severity === 'CRITICAL') ||
-    allAllergies.some(a => a.severity === 'CRITICAL');
+    allInteractions.some((i) => severityLevel(i.severity) === 'critical') ||
+    allAllergies.some((a) => severityLevel(a.severity) === 'critical');
 
-  const hasWarning = totalWarnings > 0;
+  if (totalWarnings === 0 && !showSafeStatus) return null;
 
-  // Nếu không có cảnh báo và không yêu cầu hiển thị trạng thái an toàn thì không render
-  if (!hasWarning && !showSafeStatus) {
-    return null;
-  }
+  const localNote = isLocal && (
+    <p className="text-xs mt-1 flex items-center gap-1">
+      <span className="material-symbols-outlined text-[14px]" aria-hidden="true">cloud_off</span>
+      Dịch vụ AI không phản hồi – kết quả từ bộ quy tắc cục bộ, chỉ bao phủ các cặp thuốc phổ biến.
+    </p>
+  );
 
-  // Trường hợp an toàn (Không phát hiện tương tác hay dị ứng)
-  if (!hasWarning && showSafeStatus) {
+  if (totalWarnings === 0) {
     return (
       <div
         data-testid="drug-alert-safe"
-        className={`rounded-xl p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 transition-all ${className}`}
+        role="status"
+        className={`rounded-xl p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 ${className}`}
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-            <span className="material-symbols-outlined text-[20px]">verified</span>
-          </div>
+          <span className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">verified</span>
+          </span>
           <div className="flex-1">
-            <div className="font-bold text-sm text-emerald-800 flex items-center gap-2">
+            <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
               <span>Đơn thuốc an toàn</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-200/80 font-medium text-emerald-800">
-                AI Verified
-              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-200/80 font-semibold">Đã kiểm tra</span>
             </div>
-            <p className="text-xs text-emerald-700 mt-0.5">
-              Hệ thống AI không phát hiện tương tác thuốc bất lợi hoặc xung đột với tiền sử dị ứng đã ghi nhận của bệnh nhân.
+            <p className="text-[13px] mt-0.5">
+              Không phát hiện tương tác thuốc bất lợi hoặc xung đột với tiền sử dị ứng đã ghi nhận.
             </p>
+            {localNote}
           </div>
         </div>
       </div>
     );
   }
 
-  // Trường hợp CÓ CẢNH BÁO
   const theme = hasCritical
     ? {
-        container: 'bg-red-50/90 border-red-300 text-red-950',
-        badge: 'bg-red-600 text-white',
-        accentBg: 'bg-white/80 border-red-200/70',
+        container: 'bg-red-50 border-red-400 text-red-950',
         icon: 'emergency_home',
-        iconColor: 'text-red-600',
-        title: 'Cảnh báo lâm sàng nguy cơ cao (CRITICAL)'
+        iconColor: 'text-red-700',
+        title: 'Cảnh báo nguy cơ cao – cần xem xét trước khi kê đơn',
+        badge: LEVEL_BADGE.critical,
+        badgeText: 'Nghiêm trọng'
       }
     : {
-        container: 'bg-amber-50/90 border-amber-300 text-amber-950',
-        badge: 'bg-amber-600 text-white',
-        accentBg: 'bg-white/80 border-amber-200/70',
+        container: 'bg-amber-50 border-amber-300 text-amber-950',
         icon: 'warning',
-        iconColor: 'text-amber-600',
-        title: 'Cảnh báo tương tác thuốc cần chú ý (WARNING)'
+        iconColor: 'text-amber-700',
+        title: 'Cảnh báo cần thận trọng',
+        badge: LEVEL_BADGE.warning,
+        badgeText: 'Cần thận trọng'
       };
+
+  const showDetails = hasCritical || isExpanded;
 
   return (
     <div
       data-testid="drug-interaction-alert-banner"
-      className={`rounded-2xl border p-4 shadow-sm space-y-3 transition-all animate-fade-in ${theme.container} ${className}`}
+      role={hasCritical ? 'alert' : 'status'}
+      className={`rounded-2xl border-2 p-4 space-y-3 ${theme.container} ${className}`}
     >
-      {/* Header Banner */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-white shadow-xs flex items-center justify-center shrink-0">
-            <span className={`material-symbols-outlined text-[24px] ${theme.iconColor}`}>
-              {theme.icon}
-            </span>
-          </div>
+        <div className="flex items-start gap-2.5">
+          <span className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shrink-0">
+            <span className={`material-symbols-outlined text-[24px] ${theme.iconColor}`} aria-hidden="true">{theme.icon}</span>
+          </span>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="font-headline font-bold text-sm tracking-tight text-on-surface">
-                {theme.title}
-              </h4>
-              <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full ${theme.badge}`}>
-                {hasCritical ? 'NGHIÊM TRỌNG' : 'CẦN THEO DÕI'}
-              </span>
+              <h4 className="font-bold text-sm">{theme.title}</h4>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${theme.badge}`}>{theme.badgeText}</span>
             </div>
-            <p className="text-xs text-on-surface-variant mt-0.5">
+            <p className="text-[13px] mt-0.5">
               Phát hiện{' '}
-              <strong className="text-primary font-bold">
+              <strong>
                 {interactionCount > 0 ? `${interactionCount} tương tác thuốc` : ''}
                 {interactionCount > 0 && allergyCount > 0 ? ' và ' : ''}
                 {allergyCount > 0 ? `${allergyCount} nguy cơ dị ứng` : ''}
               </strong>{' '}
-              trong đơn thuốc hiện tại.
+              trong đơn thuốc.
             </p>
+            {localNote}
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsExpanded(prev => !prev)}
-          className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-white/70 hover:bg-white text-on-surface-variant border border-outline-variant/30 flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-          aria-label={isExpanded ? 'Thu gọn' : 'Xem chi tiết'}
-        >
-          <span>{isExpanded ? 'Thu gọn' : 'Chi tiết'}</span>
-          <span className="material-symbols-outlined text-[16px]">
-            {isExpanded ? 'expand_less' : 'expand_more'}
-          </span>
-        </button>
+        {!hasCritical && (
+          <button
+            type="button"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            aria-expanded={isExpanded}
+            className="btn btn-secondary btn-sm shrink-0"
+          >
+            <span>{isExpanded ? 'Thu gọn' : 'Chi tiết'}</span>
+            <span className="material-symbols-outlined" aria-hidden="true">{isExpanded ? 'expand_less' : 'expand_more'}</span>
+          </button>
+        )}
       </div>
 
-      {/* Expanded Details Body */}
-      {isExpanded && (
+      {showDetails && (
         <div className="space-y-3 pt-1">
-          {/* 1. Phần Tương tác thuốc (DDI) */}
           {interactionCount > 0 && (
             <div className="space-y-2">
-              <div className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px] text-primary">sync_problem</span>
-                <span>Tương tác giữa các thuốc ({interactionCount})</span>
-              </div>
-
-              <div className="space-y-2">
+              <h5 className="text-[13px] font-bold flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">sync_problem</span>
+                Tương tác giữa các thuốc ({interactionCount})
+              </h5>
+              <ul className="space-y-2">
                 {allInteractions.map((item, idx) => {
-                  const isCrit = item.severity === 'CRITICAL';
+                  const level = severityLevel(item.severity);
                   return (
-                    <div
+                    <li
                       key={idx}
                       data-testid={`interaction-item-${idx}`}
-                      className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${theme.accentBg}`}
+                      className={`p-3.5 rounded-xl border bg-white text-[13px] space-y-1.5 ${level === 'critical' ? 'border-red-300' : 'border-amber-200'}`}
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="font-bold text-sm flex items-center gap-1.5 text-on-surface">
-                          <span className="text-primary">{item.drug_a_name || item.drugAName}</span>
-                          <span className="material-symbols-outlined text-[16px] text-outline">swap_horiz</span>
-                          <span className="text-primary">{item.drug_b_name || item.drugBName}</span>
+                        <div className="font-bold text-sm flex items-center gap-1.5 text-slate-900">
+                          <span>{item.drug_a_name || item.drugAName}</span>
+                          <span className="material-symbols-outlined text-[16px] text-slate-500" aria-hidden="true">swap_horiz</span>
+                          <span className="sr-only">và</span>
+                          <span>{item.drug_b_name || item.drugBName}</span>
                         </div>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                            isCrit ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'
-                          }`}
-                        >
-                          {item.severity}
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${LEVEL_BADGE[level]}`}>
+                          {severityText(item.severity)}
                         </span>
                       </div>
-
                       {item.mechanism && (
-                        <div className="text-on-surface-variant leading-relaxed">
-                          <strong className="text-on-surface">Cơ chế: </strong>
-                          {item.mechanism}
-                        </div>
+                        <p className="text-slate-700"><strong className="text-slate-900">Cơ chế: </strong>{item.mechanism}</p>
                       )}
-
-                      <div className="text-on-surface font-medium leading-relaxed">
-                        <strong className="text-error">Hậu quả: </strong>
-                        {item.description}
-                      </div>
-
+                      {item.description && (
+                        <p className="text-slate-900 font-medium"><strong className="text-red-800">Hậu quả: </strong>{item.description}</p>
+                      )}
                       {item.recommendation && (
-                        <div className="p-2 rounded-lg bg-surface-container-low text-on-surface border border-outline-variant/30 leading-relaxed flex items-start gap-1.5 mt-1">
-                          <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">
-                            medical_information
-                          </span>
-                          <div>
-                            <strong className="text-primary font-bold">Khuyến cáo xử trí: </strong>
-                            {item.recommendation}
-                          </div>
-                        </div>
+                        <p className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900">
+                          <strong className="text-primary">Khuyến cáo xử trí: </strong>{item.recommendation}
+                        </p>
                       )}
-                    </div>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             </div>
           )}
 
-          {/* 2. Phần Dị ứng thuốc (Allergy Alerts) */}
           {allergyCount > 0 && (
-            <div className="space-y-2 pt-2 border-t border-surface-variant/30">
-              <div className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-purple-900">
-                <span className="material-symbols-outlined text-[16px] text-purple-700">emergency</span>
-                <span>Xung đột tiền sử dị ứng bệnh nhân ({allergyCount})</span>
-              </div>
-
-              <div className="space-y-2">
-                {allAllergies.map((allergy, idx) => (
-                  <div
-                    key={idx}
-                    data-testid={`allergy-item-${idx}`}
-                    className="p-3.5 rounded-xl border border-purple-200/80 bg-purple-50/70 text-xs space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="font-bold text-sm text-purple-950 flex items-center gap-2">
-                        <span>Thuốc: <strong className="text-purple-700">{allergy.drug_name || allergy.drugName}</strong></span>
-                        <span className="text-outline">✕</span>
-                        <span>Dị ứng: <strong className="text-red-600">{allergy.allergen}</strong></span>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white uppercase">
-                        {allergy.reaction_type === 'DIRECT_MATCH' ? 'DỊ ỨNG TRỰC TIẾP' : 'DỊ ỨNG CHÉO'}
-                      </span>
-                    </div>
-
-                    <div className="text-purple-950 leading-relaxed font-medium">
-                      <strong className="text-red-700">Nguy cơ: </strong>
-                      {allergy.description}
-                    </div>
-
-                    {allergy.recommendation && (
-                      <div className="p-2 rounded-lg bg-white/90 text-purple-950 border border-purple-200 leading-relaxed flex items-start gap-1.5 mt-1">
-                        <span className="material-symbols-outlined text-purple-700 text-[16px] shrink-0 mt-0.5">
-                          verified_user
-                        </span>
-                        <div>
-                          <strong className="text-purple-800 font-bold">Khuyến cáo: </strong>
-                          {allergy.recommendation}
+            <div className="space-y-2 pt-2 border-t border-current/10">
+              <h5 className="text-[13px] font-bold flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">allergies</span>
+                Xung đột tiền sử dị ứng bệnh nhân ({allergyCount})
+              </h5>
+              <ul className="space-y-2">
+                {allAllergies.map((allergy, idx) => {
+                  const level = severityLevel(allergy.severity);
+                  return (
+                    <li
+                      key={idx}
+                      data-testid={`allergy-item-${idx}`}
+                      className={`p-3.5 rounded-xl border bg-white text-[13px] space-y-1.5 ${level === 'critical' ? 'border-red-300' : 'border-amber-200'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="font-bold text-sm text-slate-900 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span>Thuốc: <strong className="text-primary">{allergy.drug_name || allergy.drugName}</strong></span>
+                          <span>Dị ứng: <strong className="text-red-800">{allergy.allergen}</strong></span>
                         </div>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-300">
+                            {REACTION_LABELS[allergy.reaction_type] || 'Nguy cơ dị ứng'}
+                          </span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${LEVEL_BADGE[level]}`}>
+                            {severityText(allergy.severity)}
+                          </span>
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                      {allergy.description && (
+                        <p className="text-slate-900 font-medium"><strong className="text-red-800">Nguy cơ: </strong>{allergy.description}</p>
+                      )}
+                      {allergy.recommendation && (
+                        <p className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900">
+                          <strong className="text-primary">Khuyến cáo: </strong>{allergy.recommendation}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 
-          {/* 3. BẮT BUỘC: Disclaimer y tế (NFR-8) */}
-          <div
+          <p
             data-testid="ai-medical-disclaimer"
-            className="pt-2 border-t border-outline-variant/30 flex items-center gap-2 text-[11px] text-on-surface-variant italic"
+            className="pt-2 border-t border-current/10 flex items-center gap-2 text-xs text-slate-700 italic"
           >
-            <span className="material-symbols-outlined text-[16px] text-outline shrink-0">info</span>
+            <span className="material-symbols-outlined text-[16px] shrink-0" aria-hidden="true">info</span>
             <span>{displayDisclaimer}</span>
-          </div>
+          </p>
         </div>
       )}
     </div>

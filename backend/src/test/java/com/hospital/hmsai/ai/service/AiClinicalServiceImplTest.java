@@ -283,4 +283,215 @@ class AiClinicalServiceImplTest {
         assertEquals(50L, logs.get(0).getVisitId());
         assertEquals(AiSuggestionType.DRUG_INTERACTION, logs.get(0).getSuggestionType());
     }
+
+    // =========================================================================
+    // Hợp nhất kết quả AI với bảng drug_interactions (AI bỏ sót không che mất cặp SEVERE)
+    // =========================================================================
+    private PrescriptionSafetyCheckRequest aspirinWarfarinRequest() {
+        return PrescriptionSafetyCheckRequest.builder()
+                .drugs(List.of(
+                        DrugItemDto.builder().id(3L).name("Aspirin 81mg").build(),
+                        DrugItemDto.builder().id(4L).name("Warfarin 5mg").build()))
+                .build();
+    }
+
+    private DrugInteraction dbInteraction(InteractionSeverity severity) {
+        return DrugInteraction.builder().id(1L).drugA(drugAspirin).drugB(drugWarfarin)
+                .severity(severity).description("Tăng nguy cơ xuất huyết tiêu hóa").build();
+    }
+
+    private PrescriptionSafetyResponse aiSafetyResponse(List<DrugInteractionWarningDto> interactions) {
+        return PrescriptionSafetyResponse.builder()
+                .isSafe(interactions.isEmpty())
+                .hasWarning(!interactions.isEmpty())
+                .hasCritical(false)
+                .interactionCount(interactions.size())
+                .allergyCount(0)
+                .interactions(interactions)
+                .disclaimer(PrescriptionSafetyResponse.DEFAULT_DISCLAIMER)
+                .build();
+    }
+
+    @Test
+    @DisplayName("AI trả về an toàn nhưng DB có cặp SEVERE → kết quả vẫn CRITICAL, không an toàn")
+    void testPrescriptionSafety_aiFalseNegative_dbSevereStillReported() {
+        when(restTemplate.postForObject(contains("/check-prescription-safety"), any(), eq(PrescriptionSafetyResponse.class)))
+                .thenReturn(aiSafetyResponse(List.of()));
+        when(drugInteractionRepository.findInteractionsAmongDrugs(anyCollection()))
+                .thenReturn(List.of(dbInteraction(InteractionSeverity.SEVERE)));
+
+        PrescriptionSafetyResponse result = aiClinicalService.checkPrescriptionSafety(aspirinWarfarinRequest());
+
+        assertFalse(result.getIsSafe());
+        assertTrue(result.getHasWarning());
+        assertTrue(result.getHasCritical());
+        assertEquals(1, result.getInteractionCount());
+        assertEquals("CRITICAL", result.getInteractions().get(0).getSeverity());
+    }
+
+    @Test
+    @DisplayName("Cùng cặp thuốc (A-B / B-A) trong AI và DB → gộp 1 bản ghi, giữ mức nặng hơn")
+    void testPrescriptionSafety_samePairDeduplicated_keepsHigherSeverity() {
+        // AI trả cặp đảo chiều (Warfarin - Aspirin), không kèm id, mức WARNING; DB có SEVERE
+        DrugInteractionWarningDto aiWarning = DrugInteractionWarningDto.builder()
+                .drugAName("Warfarin 5mg").drugBName("Aspirin 81mg").severity("WARNING")
+                .description("AI").recommendation("AI").build();
+        when(restTemplate.postForObject(contains("/check-prescription-safety"), any(), eq(PrescriptionSafetyResponse.class)))
+                .thenReturn(aiSafetyResponse(List.of(aiWarning)));
+        when(drugInteractionRepository.findInteractionsAmongDrugs(anyCollection()))
+                .thenReturn(List.of(dbInteraction(InteractionSeverity.SEVERE)));
+
+        PrescriptionSafetyResponse result = aiClinicalService.checkPrescriptionSafety(aspirinWarfarinRequest());
+
+        assertEquals(1, result.getInteractionCount());
+        assertEquals("CRITICAL", result.getInteractions().get(0).getSeverity());
+        assertTrue(result.getHasCritical());
+    }
+
+    @Test
+    @DisplayName("AI đã có mức nặng hơn DB → giữ kết quả AI (nội dung chi tiết hơn)")
+    void testCheckInteractions_aiMoreSevereThanDb_keepsAi() {
+        DrugInteractionWarningDto aiCritical = DrugInteractionWarningDto.builder()
+                .drugAId(3L).drugAName("Aspirin 81mg").drugBId(4L).drugBName("Warfarin 5mg")
+                .severity("CRITICAL").description("AI").recommendation("AI").build();
+        when(restTemplate.postForObject(contains("/check-interaction"), any(), eq(InteractionCheckResponse.class)))
+                .thenReturn(InteractionCheckResponse.builder().hasInteraction(true).hasCritical(true)
+                        .totalInteractions(1).interactions(List.of(aiCritical)).build());
+        when(drugInteractionRepository.findInteractionsAmongDrugs(anyCollection()))
+                .thenReturn(List.of(dbInteraction(InteractionSeverity.MODERATE)));
+
+        InteractionCheckResponse result = aiClinicalService.checkInteractions(InteractionCheckRequest.builder()
+                .drugs(aspirinWarfarinRequest().getDrugs()).build());
+
+        assertEquals(1, result.getTotalInteractions());
+        assertEquals("AI", result.getInteractions().get(0).getDescription());
+        assertEquals("CRITICAL", result.getInteractions().get(0).getSeverity());
+    }
+
+    @Test
+    @DisplayName("Fallback: chỉ có tương tác mức INFO (MILD) → đơn vẫn an toàn, không cảnh báo")
+    void testPrescriptionSafety_infoOnly_isSafe() {
+        when(restTemplate.postForObject(contains("/check-prescription-safety"), any(), eq(PrescriptionSafetyResponse.class)))
+                .thenThrow(new RestClientException("Connection refused"));
+        when(drugInteractionRepository.findInteractionsAmongDrugs(anyCollection()))
+                .thenReturn(List.of(dbInteraction(InteractionSeverity.MILD)));
+
+        PrescriptionSafetyResponse result = aiClinicalService.checkPrescriptionSafety(aspirinWarfarinRequest());
+
+        assertEquals(1, result.getInteractionCount());
+        assertEquals("INFO", result.getInteractions().get(0).getSeverity());
+        assertTrue(result.getIsSafe());
+        assertFalse(result.getHasWarning());
+        assertFalse(result.getHasCritical());
+    }
+
+    @Test
+    @DisplayName("Lỗi DB khi tra drug_interactions không làm hỏng kiểm tra an toàn")
+    void testPrescriptionSafety_dbFailure_degradesGracefully() {
+        when(restTemplate.postForObject(contains("/check-prescription-safety"), any(), eq(PrescriptionSafetyResponse.class)))
+                .thenReturn(aiSafetyResponse(List.of()));
+        when(drugInteractionRepository.findInteractionsAmongDrugs(anyCollection()))
+                .thenThrow(new RuntimeException("DB down"));
+
+        PrescriptionSafetyResponse result = aiClinicalService.checkPrescriptionSafety(aspirinWarfarinRequest());
+
+        assertNotNull(result);
+        assertTrue(result.getIsSafe());
+    }
+
+    // =========================================================================
+    // Fallback dị ứng: chuẩn hóa, 2 chiều, họ thuốc, mức độ SEVERE
+    // =========================================================================
+    private AllergyCheckResponse checkAllergyWithAiDown(String allergen, String severity, String drugName) {
+        // doThrow (không dùng when(...)) vì helper được gọi nhiều lần trong cùng một test
+        doThrow(new RestClientException("Connection refused"))
+                .when(restTemplate).postForObject(contains("/check-allergy"), any(), eq(AllergyCheckResponse.class));
+        return aiClinicalService.checkAllergies(AllergyCheckRequest.builder()
+                .patientAllergies(List.of(PatientAllergyItemDto.builder().allergen(allergen).severity(severity).build()))
+                .drugs(List.of(DrugItemDto.builder().id(9L).name(drugName).build()))
+                .build());
+    }
+
+    @Test
+    @DisplayName("Fallback dị ứng: chính tả Việt hóa (Amoxicilin) vẫn khớp trực tiếp")
+    void testAllergyFallback_vietnameseSpelling_directMatch() {
+        AllergyCheckResponse res = checkAllergyWithAiDown("Amoxicilin", "MODERATE", "Amoxicillin 500mg");
+
+        assertTrue(res.getHasCritical());
+        assertEquals("DIRECT_MATCH", res.getAlerts().get(0).getReactionType());
+    }
+
+    @Test
+    @DisplayName("Fallback dị ứng: Penicilin → Amoxicillin cùng họ = CRITICAL")
+    void testAllergyFallback_penicillinClass() {
+        AllergyCheckResponse res = checkAllergyWithAiDown("Penicilin", "MILD", "Amoxicillin 500mg");
+
+        assertTrue(res.getHasCritical());
+        assertEquals("CROSS_REACTIVITY", res.getAlerts().get(0).getReactionType());
+    }
+
+    @Test
+    @DisplayName("Fallback dị ứng: Penicillin → Cephalosporin = WARNING, nâng CRITICAL khi dị ứng SEVERE")
+    void testAllergyFallback_crossReactivity_escalatedWhenSevere() {
+        AllergyCheckResponse moderate = checkAllergyWithAiDown("Penicillin", "MODERATE", "Ceftriaxon 1g");
+        assertEquals("WARNING", moderate.getAlerts().get(0).getSeverity());
+        assertFalse(moderate.getHasCritical());
+
+        AllergyCheckResponse severe = checkAllergyWithAiDown("Penicillin", "SEVERE", "Ceftriaxon 1g");
+        assertEquals("CRITICAL", severe.getAlerts().get(0).getSeverity());
+        assertTrue(severe.getHasCritical());
+    }
+
+    @Test
+    @DisplayName("Fallback dị ứng: NSAID → Naproxen; Sulfa → Cotrimoxazol")
+    void testAllergyFallback_nsaidAndSulfaClasses() {
+        assertTrue(checkAllergyWithAiDown("NSAID", "MILD", "Naproxen 250mg").getHasCritical());
+        assertTrue(checkAllergyWithAiDown("Sulfa", "MILD", "Cotrimoxazol 480mg").getHasCritical());
+    }
+
+    @Test
+    @DisplayName("Fallback dị ứng: 'Sulfa' KHÔNG khớp 'Magnesium sulfate'; dị nguyên rỗng/quá ngắn bị bỏ qua")
+    void testAllergyFallback_noSubstringFalsePositives() {
+        assertFalse(checkAllergyWithAiDown("Sulfa", "SEVERE", "Magnesium sulfate 15%").getHasAllergyConflict());
+        assertFalse(checkAllergyWithAiDown("  ", "SEVERE", "Paracetamol 500mg").getHasAllergyConflict());
+        assertFalse(checkAllergyWithAiDown("pa", "SEVERE", "Paracetamol 500mg").getHasAllergyConflict());
+    }
+
+    @Test
+    @DisplayName("Fallback dị ứng: so khớp 2 chiều (dị nguyên dài chứa tên thuốc)")
+    void testAllergyFallback_twoWayMatch() {
+        AllergyCheckResponse res = checkAllergyWithAiDown("Panadol (paracetamol) – nổi mề đay", "MODERATE", "Panadol");
+
+        assertTrue(res.getHasAllergyConflict());
+        assertEquals("DIRECT_MATCH", res.getAlerts().get(0).getReactionType());
+    }
+
+    // =========================================================================
+    // Không "đầu độc" transaction của caller (VisitServiceImpl.createPrescription)
+    // =========================================================================
+    @Test
+    @DisplayName("checkAndAuditPrescriptionSafety chạy NOT_SUPPORTED (không tham gia transaction của caller)")
+    void testCheckAndAudit_doesNotJoinCallerTransaction() throws Exception {
+        org.springframework.transaction.annotation.Transactional tx = AiClinicalServiceImpl.class
+                .getMethod("checkAndAuditPrescriptionSafety", Long.class, List.class)
+                .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertNotNull(tx);
+        assertEquals(org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED, tx.propagation());
+    }
+
+    @Test
+    @DisplayName("Lỗi ghi audit log không làm checkAndAuditPrescriptionSafety ném exception")
+    void testCheckAndAudit_auditFailure_isSwallowed() {
+        when(visitRepository.findById(50L)).thenReturn(Optional.of(testVisit));
+        when(patientAllergyRepository.findByPatientId(10L)).thenReturn(List.of());
+        when(restTemplate.postForObject(contains("/check-prescription-safety"), any(), eq(PrescriptionSafetyResponse.class)))
+                .thenReturn(aiSafetyResponse(List.of()));
+        when(suggestionRepository.save(any(AiClinicalSuggestion.class))).thenThrow(new RuntimeException("DB write failed"));
+
+        PrescriptionSafetyResponse result = assertDoesNotThrow(() ->
+                aiClinicalService.checkAndAuditPrescriptionSafety(50L, aspirinWarfarinRequest().getDrugs()));
+
+        assertTrue(result.getIsSafe());
+    }
 }

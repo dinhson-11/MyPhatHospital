@@ -29,6 +29,11 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-hmsai_password}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env - see .env.example}
       AI_SERVICE_URL: http://ai-service:8000
+      VIETQR_BANK_BIN: ${VIETQR_BANK_BIN:-}
+      VIETQR_BANK_NAME: ${VIETQR_BANK_NAME:-}
+      VIETQR_ACCOUNT_NO: ${VIETQR_ACCOUNT_NO:-}
+      VIETQR_ACCOUNT_NAME: ${VIETQR_ACCOUNT_NAME:-}
+      BHYT_BASE_SALARY: ${BHYT_BASE_SALARY:-2340000}
     ports:
       - "8080:8080"
     depends_on:

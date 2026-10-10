@@ -1,10 +1,10 @@
 /**
- * Chatbot Service – Kết nối API Backend & AI Service (FR-10 – Sprint 7)
+ * Chatbot Service – Kết nối API Backend & AI Service
  * Cung cấp:
  * - Gửi/nhận tin nhắn hội thoại với AI
  * - Quản lý phiên chat (session)
- * - Fallback thông minh cục bộ khi mất kết nối mạng
- * - Tuân thủ NFR-8: Disclaimer y tế bắt buộc
+ * - Fallback cục bộ khi mất kết nối mạng
+ * - Disclaimer y tế bắt buộc
  */
 
 import apiClient from './api';
@@ -13,6 +13,78 @@ import { HOURS_TEXT } from './hospitalHours';
 
 export const AI_DISCLAIMER_TEXT =
   'Trợ lý AI chỉ hỗ trợ tư vấn sơ bộ, không thay thế thăm khám và chỉ định của bác sĩ.';
+
+/** Số điện thoại hiển thị trong cảnh báo cấp cứu. */
+export const EMERGENCY_NUMBER = '115';
+export const HOSPITAL_HOTLINE = '0789065493';
+export const HOSPITAL_HOTLINE_DISPLAY = '0789 065 493';
+
+/**
+ * Thời gian chờ phản hồi từ backend. Backend chờ AI Service tối đa 3 giây rồi tự chuyển sang
+ * luật dự phòng, nên phía giao diện phải chờ lâu hơn mức đó – nếu không, các phản hồi phân loại
+ * cấp cứu (EMERGENCY) của AI sẽ bị bỏ qua và thay bằng bộ luật cục bộ đơn giản hơn.
+ */
+const CHAT_TIMEOUT_MS = 8000;
+
+/**
+ * Cụm từ cờ đỏ cho bộ luật cục bộ (đồng bộ một phần với AI Service).
+ * Chỉ gồm các cụm tự thân đã là dấu hiệu nguy hiểm – không dùng "đau ngực"/"khó thở" đơn lẻ.
+ */
+const RED_FLAG_TERMS = [
+  'cấp cứu', 'ngất', 'bất tỉnh', 'hôn mê', 'mất ý thức', 'co giật',
+  'khó thở dữ dội', 'khó thở nặng', 'không thở được', 'ngừng thở', 'ngưng thở', 'ngừng tim', 'tím tái',
+  'đột quỵ', 'tai biến', 'méo miệng', 'liệt nửa người', 'yếu nửa người',
+  'nhồi máu cơ tim', 'đau ngực dữ dội', 'sốc phản vệ',
+  'nôn ra máu', 'ói ra máu', 'ho ra máu', 'chảy máu không cầm', 'băng huyết',
+  'muốn chết', 'tự tử', 'tự sát', 'không muốn sống', 'quá liều', 'ngộ độc cấp', 'ngộ độc thuốc',
+];
+
+const nowTime = () => new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+/** Chuẩn hóa intent từ backend/AI ("emergency", " EMERGENCY ") → "EMERGENCY". */
+export function normalizeIntent(value) {
+  if (value === null || value === undefined) return null;
+  const s = String(value).trim().toUpperCase();
+  return s || null;
+}
+
+function mapSuggestedDept(dept) {
+  if (!dept) return null;
+  return {
+    id: dept.dept_id ?? dept.deptId ?? dept.id,
+    name: dept.dept_name || dept.deptName || dept.name,
+    reason: dept.reason,
+    priority: dept.priority,
+  };
+}
+
+/**
+ * Chuyển một tin nhắn backend (ChatMessageResponseDto hoặc phản hồi AI Service) về dạng giao diện dùng.
+ * Giữ nguyên intent (đặc biệt EMERGENCY) để ChatMessage hiển thị cảnh báo cấp cứu.
+ */
+export function mapServerMessage(data, fallbackSessionId = null) {
+  if (!data) return null;
+  const isEmergencyFlag = data.isEmergency === true || data.is_emergency === true || data.emergency === true;
+  const intent = isEmergencyFlag ? 'EMERGENCY' : normalizeIntent(data.intent);
+  const rawSender = String(data.sender || 'AI').toLowerCase();
+  const createdAt = data.createdAt || data.created_at;
+  const createdDate = createdAt ? new Date(String(createdAt).replace(' ', 'T')) : null;
+
+  return {
+    id: data.messageId ?? data.message_id ?? data.id ?? Date.now(),
+    sessionId: data.sessionId ?? data.session_id ?? fallbackSessionId,
+    sender: rawSender === 'user' ? 'user' : 'ai',
+    text: data.message ?? data.reply ?? '',
+    intent,
+    suggestedDept: mapSuggestedDept(data.suggestedDepartment || data.suggested_department),
+    showBookingButton: Boolean(data.showBookingButton ?? data.show_booking_button),
+    disclaimer: data.disclaimer || AI_DISCLAIMER_TEXT,
+    timestamp:
+      createdDate && !Number.isNaN(createdDate.getTime())
+        ? createdDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        : nowTime(),
+  };
+}
 
 export const chatService = {
   /**
@@ -28,7 +100,7 @@ export const chatService = {
       throw new Error('Nội dung tin nhắn không được để trống');
     }
 
-    // Trong môi trường test hoặc không có backend dev, chạy fallback đồng bộ/tức thì
+    // Trong môi trường test (không có backend), chạy bộ luật cục bộ ngay lập tức
     if (import.meta.env?.MODE === 'test') {
       return chatService.processLocalFallback(trimmed, sessionId);
     }
@@ -41,37 +113,18 @@ export const chatService = {
           sessionId: sessionId ? Number(sessionId) : null,
           patientId: patientId ? Number(patientId) : null,
         },
-        { timeout: 1500 }
+        { timeout: CHAT_TIMEOUT_MS }
       );
 
-      const data = res.data || res;
+      // apiClient trả về body ApiResponse { success, message, data } – nội dung chat nằm trong data
+      const data = res?.data && typeof res.data === 'object' ? res.data : res;
       if (data && (data.message || data.reply)) {
-        const dept = data.suggestedDepartment || data.suggested_department;
-        return {
-          id: data.messageId || Date.now(),
-          sessionId: data.sessionId,
-          sender: 'ai',
-          text: data.message || data.reply,
-          intent: data.intent,
-          suggestedDept: dept
-            ? {
-                id: dept.dept_id || dept.deptId || dept.id,
-                name: dept.dept_name || dept.deptName || dept.name,
-                reason: dept.reason,
-                priority: dept.priority,
-              }
-            : null,
-          showBookingButton: Boolean(data.showBookingButton ?? data.show_booking_button),
-          disclaimer: data.disclaimer || AI_DISCLAIMER_TEXT,
-          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          source: 'api',
-        };
+        return { ...mapServerMessage(data, sessionId), sender: 'ai', source: 'api' };
       }
     } catch {
-      // Backend / AI Service offline -> Chuyển sang Local Fallback
+      // Backend / AI Service offline -> Chuyển sang bộ luật cục bộ
     }
 
-    // Local Fallback Engine
     return chatService.processLocalFallback(trimmed, sessionId);
   },
 
@@ -81,7 +134,7 @@ export const chatService = {
   async createSession(patientId = null) {
     try {
       const url = patientId ? `/chat/sessions?patientId=${patientId}` : '/chat/sessions';
-      const res = await apiClient.post(url, {}, { timeout: 1500 });
+      const res = await apiClient.post(url, {}, { timeout: CHAT_TIMEOUT_MS });
       return res.data || res;
     } catch {
       // Fallback
@@ -99,26 +152,9 @@ export const chatService = {
    */
   async getSessionMessages(sessionId) {
     try {
-      const res = await apiClient.get(`/chat/sessions/${sessionId}/messages`, { timeout: 1500 });
-      const list = res.data || res;
-      return (list || []).map(item => ({
-        id: item.messageId || item.id,
-        sessionId: item.sessionId,
-        sender: (item.sender || '').toLowerCase() === 'user' ? 'user' : 'ai',
-        text: item.message,
-        intent: item.intent,
-        suggestedDept: item.suggestedDepartment
-          ? {
-              id: item.suggestedDepartment.dept_id || item.suggestedDepartment.deptId,
-              name: item.suggestedDepartment.dept_name || item.suggestedDepartment.deptName,
-            }
-          : null,
-        showBookingButton: Boolean(item.showBookingButton),
-        disclaimer: item.disclaimer || AI_DISCLAIMER_TEXT,
-        timestamp: item.createdAt
-          ? new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-          : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      }));
+      const res = await apiClient.get(`/chat/sessions/${sessionId}/messages`, { timeout: CHAT_TIMEOUT_MS });
+      const list = Array.isArray(res?.data) ? res.data : res;
+      return (Array.isArray(list) ? list : []).map(item => mapServerMessage(item, sessionId));
     } catch {
       // Return empty if offline
     }
@@ -126,7 +162,7 @@ export const chatService = {
   },
 
   /**
-   * Local Rule-based Fallback khi mất kết nối mạng
+   * Bộ luật cục bộ khi mất kết nối mạng
    */
   processLocalFallback(text, sessionId = null) {
     const lower = text.toLowerCase();
@@ -135,22 +171,14 @@ export const chatService = {
     let suggestedDept = null;
     let showBooking = false;
 
-    // 1. Tình huống cấp cứu / Vượt phạm vi tư vấn
-    if (
-      lower.includes('cấp cứu') ||
-      lower.includes('ngất') ||
-      lower.includes('bất tỉnh') ||
-      lower.includes('khó thở dữ dội') ||
-      lower.includes('co giật') ||
-      lower.includes('đột quỵ') ||
-      lower.includes('nôn ra máu')
-    ) {
+    // 1. Tình huống cấp cứu / dấu hiệu cờ đỏ
+    if (RED_FLAG_TERMS.some(term => lower.includes(term))) {
       intent = 'EMERGENCY';
       textReply =
         '⚠️ **TÌNH HUỐNG KHẨN CẤP / CẦN XỬ TRÍ NGAY LẬP TỨC**\n\n' +
         'Các dấu hiệu bạn mô tả có thể là tình trạng cấp cứu nguy hiểm đến tính mạng.\n' +
-        '• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n' +
-        '• Hotline cấp cứu: **0789 065 493** (trực 24/7).\n' +
+        `• Vui lòng gọi ngay **${EMERGENCY_NUMBER}** hoặc di chuyển ngay đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n` +
+        `• Đường dây nóng cấp cứu: **${HOSPITAL_HOTLINE_DISPLAY}** (trực 24/7).\n` +
         '• Không tự ý uống thuốc hoặc chờ đợi tại nhà!';
       showBooking = false;
     }
@@ -167,7 +195,7 @@ export const chatService = {
         'Tôi có thể hỗ trợ bạn:\n' +
         '• Tư vấn sơ bộ triệu chứng và gợi ý chuyên khoa khám\n' +
         '• Tra cứu giờ làm việc, thủ tục BHYT và viện phí\n' +
-        '• Hướng dẫn đặt lịch khám trực tuyến hoặc gọi hotline 0789 065 493\n\n' +
+        `• Hướng dẫn đặt lịch khám trực tuyến hoặc gọi đường dây nóng ${HOSPITAL_HOTLINE_DISPLAY}\n\n` +
         'Bạn đang gặp vấn đề sức khỏe gì hoặc cần hỗ trợ thông tin nào?';
       showBooking = false;
     }
@@ -188,7 +216,7 @@ export const chatService = {
         `• ${HOURS_TEXT.summer}\n` +
         `• ${HOURS_TEXT.winter}\n` +
         `• ${HOURS_TEXT.bhyt}\n` +
-        `• ${HOURS_TEXT.emergency} (Hotline: 0789 065 493).`;
+        `• ${HOURS_TEXT.emergency} (Đường dây nóng: ${HOSPITAL_HOTLINE_DISPLAY}).`;
       showBooking = true;
     }
     // 5. Đặt lịch
@@ -228,7 +256,7 @@ export const chatService = {
       suggestedDept,
       showBookingButton: showBooking,
       disclaimer: AI_DISCLAIMER_TEXT,
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: nowTime(),
       source: 'local_fallback',
     };
   },

@@ -2,6 +2,8 @@ package com.hospital.hmsai.pharmacy.service.impl;
 
 import com.hospital.hmsai.clinical.entity.Prescription;
 import com.hospital.hmsai.clinical.entity.PrescriptionItem;
+import com.hospital.hmsai.clinical.entity.Visit;
+import com.hospital.hmsai.clinical.entity.VisitStatus;
 import com.hospital.hmsai.clinical.repository.PrescriptionRepository;
 import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
@@ -20,70 +22,117 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class DispenseServiceImpl implements DispenseService {
 
+    private static final DateTimeFormatter VN_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     private final DispenseRepository dispenseRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final DrugRepository drugRepository;
     private final StaffProfileRepository staffProfileRepository;
 
+    /**
+     * Cấp phát thuốc theo đơn.
+     * <ul>
+     *   <li>Khóa ghi đơn thuốc (chống cấp phát trùng đồng thời) – DB còn ràng buộc UNIQUE(dispenses.prescription_id).</li>
+     *   <li>Chỉ cấp phát khi ca khám đã COMPLETED: bác sĩ đã chốt đơn, không thể kê thêm sau khi phát thuốc.</li>
+     *   <li>Bắt buộc có hồ sơ nhân viên của người cấp phát (không ghi nhận thay bằng nhân viên khác).</li>
+     *   <li>Cộng dồn số lượng các dòng cùng thuốc, khóa từng thuốc theo ID tăng dần (tránh deadlock),
+     *       chặn thuốc hết hạn và thiếu tồn kho, sau đó mới trừ kho.</li>
+     * </ul>
+     */
     @Override
     @Transactional
     public DispenseResponse dispensePrescription(Long prescriptionId, DispenseRequest request, Long currentUserId) {
         log.info("Xử lý cấp phát thuốc cho đơn ID: {}, dược sĩ userId: {}", prescriptionId, currentUserId);
 
-        // 1. Kiểm tra đơn thuốc tồn tại
-        Prescription prescription = prescriptionRepository.findByIdWithItems(prescriptionId)
+        // 1. Khóa đơn thuốc
+        Prescription prescription = prescriptionRepository.findByIdWithItemsForUpdate(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Đơn thuốc", "id", prescriptionId));
 
-        // 2. Kiểm tra xem đơn đã được cấp phát trước đó chưa (Chống cấp phát trùng)
+        // 2. Chống cấp phát trùng
         if (dispenseRepository.existsByPrescriptionId(prescriptionId)) {
             throw new BusinessException("Đơn thuốc ID " + prescriptionId + " đã được cấp phát trước đó");
         }
 
-        // 3. Tìm thông tin dược sĩ cấp phát
-        StaffProfile pharmacist = null;
-        if (currentUserId != null) {
-            pharmacist = staffProfileRepository.findByUserId(currentUserId).orElse(null);
-        }
-        if (pharmacist == null) {
-            // Fallback lấy nhân viên đầu tiên nếu có
-            pharmacist = staffProfileRepository.findAll().stream().findFirst().orElse(null);
+        // 3. Chỉ cấp phát khi bác sĩ đã hoàn tất ca khám (chốt đơn)
+        Visit visit = prescription.getVisit();
+        if (visit == null || visit.getStatus() != VisitStatus.COMPLETED) {
+            throw new BusinessException("Ca khám chưa hoàn tất. Bác sĩ cần hoàn tất ca khám (chốt đơn) trước khi cấp phát thuốc");
         }
 
-        // 4. Kiểm tra tồn kho của từng loại thuốc trong đơn trước khi trừ
+        // 4. Người cấp phát phải có hồ sơ nhân viên
+        StaffProfile pharmacist = currentUserId != null
+                ? staffProfileRepository.findByUserId(currentUserId).orElse(null)
+                : null;
+        if (pharmacist == null) {
+            throw new BusinessException("Tài khoản hiện tại chưa có hồ sơ nhân viên dược, không thể ghi nhận người cấp phát thuốc");
+        }
+
         List<PrescriptionItem> items = prescription.getItems();
         if (items == null || items.isEmpty()) {
             throw new BusinessException("Đơn thuốc không có danh mục thuốc để cấp phát");
         }
 
+        // 5. Cộng dồn số lượng theo thuốc (TreeMap: khóa theo ID tăng dần)
+        Map<Long, Integer> requiredByDrug = new TreeMap<>();
         for (PrescriptionItem item : items) {
-            Drug drug = item.getDrug();
-            int requiredQty = item.getQuantity() != null ? item.getQuantity() : 1;
-            int availableStock = drug.getStockQuantity() != null ? drug.getStockQuantity() : 0;
+            if (item.getDrug() == null || item.getDrug().getId() == null) {
+                throw new BusinessException("Đơn thuốc có dòng thuốc không hợp lệ");
+            }
+            int qty = item.getQuantity() != null ? item.getQuantity() : 1;
+            if (qty < 1) {
+                throw new BusinessException("Số lượng thuốc trong đơn phải lớn hơn hoặc bằng 1");
+            }
+            requiredByDrug.merge(item.getDrug().getId(), qty, Integer::sum);
+        }
 
+        // 6. Khóa từng thuốc, kiểm tra hạn dùng và tồn kho (đọc giá trị mới nhất)
+        LocalDate today = LocalDate.now();
+        Map<Long, Drug> lockedDrugs = new HashMap<>();
+        for (Map.Entry<Long, Integer> entry : requiredByDrug.entrySet()) {
+            Long drugId = entry.getKey();
+            int requiredQty = entry.getValue();
+            Drug drug = drugRepository.findByIdForUpdate(drugId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Thuốc", "id", drugId));
+
+            if (drug.getExpiryDate() != null && !drug.getExpiryDate().isAfter(today)) {
+                throw new BusinessException("Thuốc '" + drug.getName() + "' (Mã: " + drug.getCode()
+                        + ") đã hết hạn sử dụng (" + drug.getExpiryDate().format(VN_DATE) + "), không thể cấp phát");
+            }
+
+            int availableStock = drug.getStockQuantity() != null ? drug.getStockQuantity() : 0;
             if (availableStock < requiredQty) {
                 throw new BusinessException("Thuốc '" + drug.getName() + "' (Mã: " + drug.getCode() +
                         ") không đủ tồn kho để cấp phát (Tồn kho: " + availableStock + ", Cần cấp: " + requiredQty + ")");
             }
+            lockedDrugs.put(drugId, drug);
         }
 
-        // 5. Trừ tồn kho và ghi nhận danh mục thuốc đã cấp
+        // 7. Trừ tồn kho
+        for (Map.Entry<Long, Integer> entry : requiredByDrug.entrySet()) {
+            Drug drug = lockedDrugs.get(entry.getKey());
+            int current = drug.getStockQuantity() != null ? drug.getStockQuantity() : 0;
+            drug.setStockQuantity(current - entry.getValue());
+            drugRepository.save(drug);
+        }
+
+        // 8. Ghi nhận danh mục thuốc đã cấp
         List<DispensedItemResponse> dispensedItems = new ArrayList<>();
         for (PrescriptionItem item : items) {
-            Drug drug = item.getDrug();
-            int requiredQty = item.getQuantity() != null ? item.getQuantity() : 1;
-
-            drug.setStockQuantity(drug.getStockQuantity() - requiredQty);
-            Drug updatedDrug = drugRepository.save(drug);
-
+            Drug drug = lockedDrugs.get(item.getDrug().getId());
             dispensedItems.add(DispensedItemResponse.builder()
                     .drugId(drug.getId())
                     .drugCode(drug.getCode())
@@ -91,13 +140,13 @@ public class DispenseServiceImpl implements DispenseService {
                     .unit(drug.getUnit())
                     .price(drug.getPrice())
                     .dosage(item.getDosage())
-                    .quantity(requiredQty)
-                    .remainingStock(updatedDrug.getStockQuantity())
+                    .quantity(item.getQuantity() != null ? item.getQuantity() : 1)
+                    .remainingStock(drug.getStockQuantity())
                     .instruction(item.getInstruction())
                     .build());
         }
 
-        // 6. Lưu bản ghi Dispense
+        // 9. Lưu bản ghi Dispense
         Dispense dispense = Dispense.builder()
                 .prescription(prescription)
                 .dispensedBy(pharmacist)

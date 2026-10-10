@@ -1,10 +1,14 @@
 """
 AI Chatbot Service (FR-10 – Sprint 7):
-- Intent classification: SYMPTOM_CHECK / BOOKING / FAQ / OUT_OF_SCOPE / GREETING
-- Gợi ý chuyên khoa theo triệu chứng (rule-based)
+- Intent classification: EMERGENCY / SYMPTOM_CHECK / BOOKING / FAQ / OUT_OF_SCOPE / GREETING
+- Phát hiện dấu hiệu cấp cứu (cờ đỏ) TRƯỚC mọi bước khác → hướng dẫn gọi 115
+- Gợi ý chuyên khoa theo triệu chứng (ML + rule-based)
 - Trả lời FAQ về dịch vụ y tế (giờ khám, BHYT, thủ tục…)
-- Xử lý câu hỏi vượt phạm vi → cảnh báo gọi 115
+- Xử lý câu hỏi vượt phạm vi
 - Tuân thủ NFR-8: Disclaimer y tế bắt buộc
+
+Mọi so khớp từ khóa dùng services.text_normalizer: chuẩn hóa NFC, khớp nguyên từ
+(word-boundary) và chấp nhận người dùng gõ không dấu ("dot quy", "muon chet").
 """
 
 import re
@@ -22,6 +26,7 @@ from services.hospital_catalog import (
     department_name, DEFAULT_DEPT_ID,
     HOURS_DAYS, HOURS_SUMMER, HOURS_WINTER, HOURS_BHYT, HOURS_EMERGENCY,
 )
+from services.text_normalizer import contains_any, exact, normalize_text, strip_accents
 
 # ============================================================================
 # DEPARTMENT ROUTING KNOWLEDGE BASE (Rule-based Fallback & Knowledge Base)
@@ -113,9 +118,9 @@ DEPT_ROUTING: list[dict] = [
     {
         "dept_id": 3, "dept_name": department_name(3),
         "priority": True,  # Mô hình ML chưa có nhãn Sản - Phụ khoa nên luật từ khóa được ưu tiên
-        "keywords": ["kinh nguyệt", "thai kỳ", "mang thai", "khám phụ khoa",
-                     "đau bụng kinh", "rối loạn kinh nguyệt", "vô sinh",
-                     "siêu âm thai", "khám thai"],
+        "keywords": ["kinh nguyệt", "thai kỳ", "mang thai", "có thai", "có bầu", "mang bầu",
+                     "bà bầu", "khám phụ khoa", "đau bụng kinh", "rối loạn kinh nguyệt",
+                     "vô sinh", "siêu âm thai", "khám thai"],
         "reply": ("Với vấn đề bạn chia sẻ, **Khoa Sản phụ khoa** sẽ tư vấn và "
                   "thăm khám chuyên sâu, đảm bảo sức khỏe tối ưu cho bạn."),
     },
@@ -148,7 +153,9 @@ FAQ_KB: list[dict] = [
                   "• Đăng ký đặt lịch trước để tránh chờ đợi"),
     },
     {
-        "keywords": ["chi phí", "giá", "phí khám", "bao nhiêu tiền", "phí dịch vụ"],
+        # Không dùng từ đơn "giá" (dễ khớp nhầm "cảm giác", "gia đình" khi gõ không dấu)
+        "keywords": ["chi phí", "giá khám", "giá dịch vụ", "bảng giá", "báo giá", "giá cả",
+                     "giá bao nhiêu", "phí khám", "bao nhiêu tiền", "hết bao nhiêu", "phí dịch vụ"],
         "reply": ("💰 **Chi phí dịch vụ khám:**\n\n"
                   "• Khám BHYT đúng tuyến: theo quy định Nhà nước\n"
                   "• Khám dịch vụ: từ 150.000 – 350.000đ/lượt (tùy chuyên khoa)\n"
@@ -182,12 +189,116 @@ FAQ_KB: list[dict] = [
 ]
 
 # ============================================================================
-# EMERGENCY / OUT-OF-SCOPE KEYWORDS
+# EMERGENCY (DẤU HIỆU CỜ ĐỎ) – kiểm tra TRƯỚC FAQ, ngoài phạm vi và luật ưu tiên Sản khoa
 # ============================================================================
-EMERGENCY_KEYWORDS = [
-    "cấp cứu", "nguy kịch", "hôn mê", "ngừng thở", "nhồi máu cơ tim",
-    "đột quỵ", "tai nạn", "chảy máu nhiều", "mất ý thức", "co giật liên tục",
-    "uống thuốc quá liều", "tự tử", "ngộ độc cấp", "khó thở nặng",
+# Mỗi luật: "any" = khớp một cụm bất kỳ; "all" = MỖI danh sách con phải khớp ít nhất một cụm.
+# exact(...) = chỉ khớp khi gõ đúng dấu (dạng không dấu bị nhập nhằng: "xiu" ~ "xíu", "tu tu" ~ "từ từ").
+CHEST_PAIN_TERMS = ["đau ngực", "tức ngực", "đau thắt ngực", "đau tức ngực", "nặng ngực"]
+CHEST_PAIN_SEVERITY_TERMS = [
+    "dữ dội", "lan tay", "lan ra tay", "lan xuống tay", "lan lên hàm", "lan ra sau lưng",
+    "vã mồ hôi", "toát mồ hôi", "khó thở", "ngất xỉu", exact("ngất"),
+]
+PREGNANCY_TERMS = ["mang thai", "có thai", "có bầu", "mang bầu", "bà bầu", "đang bầu", "thai"]
+PREGNANCY_DANGER_TERMS = [
+    "ra máu", "ra huyết", "chảy máu âm đạo", "chảy máu vùng kín", "đau bụng dữ dội",
+    "vỡ ối", "rỉ ối", "ra nước ối",
+]
+ALLERGY_TRIGGER_TERMS = [
+    "dị ứng", "mề đay", "mày đay", "mẩn ngứa", "sau tiêm", "sau khi tiêm", "sau uống thuốc",
+    "sau khi uống thuốc", "sau dùng thuốc", "ong đốt",
+]
+
+EMERGENCY_RULES: list[dict] = [
+    {"group": "GENERAL", "any": ["cấp cứu", "nguy kịch", "hôn mê", "ngừng thở", "ngưng thở",
+                                 "ngừng tim", "tai nạn", "mất ý thức", "khó thở nặng"]},
+    {"group": "CHEST_PAIN", "any": ["nhồi máu cơ tim", "đau ngực dữ dội", "đau ngực lan tay",
+                                    "đau ngực lan ra tay"]},
+    {"group": "CHEST_PAIN", "all": [CHEST_PAIN_TERMS, CHEST_PAIN_SEVERITY_TERMS]},
+    {"group": "STROKE", "any": ["đột quỵ", "tai biến", "méo miệng", "méo mồm", "méo mặt",
+                                "nói ngọng", "nói khó", "yếu nửa người", "liệt nửa người",
+                                "tê nửa người"]},
+    {"group": "AIRWAY", "any": ["khó thở dữ dội", "không thở được", "thở không được",
+                                "không thở nổi", "thở không nổi", "tím tái", "môi tím",
+                                "tím môi", "ngạt thở", "hóc dị vật"]},
+    {"group": "ANAPHYLAXIS", "any": ["sốc phản vệ", "phản vệ", "sưng môi", "phù môi", "phù mặt",
+                                     "phù họng", "sưng lưỡi", "phù lưỡi"]},
+    {"group": "ANAPHYLAXIS", "all": [ALLERGY_TRIGGER_TERMS, ["khó thở", "tụt huyết áp", "choáng"]]},
+    {"group": "SEIZURE", "any": ["co giật"]},
+    {"group": "SYNCOPE", "any": [exact("ngất"), "ngất xỉu", "ngất đi", exact("xỉu"), "bất tỉnh"]},
+    {"group": "BLEEDING", "any": ["nôn ra máu", "ói ra máu", "ho ra máu", "khạc ra máu",
+                                  "chảy máu không cầm", "chảy máu không ngừng", "chảy máu nhiều",
+                                  "mất máu nhiều", "băng huyết"]},
+    {"group": "PREGNANCY", "all": [PREGNANCY_TERMS, PREGNANCY_DANGER_TERMS]},
+    {"group": "SUICIDE", "any": ["muốn chết", exact("tự tử"), "tự sát", "tự vẫn",
+                                 "không muốn sống", "tự làm hại bản thân", "tự hại"]},
+    # Quá liều / ngộ độc: "quá liều" ở bất kỳ vị trí nào ("uống quá liều thuốc", "uống thuốc quá liều")
+    {"group": "POISONING", "any": ["quá liều", "uống thuốc độc", "uống thuốc trừ sâu",
+                                   "uống thuốc diệt cỏ", "uống thuốc chuột", "ngộ độc cấp",
+                                   "ngộ độc rượu", "ngộ độc methanol", "ngộ độc thuốc",
+                                   "ngộ độc nấm", "ngộ độc khí"]},
+]
+
+# Trẻ < 3 tháng tuổi có sốt / bỏ bú / li bì là dấu hiệu nguy hiểm (IMCI)
+INFANT_DANGER_TERMS = ["sốt", "bỏ bú", "li bì"]
+_AGE_UNIT = r"(tháng|thang|tuần|tuan|ngày|ngay)"
+_INFANT_AGE_PATTERNS = [
+    # "2 tháng tuổi", "3 tuần tuổi", "10 ngày tuổi"
+    re.compile(r"(?<!\w)(\d{1,2})\s*" + _AGE_UNIT + r"\s*(?:tuổi|tuoi)(?!\w)"),
+    # "bé 2 tháng", "bé nhà tôi 6 tuần", "con tôi 20 ngày" (không bắt "con tôi bị sốt 2 ngày")
+    re.compile(r"(?<!\w)(?:bé|be|trẻ|tre|con|cháu|chau)(?:\s+(?:nhà\s+|nha\s+)?(?:tôi|toi|em|mình|minh))?"
+               r"\s+(\d{1,2})\s*" + _AGE_UNIT + r"(?!\w)"),
+]
+_NEWBORN_TERMS = ["sơ sinh"]
+
+
+def _is_young_infant(msg: str) -> bool:
+    """Trẻ sơ sinh hoặc dưới 3 tháng tuổi (msg đã normalize_text)."""
+    if contains_any(msg, _NEWBORN_TERMS):
+        return True
+    for pattern in _INFANT_AGE_PATTERNS:
+        for m in pattern.finditer(msg):
+            n, unit = int(m.group(1)), strip_accents(m.group(2))
+            if (unit == "thang" and n < 3) or (unit == "tuan" and n < 13) or (unit == "ngay" and n <= 90):
+                return True
+    return False
+
+
+EMERGENCY_REPLY = (
+    "🚨 **TÌNH TRẠNG KHẨN CẤP – Gọi 115 ngay!**\n\n"
+    "Triệu chứng bạn mô tả có thể là dấu hiệu cấp cứu nghiêm trọng. "
+    "Vui lòng **gọi ngay số 115** hoặc đến **Khoa Khám bệnh / Cấp cứu ban đầu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
+    "• Không tự ý dùng thuốc hoặc chờ đợi tại nhà.\n\n"
+    "Mỹ Phát Hospital – Cấp cứu 24/7: 0789 065 493"
+)
+
+SUICIDE_REPLY = (
+    "🚨 **Bạn không đơn độc – hãy tìm trợ giúp ngay bây giờ**\n\n"
+    "Nếu bạn đang có ý định làm hại bản thân hoặc đang gặp nguy hiểm, vui lòng **gọi ngay số 115** "
+    "hoặc đến **Khoa Khám bệnh / Cấp cứu ban đầu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
+    "• Hỗ trợ tâm lý khẩn cấp 24/7: Hotline Mỹ Phát Hospital **0789 065 493** – nhân viên y tế sẽ lắng nghe "
+    "và kết nối bạn với bác sĩ.\n"
+    "• Nếu bạn là trẻ em (dưới 16 tuổi): Tổng đài quốc gia bảo vệ trẻ em **111** (miễn phí, 24/7).\n"
+    "• Hãy ở cạnh hoặc gọi ngay cho người thân, bạn bè mà bạn tin tưởng; cất xa thuốc và vật sắc nhọn.\n\n"
+    "Mỹ Phát Hospital – Cấp cứu 24/7: 0789 065 493"
+)
+
+# ============================================================================
+# TRIỆU CHỨNG / NGỮ CẢNH Y TẾ – dùng để KHÔNG trả lời FAQ và KHÔNG chặn "ngoài phạm vi"
+# khi người dùng đang mô tả triệu chứng (vd: "đau ở vị trí nào", "hút thuốc lá bị ho")
+# ============================================================================
+SYMPTOM_TERMS = [
+    "đau", "nhức", "sốt", "ho", "nôn", "ói", "buồn nôn", "mệt", "mệt mỏi", "ngứa", "sưng", "phù",
+    "chảy máu", "ra máu", "khó thở", "chóng mặt", "hoa mắt", "tiêu chảy", "táo bón", "triệu chứng",
+    "viêm", "nổi mẩn", "nổi mần", "phát ban", "dị ứng", "tê bì", "tê tay", "tê chân", "co giật",
+    "ợ chua", "ợ nóng", "đầy hơi", "khàn tiếng", "ngạt mũi", "nghẹt mũi", "sổ mũi", "chảy mũi",
+    "ù tai", "mất ngủ", "hồi hộp", "đánh trống ngực", "tức ngực", "rụng tóc", "mụn", "khó chịu",
+    "bị bệnh", "bị ốm", "khó nuốt", "tiểu buốt", "tiểu rắt",
+]
+
+MEDICAL_CONTEXT_TERMS = SYMPTOM_TERMS + [
+    "cai", "cai nghiện", "nghiện", "điều trị", "chữa", "khám", "xét nghiệm", "tác hại",
+    "sức khỏe", "bác sĩ", "lây", "lây nhiễm", "bệnh xã hội", "biến chứng", "ngộ độc",
+    "quá liều", "say", "tránh thai", "bao cao su",
 ]
 
 OUT_OF_SCOPE_KEYWORDS = [
@@ -207,12 +318,26 @@ class ChatbotService:
 
     @staticmethod
     def _normalize(text: str) -> str:
-        return text.lower().strip()
+        return normalize_text(text)
 
     @staticmethod
     def _match(text: str, keywords: list[str]) -> bool:
-        t = text.lower()
-        return any(kw in t for kw in keywords)
+        """So khớp nguyên từ (word-boundary), chịu được gõ không dấu."""
+        return contains_any(normalize_text(text), keywords)
+
+    @classmethod
+    def detect_emergency_groups(cls, message: str) -> set[str]:
+        """Trả về tập nhóm dấu hiệu cấp cứu phát hiện được (rỗng nếu không có)."""
+        msg = normalize_text(message)
+        groups: set[str] = set()
+        for rule in EMERGENCY_RULES:
+            if "any" in rule and contains_any(msg, rule["any"]):
+                groups.add(rule["group"])
+            elif "all" in rule and all(contains_any(msg, terms) for terms in rule["all"]):
+                groups.add(rule["group"])
+        if _is_young_infant(msg) and contains_any(msg, INFANT_DANGER_TERMS):
+            groups.add("INFANT")
+        return groups
 
     @classmethod
     def process_message(
@@ -223,23 +348,22 @@ class ChatbotService:
         sid = session_id or str(uuid.uuid4())[:12]
         msg = cls._normalize(message)
 
-        # 1. EMERGENCY – Ưu tiên cao nhất
-        if cls._match(msg, EMERGENCY_KEYWORDS):
+        # 1. EMERGENCY – Ưu tiên cao nhất, chạy trước FAQ / ngoài phạm vi / luật Sản khoa
+        emergency_groups = cls.detect_emergency_groups(msg)
+        if emergency_groups:
             return ChatMessageResponse(
                 session_id=sid,
-                intent="OUT_OF_SCOPE",
+                intent="EMERGENCY",
                 is_out_of_scope=True,
-                reply=(
-                    "🚨 **TÌNH TRẠNG KHẨN CẤP – Gọi 115 ngay!**\n\n"
-                    "Triệu chứng bạn mô tả có thể là dấu hiệu cấp cứu nghiêm trọng. "
-                    "Vui lòng **gọi ngay số 115** hoặc đến **Khoa Khám bệnh / Cấp cứu ban đầu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
-                    "Mỹ Phát Hospital – Cấp cứu 24/7: 0789 065 493"
-                ),
+                reply=SUICIDE_REPLY if "SUICIDE" in emergency_groups else EMERGENCY_REPLY,
                 disclaimer=CHATBOT_DISCLAIMER,
             )
 
-        # 2. OUT-OF-SCOPE
-        if cls._match(msg, OUT_OF_SCOPE_KEYWORDS):
+        has_symptom = cls._match(msg, SYMPTOM_TERMS)
+
+        # 2. OUT-OF-SCOPE – chỉ chặn khi KHÔNG có triệu chứng / ngữ cảnh y tế
+        #    ("hút thuốc lá bị ho kéo dài" vẫn được tư vấn triệu chứng)
+        if cls._match(msg, OUT_OF_SCOPE_KEYWORDS) and not cls._match(msg, MEDICAL_CONTEXT_TERMS):
             return ChatMessageResponse(
                 session_id=sid,
                 intent="OUT_OF_SCOPE",
@@ -252,22 +376,24 @@ class ChatbotService:
                 disclaimer=CHATBOT_DISCLAIMER,
             )
 
-        # 3. FAQ – kiểm tra trước GREETING vì FAQ có thể chứa từ chào hỏi
-        for faq in FAQ_KB:
-            if cls._match(msg, faq["keywords"]):
-                return ChatMessageResponse(
-                    session_id=sid,
-                    intent="FAQ",
-                    reply=faq["reply"],
-                    show_booking_button=faq.get("show_booking", False),
-                    disclaimer=CHATBOT_DISCLAIMER,
-                )
+        # 3. FAQ – kiểm tra trước GREETING vì FAQ có thể chứa từ chào hỏi.
+        #    Bỏ qua FAQ khi tin nhắn mô tả triệu chứng ("đau ở vị trí nào", "đau mấy giờ rồi").
+        if not has_symptom:
+            for faq in FAQ_KB:
+                if cls._match(msg, faq["keywords"]):
+                    return ChatMessageResponse(
+                        session_id=sid,
+                        intent="FAQ",
+                        reply=faq["reply"],
+                        show_booking_button=faq.get("show_booking", False),
+                        disclaimer=CHATBOT_DISCLAIMER,
+                    )
 
         # 4. GREETING – Kiểm tra lời chào thuần túy (không kèm triệu chứng bệnh lý)
         is_greeting = cls._match(msg, GREETING_KEYWORDS)
         has_dept_keyword = any(cls._match(msg, dept["keywords"]) for dept in DEPT_ROUTING)
 
-        if is_greeting and not has_dept_keyword:
+        if is_greeting and not has_dept_keyword and not has_symptom:
             return ChatMessageResponse(
                 session_id=sid,
                 intent="GREETING",
@@ -286,20 +412,9 @@ class ChatbotService:
         # 5a0. Khoa mà mô hình ML chưa có nhãn (Sản - Phụ khoa) -> dùng luật từ khóa trước
         for dept in DEPT_ROUTING:
             if dept.get("priority") and cls._match(msg, dept["keywords"]):
-                return ChatMessageResponse(
-                    session_id=sid,
-                    intent="SYMPTOM_CHECK",
-                    reply=dept["reply"],
-                    suggested_department=DepartmentSuggestion(
-                        dept_id=dept["dept_id"],
-                        dept_name=dept["dept_name"],
-                        reason=f"Triệu chứng phù hợp với bệnh lý {dept['dept_name']}",
-                    ),
-                    show_booking_button=True,
-                    disclaimer=CHATBOT_DISCLAIMER,
-                )
+                return cls._dept_response(sid, dept)
 
-        # 5a. Ưu tiên mô hình máy học đã huấn luyện
+        # 5a. Ưu tiên mô hình máy học đã huấn luyện (chỉ khi đủ tự tin, xem ml_triage_service)
         ml_result = predict_department(msg)
         if ml_result is not None:
             dept_id, dept_name, conf, meta = ml_result
@@ -319,20 +434,9 @@ class ChatbotService:
         # 5b. Rule-based Fallback theo cơ sở tri thức chuyên khoa
         for dept in DEPT_ROUTING:
             if cls._match(msg, dept["keywords"]):
-                return ChatMessageResponse(
-                    session_id=sid,
-                    intent="SYMPTOM_CHECK",
-                    reply=dept["reply"],
-                    suggested_department=DepartmentSuggestion(
-                        dept_id=dept["dept_id"],
-                        dept_name=dept["dept_name"],
-                        reason=f"Triệu chứng phù hợp với bệnh lý {dept['dept_name']}",
-                    ),
-                    show_booking_button=True,
-                    disclaimer=CHATBOT_DISCLAIMER,
-                )
+                return cls._dept_response(sid, dept)
 
-        # 6. DEFAULT – Không xác định được intent
+        # 6. DEFAULT – Không xác định được intent → Khoa Khám bệnh / Cấp cứu ban đầu
         return ChatMessageResponse(
             session_id=sid,
             intent="SYMPTOM_CHECK",
@@ -346,6 +450,21 @@ class ChatbotService:
                 dept_id=DEFAULT_DEPT_ID,
                 dept_name=department_name(DEFAULT_DEPT_ID),
                 reason="Phù hợp cho đánh giá sức khỏe tổng thể ban đầu",
+            ),
+            show_booking_button=True,
+            disclaimer=CHATBOT_DISCLAIMER,
+        )
+
+    @staticmethod
+    def _dept_response(sid: str, dept: dict) -> ChatMessageResponse:
+        return ChatMessageResponse(
+            session_id=sid,
+            intent="SYMPTOM_CHECK",
+            reply=dept["reply"],
+            suggested_department=DepartmentSuggestion(
+                dept_id=dept["dept_id"],
+                dept_name=dept["dept_name"],
+                reason=f"Triệu chứng phù hợp với bệnh lý {dept['dept_name']}",
             ),
             show_booking_button=True,
             disclaimer=CHATBOT_DISCLAIMER,

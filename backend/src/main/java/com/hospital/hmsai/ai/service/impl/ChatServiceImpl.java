@@ -22,7 +22,14 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.containsAny;
+import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.exact;
+import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.normalize;
+import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.stripDiacritics;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +38,87 @@ public class ChatServiceImpl implements ChatService {
 
     public static final String CHATBOT_DISCLAIMER =
             "Trợ lý AI chỉ hỗ trợ tư vấn sơ bộ, không thay thế thăm khám và chỉ định của bác sĩ.";
+
+    // =========================================================================
+    // TỪ KHÓA CẤP CỨU (CỜ ĐỎ) – đồng bộ với ai-service/services/chatbot_service.py (EMERGENCY_RULES)
+    // So khớp nguyên từ, chịu được gõ không dấu; exact(...) = chỉ khớp khi gõ đúng dấu.
+    // =========================================================================
+    private static final String[] EMERGENCY_ANY_TERMS = {
+            // Chung
+            "cấp cứu", "nguy kịch", "hôn mê", "ngừng thở", "ngưng thở", "ngừng tim", "tai nạn",
+            "mất ý thức", "khó thở nặng",
+            // Đau ngực
+            "nhồi máu cơ tim", "đau ngực dữ dội", "đau ngực lan tay", "đau ngực lan ra tay",
+            // Đột quỵ
+            "đột quỵ", "tai biến", "méo miệng", "méo mồm", "méo mặt", "nói ngọng", "nói khó",
+            "yếu nửa người", "liệt nửa người", "tê nửa người",
+            // Đường thở
+            "khó thở dữ dội", "không thở được", "thở không được", "không thở nổi", "thở không nổi",
+            "tím tái", "môi tím", "tím môi", "ngạt thở", "hóc dị vật",
+            // Phản vệ
+            "sốc phản vệ", "phản vệ", "sưng môi", "phù môi", "phù mặt", "phù họng", "sưng lưỡi", "phù lưỡi",
+            // Co giật / ngất
+            "co giật", exact("ngất"), "ngất xỉu", "ngất đi", exact("xỉu"), "bất tỉnh",
+            // Chảy máu
+            "nôn ra máu", "ói ra máu", "ho ra máu", "khạc ra máu", "chảy máu không cầm",
+            "chảy máu không ngừng", "chảy máu nhiều", "mất máu nhiều", "băng huyết",
+            // Quá liều / ngộ độc (thứ tự từ linh hoạt: "uống quá liều thuốc", "uống thuốc quá liều")
+            "quá liều", "uống thuốc độc", "uống thuốc trừ sâu", "uống thuốc diệt cỏ", "uống thuốc chuột",
+            "ngộ độc cấp", "ngộ độc rượu", "ngộ độc methanol", "ngộ độc thuốc", "ngộ độc nấm", "ngộ độc khí"
+    };
+    private static final String[] SUICIDE_TERMS = {
+            "muốn chết", exact("tự tử"), "tự sát", "tự vẫn", "không muốn sống", "tự làm hại bản thân", "tự hại"
+    };
+    private static final String[] CHEST_PAIN_TERMS = {
+            "đau ngực", "tức ngực", "đau thắt ngực", "đau tức ngực", "nặng ngực"
+    };
+    private static final String[] CHEST_PAIN_SEVERITY_TERMS = {
+            "dữ dội", "lan tay", "lan ra tay", "lan xuống tay", "lan lên hàm", "lan ra sau lưng",
+            "vã mồ hôi", "toát mồ hôi", "khó thở", "ngất xỉu", exact("ngất")
+    };
+    private static final String[] PREGNANCY_TERMS = {
+            "mang thai", "có thai", "có bầu", "mang bầu", "bà bầu", "đang bầu", "thai"
+    };
+    private static final String[] PREGNANCY_DANGER_TERMS = {
+            "ra máu", "ra huyết", "chảy máu âm đạo", "chảy máu vùng kín", "đau bụng dữ dội",
+            "vỡ ối", "rỉ ối", "ra nước ối"
+    };
+    private static final String[] ALLERGY_TRIGGER_TERMS = {
+            "dị ứng", "mề đay", "mày đay", "mẩn ngứa", "sau tiêm", "sau khi tiêm", "sau uống thuốc",
+            "sau khi uống thuốc", "sau dùng thuốc", "ong đốt"
+    };
+    private static final String[] ANAPHYLAXIS_SIGN_TERMS = {"khó thở", "tụt huyết áp", "choáng"};
+    private static final String[] INFANT_DANGER_TERMS = {"sốt", "bỏ bú", "li bì"};
+    private static final String AGE_UNIT = "(tháng|thang|tuần|tuan|ngày|ngay)";
+    private static final Pattern[] INFANT_AGE_PATTERNS = {
+            // "2 tháng tuổi", "3 tuần tuổi", "10 ngày tuổi"
+            Pattern.compile("(?<!\\w)(\\d{1,2})\\s*" + AGE_UNIT + "\\s*(?:tuổi|tuoi)(?!\\w)",
+                    Pattern.UNICODE_CHARACTER_CLASS),
+            // "bé 2 tháng", "bé nhà tôi 6 tuần" (không bắt "con tôi bị sốt 2 ngày")
+            Pattern.compile("(?<!\\w)(?:bé|be|trẻ|tre|con|cháu|chau)(?:\\s+(?:nhà\\s+|nha\\s+)?(?:tôi|toi|em|mình|minh))?"
+                    + "\\s+(\\d{1,2})\\s*" + AGE_UNIT + "(?!\\w)", Pattern.UNICODE_CHARACTER_CLASS)
+    };
+
+    /** Triệu chứng: có triệu chứng thì không trả lời chào hỏi / FAQ chung chung (vd "đau ở đâu"). */
+    private static final String[] SYMPTOM_TERMS = {
+            "đau", "nhức", "sốt", "ho", "nôn", "ói", "buồn nôn", "mệt", "ngứa", "sưng", "phù", "chảy máu",
+            "ra máu", "khó thở", "chóng mặt", "hoa mắt", "tiêu chảy", "táo bón", "triệu chứng", "viêm",
+            "nổi mẩn", "nổi mần", "phát ban", "dị ứng", "tê bì", "co giật", "ợ chua", "khàn tiếng",
+            "ngạt mũi", "nghẹt mũi", "sổ mũi", "ù tai", "mất ngủ", "hồi hộp", "tức ngực", "mụn", "bị bệnh", "bị ốm"
+    };
+
+    private static final String EMERGENCY_REPLY = "⚠️ **TÌNH HUỐNG KHẨN CẤP / CẦN XỬ TRÍ NGAY LẬP TỨC**\n\n"
+            + "Các dấu hiệu bạn mô tả có thể là tình trạng cấp cứu nguy hiểm đến tính mạng.\n"
+            + "• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n"
+            + "• Hotline cấp cứu 24/7: **0789 065 493**.\n"
+            + "• Không tự ý uống thuốc hoặc chờ đợi tại nhà!";
+
+    private static final String SUICIDE_REPLY = "⚠️ **Bạn không đơn độc – hãy tìm trợ giúp ngay bây giờ**\n\n"
+            + "Nếu bạn đang có ý định làm hại bản thân hoặc đang gặp nguy hiểm, vui lòng gọi ngay **115** "
+            + "hoặc đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n"
+            + "• Hỗ trợ tâm lý khẩn cấp 24/7: Hotline Mỹ Phát Hospital **0789 065 493** – nhân viên y tế sẽ lắng nghe và kết nối bạn với bác sĩ.\n"
+            + "• Nếu bạn là trẻ em (dưới 16 tuổi): Tổng đài quốc gia bảo vệ trẻ em **111** (miễn phí, 24/7).\n"
+            + "• Hãy ở cạnh hoặc gọi ngay cho người thân, bạn bè mà bạn tin tưởng; cất xa thuốc và vật sắc nhọn.";
 
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
@@ -202,27 +290,26 @@ public class ChatServiceImpl implements ChatService {
      * Fallback AI Chatbot logic nếu AI Service offline.
      */
     private AiChatbotResponse generateLocalFallbackResponse(String message, String sessionId) {
-        String lower = message.toLowerCase();
+        String lower = normalize(message);
 
-        // 1. Khẩn cấp / Vượt phạm vi tư vấn
-        if (lower.contains("cấp cứu") || lower.contains("ngất") || lower.contains("bất tỉnh")
-                || lower.contains("đột quỵ") || lower.contains("co giật") || lower.contains("khó thở dữ dội")
-                || lower.contains("nôn ra máu") || lower.contains("chảy máu không cầm")) {
+        // 1. Khẩn cấp – luôn kiểm tra TRƯỚC mọi bước khác (bộ từ khóa đồng bộ với AI Service)
+        boolean suicideRisk = isSuicideRisk(lower);
+        if (suicideRisk || isEmergency(lower)) {
             return AiChatbotResponse.builder()
-                    .reply("⚠️ **TÌNH HUỐNG KHẨN CẤP / CẦN XỬ TRÍ NGAY LẬP TỨC**\n\n"
-                            + "Các dấu hiệu bạn mô tả có thể là tình trạng cấp cứu nguy hiểm đến tính mạng.\n"
-                            + "• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n"
-                            + "• Hotline cấp cứu 24/7: **0789 065 493**.\n"
-                            + "• Không tự ý uống thuốc hoặc chờ đợi tại nhà!")
+                    .reply(suicideRisk ? SUICIDE_REPLY : EMERGENCY_REPLY)
                     .intent("EMERGENCY")
                     .showBookingButton(false)
+                    .isOutOfScope(true)
                     .sessionId(sessionId)
                     .disclaimer(CHATBOT_DISCLAIMER)
                     .build();
         }
 
+        // Tin nhắn mô tả triệu chứng thì không trả lời chào hỏi / FAQ / đặt lịch chung chung
+        boolean hasSymptom = containsAny(lower, SYMPTOM_TERMS);
+
         // 2. Chào hỏi
-        if (lower.contains("xin chào") || lower.contains("chào bạn") || lower.contains("hello") || lower.contains("hi bạn")) {
+        if (!hasSymptom && containsAny(lower, "xin chào", "chào bạn", "hello", "hi bạn")) {
             return AiChatbotResponse.builder()
                     .reply("Xin chào! Tôi là **Trợ lý AI Y tế của Mỹ Phát Hospital**.\n\n"
                             + "Tôi có thể giúp bạn:\n"
@@ -238,7 +325,7 @@ public class ChatServiceImpl implements ChatService {
         }
 
         // 3. FAQ: BHYT
-        if (lower.contains("bhyt") || lower.contains("bảo hiểm y tế") || lower.contains("thẻ bhyt")) {
+        if (!hasSymptom && containsAny(lower, "bhyt", "bảo hiểm y tế", "thẻ bhyt")) {
             return AiChatbotResponse.builder()
                     .reply("🏥 **Thông tin Bảo hiểm Y tế tại Mỹ Phát Hospital:**\n\n"
                             + "• Tiếp nhận BHYT thông tuyến toàn quốc (tuyến huyện/tỉnh theo quy định).\n"
@@ -253,7 +340,7 @@ public class ChatServiceImpl implements ChatService {
         }
 
         // 4. FAQ: Giờ khám
-        if (lower.contains("giờ khám") || lower.contains("giờ làm việc") || lower.contains("mấy giờ") || lower.contains("lịch làm việc")) {
+        if (!hasSymptom && containsAny(lower, "giờ khám", "giờ làm việc", "mấy giờ", "lịch làm việc")) {
             return AiChatbotResponse.builder()
                     .reply("⏰ **Lịch làm việc Mỹ Phát Hospital:**\n\n"
                             + "• **Thứ 2 – Chủ nhật**\n"
@@ -269,7 +356,7 @@ public class ChatServiceImpl implements ChatService {
         }
 
         // 5. Booking
-        if (lower.contains("đặt lịch") || lower.contains("hẹn khám") || lower.contains("đăng ký khám")) {
+        if (!hasSymptom && containsAny(lower, "đặt lịch", "hẹn khám", "đăng ký khám")) {
             return AiChatbotResponse.builder()
                     .reply("Bạn có thể đặt lịch khám bệnh trực tuyến nhanh chóng qua hệ thống của chúng tôi.\n"
                             + "Vui lòng bấm nút **'Đặt lịch khám ngay'** bên dưới để chọn chuyên khoa, bác sĩ và khung giờ mong muốn.")
@@ -282,53 +369,51 @@ public class ChatServiceImpl implements ChatService {
 
         // 6. Gợi ý chuyên khoa theo triệu chứng
         // 6a. Triệu chứng Da liễu & Dị ứng: ưu tiên cao cho các tổn thương da mẩn/mần ngứa, dị ứng, mề đay kể cả khi có từ 'bé', 'con'
-        if (lower.contains("dị ứng") || lower.contains("nổi mẩn") || lower.contains("nổi mần")
-                || lower.contains("mẩn ngứa") || lower.contains("mần ngứa") || lower.contains("ngứa")
-                || lower.contains("phát ban") || lower.contains("mề đay") || lower.contains("mày đay")
-                || lower.contains("viêm da") || lower.contains("mụn") || lower.contains("nấm da")) {
+        if (containsAny(lower, "dị ứng", "nổi mẩn", "nổi mần", "mẩn ngứa", "mần ngứa", "ngứa",
+                "phát ban", "mề đay", "mày đay", "viêm da", "mụn", "nấm da")) {
             return buildDeptResponse(sessionId, 14, "Dịch vụ Thẩm mỹ / Tạo hình",
                     "Triệu chứng trên da và dị ứng của bạn nên được bác sĩ **Dịch vụ Thẩm mỹ / Tạo hình** (da liễu) thăm khám trực tiếp để chẩn đoán chính xác và kê đơn điều trị.",
                     "Dấu hiệu da liễu / dị ứng, mẩn ngứa", "MEDIUM");
         }
-        if (lower.contains("khám thai") || lower.contains("mang thai") || lower.contains("thai kỳ")
-                || lower.contains("kinh nguyệt") || lower.contains("phụ khoa")) {
+        if (containsAny(lower, "khám thai", "mang thai", "có thai", "có bầu", "mang bầu", "bà bầu",
+                "thai kỳ", "kinh nguyệt", "phụ khoa")) {
             return buildDeptResponse(sessionId, 3, "Sản - Phụ khoa",
                     "Vấn đề thai kỳ và sức khỏe phụ nữ của bạn sẽ được bác sĩ **Sản - Phụ khoa** tư vấn và thăm khám chuyên sâu.",
                     "Triệu chứng liên quan đến thai kỳ / phụ khoa", "MEDIUM");
         }
-        if (lower.contains("đau họng") || lower.contains("rát họng") || lower.contains("viêm họng")
-                || lower.contains("ngạt mũi") || lower.contains("viêm xoang") || lower.contains("đau tai")
-                || lower.contains("khàn tiếng")) {
+        if (containsAny(lower, "đau họng", "rát họng", "viêm họng", "ngạt mũi", "viêm xoang", "đau tai",
+                "khàn tiếng")) {
             return buildDeptResponse(sessionId, 10, "Tai Mũi Họng",
                     "Triệu chứng tai mũi họng của bạn nên được nội soi kiểm tra tại **Tai Mũi Họng** để điều trị dứt điểm.",
                     "Triệu chứng viêm nhiễm vùng tai mũi họng", "MEDIUM");
         }
-        if (lower.contains("trẻ") || lower.contains("bé") || lower.contains("con tôi") || lower.contains("sơ sinh")) {
+        if (containsAny(lower, "trẻ", "bé", "con tôi", "sơ sinh")) {
             return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
                     "Bạn đang hỏi về sức khỏe trẻ nhỏ. Bạn có thể đặt lịch tại **Khoa Khám bệnh / Cấp cứu ban đầu** để bác sĩ thăm khám cho bé.",
                     "Triệu chứng liên quan đến sức khỏe trẻ em", "HIGH");
         }
-        if (lower.contains("đau ngực") || lower.contains("tức ngực") || lower.contains("hồi hộp") || lower.contains("tim") || lower.contains("huyết áp")) {
+        if (containsAny(lower, "đau ngực", "tức ngực", "hồi hộp", "tim", "huyết áp")) {
             return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
                     "Triệu chứng ngực và tuần hoàn của bạn cần được kiểm tra tại **Khoa Khám bệnh / Cấp cứu ban đầu** để đo ECG và đánh giá ban đầu.",
                     "Triệu chứng gợi ý bệnh lý hệ tim mạch", "HIGH");
         }
-        if (lower.contains("ho") || lower.contains("đờm") || lower.contains("khó thở") || lower.contains("phổi")) {
+        // "ho" khớp nguyên từ: không bắt nhầm "cho", "khoa", "họng"
+        if (containsAny(lower, "ho", "đờm", "khó thở", "phổi")) {
             return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
                     "Dựa vào dấu hiệu hô hấp, bạn nên đến **Khoa Khám bệnh / Cấp cứu ban đầu** để bác sĩ thăm khám và nghe phổi, chỉ định X-quang nếu cần.",
                     "Dấu hiệu viêm đường hô hấp hoặc bệnh lý phổi", "HIGH");
         }
-        if (lower.contains("đau bụng") || lower.contains("dạ dày") || lower.contains("ợ chua") || lower.contains("buồn nôn") || lower.contains("tiêu chảy")) {
+        if (containsAny(lower, "đau bụng", "dạ dày", "ợ chua", "buồn nôn", "tiêu chảy")) {
             return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
                     "Triệu chứng vùng bụng liên quan đến đường tiêu hóa. Bạn nên khám tại **Khoa Khám bệnh / Cấp cứu ban đầu**.",
                     "Dấu hiệu bệnh lý tiêu hóa / dạ dày", "MEDIUM");
         }
-        if (lower.contains("đau đầu") || lower.contains("chóng mặt") || lower.contains("tê bì") || lower.contains("mất ngủ")) {
+        if (containsAny(lower, "đau đầu", "chóng mặt", "tê bì", "mất ngủ")) {
             return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
                     "Triệu chứng thần kinh của bạn nên được bác sĩ **Khoa Khám bệnh / Cấp cứu ban đầu** đánh giá lâm sàng chuyên sâu.",
                     "Dấu hiệu thần kinh / tuần hoàn não", "MEDIUM");
         }
-        if (lower.contains("đau khớp") || lower.contains("đau lưng") || lower.contains("thoái hóa") || lower.contains("sưng khớp")) {
+        if (containsAny(lower, "đau khớp", "đau lưng", "thoái hóa", "sưng khớp")) {
             return buildDeptResponse(sessionId, 13, "Khoa Y học cổ truyền – Phục hồi chức năng",
                     "Triệu chứng cơ xương khớp nên được thăm khám tại **Khoa Y học cổ truyền – Phục hồi chức năng** để có hướng điều trị phù hợp.",
                     "Dấu hiệu thoái hóa hoặc viêm khớp", "MEDIUM");
@@ -338,6 +423,45 @@ public class ChatServiceImpl implements ChatService {
         return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
                 "Để có đánh giá toàn diện về sức khỏe, bạn nên đến **Khoa Khám bệnh / Cấp cứu ban đầu** để được bác sĩ khám sàng lọc và hướng dẫn xét nghiệm phù hợp.",
                 "Khám sức khỏe tổng quát và sàng lọc ban đầu", "NORMAL");
+    }
+
+    static boolean isSuicideRisk(String normalizedText) {
+        return containsAny(normalizedText, SUICIDE_TERMS);
+    }
+
+    /** Phát hiện dấu hiệu cấp cứu (cờ đỏ). {@code normalizedText} phải đã qua normalize(). */
+    static boolean isEmergency(String normalizedText) {
+        if (containsAny(normalizedText, EMERGENCY_ANY_TERMS)) {
+            return true;
+        }
+        if (containsAny(normalizedText, CHEST_PAIN_TERMS) && containsAny(normalizedText, CHEST_PAIN_SEVERITY_TERMS)) {
+            return true;
+        }
+        if (containsAny(normalizedText, PREGNANCY_TERMS) && containsAny(normalizedText, PREGNANCY_DANGER_TERMS)) {
+            return true;
+        }
+        if (containsAny(normalizedText, ALLERGY_TRIGGER_TERMS) && containsAny(normalizedText, ANAPHYLAXIS_SIGN_TERMS)) {
+            return true;
+        }
+        return isYoungInfant(normalizedText) && containsAny(normalizedText, INFANT_DANGER_TERMS);
+    }
+
+    /** Trẻ sơ sinh hoặc dưới 3 tháng tuổi. */
+    private static boolean isYoungInfant(String normalizedText) {
+        if (containsAny(normalizedText, "sơ sinh")) {
+            return true;
+        }
+        for (Pattern pattern : INFANT_AGE_PATTERNS) {
+            Matcher m = pattern.matcher(normalizedText);
+            while (m.find()) {
+                int n = Integer.parseInt(m.group(1));
+                String unit = stripDiacritics(m.group(2));
+                if ((unit.equals("thang") && n < 3) || (unit.equals("tuan") && n < 13) || (unit.equals("ngay") && n <= 90)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private AiChatbotResponse buildDeptResponse(String sessionId, Integer deptId, String deptName,

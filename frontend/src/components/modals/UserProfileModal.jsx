@@ -1,14 +1,35 @@
 import React from 'react';
+import Modal from '../common/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+
+const ROLE_LABELS = {
+  ADMIN: 'Quản trị viên',
+  DOCTOR: 'Bác sĩ',
+  NURSE: 'Điều dưỡng',
+  PHARMACIST: 'Dược sĩ',
+  RECEPTIONIST: 'Lễ tân',
+  ACCOUNTANT: 'Kế toán',
+  PATIENT: 'Bệnh nhân'
+};
+
+const roleLabel = (role) => {
+  const key = String(role || '').replace(/^ROLE_/, '');
+  return ROLE_LABELS[key] || key;
+};
+
+function InfoRow({ label, children }) {
+  return (
+    <div className="flex justify-between gap-4 py-2.5 border-b border-slate-100 last:border-b-0">
+      <dt className="text-slate-500 shrink-0">{label}</dt>
+      <dd className="font-semibold text-slate-800 text-right min-w-0 break-words">{children}</dd>
+    </div>
+  );
+}
 
 export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, onOpenPatientProfile }) {
-  useEscapeKey(isOpen, onClose);
   const { user, logout } = useAuth();
   const { showToast } = useToast();
-
-  if (!isOpen || !user) return null;
 
   const handleLogout = () => {
     logout();
@@ -16,133 +37,89 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, 
     onClose();
   };
 
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const phone = user?.phoneNumber || user?.phone;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div
-        className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden relative my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="p-6 pb-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">person</span>
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Hồ Sơ Cá Nhân</h3>
-              <p className="text-xs text-slate-500">Thông tin tài khoản khám bệnh điện tử</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
-              ESC
+    <Modal
+      isOpen={isOpen && Boolean(user)}
+      onClose={onClose}
+      size="sm"
+      icon="badge"
+      title="Thông Tin Tài Khoản"
+      subtitle="Tài khoản khám chữa bệnh điện tử"
+      bodyClassName="px-5 py-5 sm:px-6 overflow-y-auto space-y-5"
+    >
+      {user && (
+        <>
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary-fixed border border-primary-fixed-dim">
+            <span
+              className="w-14 h-14 rounded-2xl bg-primary text-white flex items-center justify-center text-xl font-extrabold shrink-0"
+              aria-hidden="true"
+            >
+              {user.fullName ? user.fullName.trim().charAt(0).toUpperCase() : 'U'}
             </span>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-              title="Đóng (Esc)"
-            >
-              <span className="material-symbols-outlined text-lg">close</span>
-            </button>
-          </div>
-        </div>
-
-        {/* User Card */}
-        <div className="p-6 space-y-5">
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100">
-            <div className="w-14 h-14 rounded-2xl bg-primary text-white flex items-center justify-center text-xl font-black shadow-md">
-              {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
-            </div>
-            <div>
-              <h4 className="font-bold text-slate-900 text-base">{user.fullName}</h4>
-              <p className="text-xs text-slate-500 font-mono">@{user.username}</p>
-              <div className="flex gap-1 mt-1">
-                {user.roles && user.roles.map((r, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary text-white"
-                  >
-                    {r}
-                  </span>
-                ))}
-              </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-slate-900 text-base truncate">{user.fullName || user.username}</h3>
+              <p className="text-xs text-slate-500 font-mono truncate">@{user.username}</p>
+              {roles.length > 0 && (
+                <ul className="flex flex-wrap gap-1 mt-1.5" aria-label="Vai trò">
+                  {roles.map((r) => (
+                    <li key={r} className="badge badge-primary">{roleLabel(r)}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
-          <div className="space-y-2.5 text-xs">
-            {user.title && (
-              <div className="flex justify-between py-2 border-b border-slate-100">
-                <span className="text-slate-500">Chức vụ:</span>
-                <span className="font-semibold text-slate-800 text-right">{user.title}</span>
-              </div>
-            )}
-            {user.departmentName && (
-              <div className="flex justify-between py-2 border-b border-slate-100">
-                <span className="text-slate-500">Khoa / Phòng:</span>
-                <span className="font-semibold text-teal-800 text-right">{user.departmentName}</span>
-              </div>
-            )}
-            {user.room && (
-              <div className="flex justify-between py-2 border-b border-slate-100">
-                <span className="text-slate-500">Phòng làm việc:</span>
-                <span className="font-semibold text-slate-800 text-right">{user.room}</span>
-              </div>
-            )}
-            <div className="flex justify-between py-2 border-b border-slate-100">
-              <span className="text-slate-500">Email:</span>
-              <span className="font-semibold text-slate-800">{user.email || 'Chưa cập nhật'}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-slate-100">
-              <span className="text-slate-500">Số điện thoại:</span>
-              <span className="font-semibold text-slate-800">{user.phoneNumber || user.phone || '0789 065 493'}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-slate-100">
-              <span className="text-slate-500">Trạng thái:</span>
-              <span className="font-bold text-emerald-600 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Đang kích hoạt
-              </span>
-            </div>
-          </div>
+          <dl className="text-sm">
+            {user.title && <InfoRow label="Chức vụ">{user.title}</InfoRow>}
+            {user.departmentName && <InfoRow label="Khoa / Phòng">{user.departmentName}</InfoRow>}
+            {user.room && <InfoRow label="Phòng làm việc">{user.room}</InfoRow>}
+            <InfoRow label="Email">
+              {user.email || <span className="font-normal text-slate-400">Chưa cập nhật</span>}
+            </InfoRow>
+            <InfoRow label="Số điện thoại">
+              {phone || <span className="font-normal text-slate-400">Chưa cập nhật</span>}
+            </InfoRow>
+          </dl>
 
-          {/* Quick Actions */}
-          <div className="space-y-2 pt-2">
+          <div className="space-y-2">
             <button
               type="button"
               onClick={() => {
                 onClose();
-                if (onOpenPatientProfile) onOpenPatientProfile();
+                onOpenPatientProfile?.();
               }}
-              className="w-full py-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              className="btn btn-soft btn-block"
             >
-              <span className="material-symbols-outlined text-base">medical_information</span>
-              Hồ Sơ Sức Khỏe & Tiền Sử Dị Ứng
+              <span className="material-symbols-outlined" aria-hidden="true">medical_information</span>
+              Hồ sơ sức khỏe & tiền sử dị ứng
             </button>
 
             <button
               type="button"
               onClick={() => {
                 onClose();
-                if (onOpenAppointments) onOpenAppointments();
+                onOpenAppointments?.();
               }}
-              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              className="btn btn-secondary btn-block"
             >
-              <span className="material-symbols-outlined text-base">receipt_long</span>
-              Xem Lịch Khám Của Tôi
+              <span className="material-symbols-outlined" aria-hidden="true">event_note</span>
+              Xem lịch khám của tôi
             </button>
 
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-colors flex items-center justify-center gap-2"
+              className="btn btn-block bg-red-50 text-red-700 hover:bg-red-100 border-red-200"
             >
-              <span className="material-symbols-outlined text-base">logout</span>
-              Đăng Xuất Khỏi Tài Khoản
+              <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+              Đăng xuất
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </Modal>
   );
 }

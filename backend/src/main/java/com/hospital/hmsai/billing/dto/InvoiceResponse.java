@@ -20,6 +20,7 @@ import java.util.List;
 public class InvoiceResponse {
 
     private Long id;
+    private String invoiceCode;
     private Long patientId;
     private String patientName;
     private String patientCode;
@@ -27,11 +28,28 @@ public class InvoiceResponse {
     private LocalDateTime visitTime;
     private String doctorName;
     private String diagnosisCode;
+    private String diagnosisNote;
+
+    /** Tổng chi phí (trước BHYT). */
     private BigDecimal totalAmount;
+    private String insuranceNumber;
+    private BigDecimal insuranceRate;
+    private BigDecimal insuranceAmount;
+    private String insuranceNote;
+    /** Số tiền người bệnh phải trả. */
+    private BigDecimal patientAmount;
+
     private InvoiceStatus status;
     private PaymentMethod paymentMethod;
     private String transactionCode;
     private LocalDateTime paidAt;
+    private BigDecimal amountReceived;
+    private BigDecimal changeAmount;
+    private String cashierName;
+    private String note;
+    private String voidReason;
+    private LocalDateTime voidedAt;
+    private String voidedBy;
     private LocalDateTime createdAt;
     private List<InvoiceItemResponse> items;
 
@@ -51,10 +69,12 @@ public class InvoiceResponse {
         LocalDateTime visitTime = null;
         String doctorName = null;
         String diagnosisCode = null;
+        String diagnosisNote = null;
         if (invoice.getVisit() != null) {
             visitId = invoice.getVisit().getId();
             visitTime = invoice.getVisit().getVisitTime();
             diagnosisCode = invoice.getVisit().getDiagnosisCode();
+            diagnosisNote = invoice.getVisit().getDiagnosisNote();
             if (invoice.getVisit().getDoctor() != null && invoice.getVisit().getDoctor().getUser() != null) {
                 doctorName = invoice.getVisit().getDoctor().getUser().getFullName();
             }
@@ -69,6 +89,7 @@ public class InvoiceResponse {
 
         return InvoiceResponse.builder()
                 .id(invoice.getId())
+                .invoiceCode(invoice.getInvoiceCode())
                 .patientId(patientId)
                 .patientName(patientName)
                 .patientCode(patientCode)
@@ -76,11 +97,24 @@ public class InvoiceResponse {
                 .visitTime(visitTime)
                 .doctorName(doctorName)
                 .diagnosisCode(diagnosisCode)
+                .diagnosisNote(diagnosisNote)
                 .totalAmount(invoice.getTotalAmount())
+                .insuranceNumber(invoice.getInsuranceNumber())
+                .insuranceRate(invoice.getInsuranceRate())
+                .insuranceAmount(invoice.getInsuranceAmount())
+                .insuranceNote(invoice.getInsuranceNote())
+                .patientAmount(invoice.getPatientAmount())
                 .status(invoice.getStatus())
                 .paymentMethod(invoice.getPaymentMethod())
                 .transactionCode(invoice.getTransactionCode())
                 .paidAt(invoice.getPaidAt())
+                .amountReceived(invoice.getAmountReceived())
+                .changeAmount(invoice.getChangeAmount())
+                .cashierName(invoice.getCashierName())
+                .note(invoice.getNote())
+                .voidReason(invoice.getVoidReason())
+                .voidedAt(invoice.getVoidedAt())
+                .voidedBy(invoice.getVoidedBy())
                 .createdAt(invoice.getCreatedAt())
                 .items(itemsList)
                 .build();

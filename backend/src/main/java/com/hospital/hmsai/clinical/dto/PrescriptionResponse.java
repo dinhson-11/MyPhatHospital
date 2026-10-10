@@ -24,6 +24,9 @@ public class PrescriptionResponse {
     private Long visitId;
     private List<PrescriptionItemResponse> items;
     private BigDecimal estimatedTotalAmount;
+
+    /** Lý do bác sĩ xác nhận kê đơn bất chấp cảnh báo nghiêm trọng (null nếu không có). */
+    private String overrideReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -58,6 +61,7 @@ public class PrescriptionResponse {
                 .visitId(prescription.getVisit() != null ? prescription.getVisit().getId() : null)
                 .items(itemResponses)
                 .estimatedTotalAmount(total)
+                .overrideReason(prescription.getOverrideReason())
                 .createdAt(prescription.getCreatedAt())
                 .updatedAt(prescription.getUpdatedAt())
                 .interactionWarnings(new ArrayList<>())

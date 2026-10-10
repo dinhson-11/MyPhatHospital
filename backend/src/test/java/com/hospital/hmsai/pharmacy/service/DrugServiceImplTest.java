@@ -1,6 +1,10 @@
 package com.hospital.hmsai.pharmacy.service;
 
+import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
+import com.hospital.hmsai.pharmacy.dto.CreateDrugRequest;
+import com.hospital.hmsai.pharmacy.dto.StockAdjustmentType;
+import com.hospital.hmsai.pharmacy.dto.UpdateStockRequest;
 import com.hospital.hmsai.pharmacy.dto.DrugInteractionResponse;
 import com.hospital.hmsai.pharmacy.dto.DrugResponse;
 import com.hospital.hmsai.pharmacy.entity.Drug;
@@ -128,5 +132,51 @@ class DrugServiceImplTest {
         List<DrugInteractionResponse> responses = drugService.checkInteractionsAmongDrugs(List.of(3L));
         assertTrue(responses.isEmpty());
         verify(drugInteractionRepository, never()).findInteractionsAmongDrugs(any());
+    }
+
+    @Test
+    @DisplayName("Thêm thuốc: mã được chuẩn hóa (trim + chữ hoa) TRƯỚC khi kiểm tra trùng")
+    void testCreateDrug_CodeNormalizedBeforeDuplicateCheck() {
+        CreateDrugRequest request = CreateDrugRequest.builder()
+                .code("  drug-asp-81 ").name("Aspirin 81mg").price(BigDecimal.valueOf(2000)).stockQuantity(10).build();
+        when(drugRepository.existsByCode("DRUG-ASP-81")).thenReturn(true);
+
+        assertThrows(BusinessException.class, () -> drugService.createDrug(request));
+        verify(drugRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Điều chỉnh kiểm kê (ADJUSTMENT) về 0 được phép")
+    void testUpdateStock_AdjustmentToZero_Allowed() {
+        when(drugRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(aspirin));
+        when(drugRepository.save(any(Drug.class))).thenAnswer(i -> i.getArgument(0));
+
+        DrugResponse response = drugService.updateStock(3L, UpdateStockRequest.builder()
+                .quantity(0).adjustmentType(StockAdjustmentType.ADJUSTMENT).build());
+
+        assertEquals(0, response.getStockQuantity());
+    }
+
+    @Test
+    @DisplayName("Nhập kho / xuất kho số lượng 0 bị từ chối")
+    void testUpdateStock_ImportZero_Rejected() {
+        when(drugRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(aspirin));
+
+        assertThrows(BusinessException.class, () -> drugService.updateStock(3L, UpdateStockRequest.builder()
+                .quantity(0).adjustmentType(StockAdjustmentType.IMPORT).build()));
+        assertThrows(BusinessException.class, () -> drugService.updateStock(3L, UpdateStockRequest.builder()
+                .quantity(0).adjustmentType(StockAdjustmentType.EXPORT).build()));
+        verify(drugRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Xuất kho vượt tồn bị từ chối, nhập kho dùng khóa ghi dòng thuốc")
+    void testUpdateStock_ExportMoreThanStock_Rejected() {
+        when(drugRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(aspirin));
+
+        assertThrows(BusinessException.class, () -> drugService.updateStock(3L, UpdateStockRequest.builder()
+                .quantity(501).adjustmentType(StockAdjustmentType.EXPORT).build()));
+        assertEquals(500, aspirin.getStockQuantity());
+        verify(drugRepository, never()).findById(any());
     }
 }

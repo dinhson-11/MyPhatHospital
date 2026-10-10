@@ -17,6 +17,7 @@ import joblib
 logger = logging.getLogger(__name__)
 
 from services.hospital_catalog import ML_LABEL_TO_DEPT, department_name, doctor_name
+from services.text_normalizer import normalize_text
 
 # Nội dung tư vấn theo NHÃN của mô hình ML (bộ nhãn cũ). Khoa/bác sĩ đề xuất luôn là khoa THỰC TẾ
 # của Mỹ Phát Hospital, quy đổi qua ML_LABEL_TO_DEPT (xem hospital_catalog.py).
@@ -133,28 +134,42 @@ def load_trained_model():
         return None
 
 
+# Ngưỡng tin cậy của mô hình. Mô hình gán ~0.40 cho chuỗi vô nghĩa ("xyz abc" -> Da liễu),
+# nên chỉ chấp nhận dự đoán khi đủ tự tin VÀ bỏ xa nhãn thứ hai; ngược lại trả None để
+# chatbot dùng luật từ khóa rồi mặc định Khoa Khám bệnh / Cấp cứu ban đầu (dept 1).
+ML_MIN_CONFIDENCE = 0.6
+ML_MIN_MARGIN = 0.2
+
+
 def predict_department(text: str) -> Optional[Tuple[int, str, float, Dict[str, Any]]]:
     """
     Dự đoán chuyên khoa dựa trên văn bản triệu chứng.
-    Trả về: (dept_id, dept_name, confidence, metadata_dict) hoặc None nếu không dự đoán được.
+    Trả về: (dept_id, dept_name, confidence, metadata_dict) hoặc None nếu không dự đoán được
+    hoặc mô hình không đủ tự tin (confidence < ML_MIN_CONFIDENCE hoặc top1 - top2 < ML_MIN_MARGIN).
     """
     if not text or len(text.strip()) < 3:
         return None
 
-    clean_text = text.lower().strip()
+    clean_text = normalize_text(text)
 
     # Thử nạp và dự đoán bằng mô hình ML
     pipeline = load_trained_model()
     if pipeline is not None:
         try:
-            pred_id = int(pipeline.predict([clean_text])[0])
             probs = pipeline.predict_proba([clean_text])[0]
             classes = pipeline.classes_
-            prob_dict = {int(c): float(p) for c, p in zip(classes, probs)}
-            confidence = prob_dict.get(pred_id, 0.0)
+            ranked = sorted(
+                ((float(p), int(c)) for c, p in zip(classes, probs)), reverse=True
+            )
+            confidence, pred_id = ranked[0]
+            runner_up = ranked[1][0] if len(ranked) > 1 else 0.0
 
-            # Ngưỡng tin cậy tối thiểu của mô hình
-            if confidence >= 0.25 and pred_id in DEPT_METADATA:
+            # Ngưỡng tin cậy tối thiểu + khoảng cách tối thiểu với nhãn thứ hai
+            if (
+                confidence >= ML_MIN_CONFIDENCE
+                and (confidence - runner_up) >= ML_MIN_MARGIN
+                and pred_id in DEPT_METADATA
+            ):
                 meta = DEPT_METADATA[pred_id]
                 return meta["dept_id"], meta["dept_name"], confidence, meta
         except Exception as e:

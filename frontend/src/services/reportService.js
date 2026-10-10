@@ -1,59 +1,177 @@
 import apiClient from './api';
+import { toAppError } from './apiError';
+import { PAYMENT_METHOD_LABELS } from '../utils/format';
 
-const DEFAULT_KPI = {
-  totalPatients: 1284,
-  todayAppointments: 42,
-  todayVisits: 38,
-  todayRevenue: 28450000,
-  activeStaffCount: 48,
-  lowStockDrugsCount: 3,
-  aiAlertsCount: 64
+/**
+ * Báo cáo & thống kê – CHỈ dùng số liệu thật từ backend (/api/v1/reports/*).
+ * Không còn dữ liệu mẫu / dữ liệu sinh ngẫu nhiên khi lỗi: lỗi được ném ra (AppError, thông điệp tiếng Việt)
+ * để màn hình hiển thị trạng thái lỗi + nút thử lại. Giá trị backend không trả về được chuẩn hóa thành null
+ * (giao diện hiển thị "—"), không thay bằng 0.
+ *
+ * Quyền backend: kpi-summary & visits-summary: ADMIN; revenue: ADMIN, ACCOUNTANT; top-diagnoses: ADMIN, DOCTOR.
+ */
+
+/** Phương thức thanh toán theo thứ tự hiển thị, khớp enum PaymentMethod của backend. */
+export const PAYMENT_METHODS = ['CASH', 'VIETQR', 'BANK_TRANSFER', 'CARD'];
+
+const METHOD_FIELDS = {
+  CASH: 'cashRevenue',
+  VIETQR: 'vietQrRevenue',
+  BANK_TRANSFER: 'bankTransferRevenue',
+  CARD: 'cardRevenue'
 };
 
-const DEFAULT_TOP_DIAGNOSES = [
-  { icd10Code: 'I10', diseaseName: 'Tăng huyết áp vô căn (nguyên phát)', count: 142, percentage: 32.5 },
-  { icd10Code: 'E11', diseaseName: 'Đái tháo đường típ 2 không phụ thuộc insulin', count: 98, percentage: 22.4 },
-  { icd10Code: 'J06', diseaseName: 'Nhiễm khuẩn hô hấp trên cấp tính nhiều vị trí', count: 76, percentage: 17.4 },
-  { icd10Code: 'K29', diseaseName: 'Viêm dạ dày và tá tràng mạn tính', count: 65, percentage: 14.9 },
-  { icd10Code: 'M54', diseaseName: 'Đau thắt lưng và thoái hóa cột sống', count: 56, percentage: 12.8 }
-];
+/** Số từ JSON (BigDecimal có thể về dạng chuỗi) → number; thiếu / không hợp lệ → null. */
+export const toNumberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
 
-const generateDailyVisits = () => {
-  const list = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const total = 25 + Math.floor(Math.sin(i) * 10) + (i % 2 === 0 ? 8 : 4);
-    const completed = Math.max(15, total - Math.floor(Math.random() * 4));
-    list.push({ date: dateStr, total, completed });
+const pad = (n) => String(n).padStart(2, '0');
+const toISODate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/** Khoảng thời gian báo cáo (theo giờ máy, định dạng yyyy-MM-dd): '7days' | '30days' | 'this_month'. */
+export function getReportRange(rangeKey = '7days', today = new Date()) {
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let start;
+  if (rangeKey === 'this_month') {
+    start = new Date(end.getFullYear(), end.getMonth(), 1);
+  } else {
+    const days = rangeKey === '30days' ? 30 : 7;
+    start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
   }
-  return list;
+  return { from: toISODate(start), to: toISODate(end) };
+}
+
+function unwrap(res) {
+  // apiClient đã bóc response.data → res = ApiResponse { success, data, message }
+  if (res === null || res === undefined || res.data === null || res.data === undefined) {
+    const err = new Error('Máy chủ không trả về dữ liệu báo cáo.');
+    err.status = null;
+    throw err;
+  }
+  return res.data;
+}
+
+function normalizeKpi(d = {}) {
+  return {
+    totalPatients: toNumberOrNull(d.totalPatients),
+    todayAppointments: toNumberOrNull(d.todayAppointments),
+    todayVisits: toNumberOrNull(d.todayVisits),
+    todayRevenue: toNumberOrNull(d.todayRevenue),
+    activeStaffCount: toNumberOrNull(d.activeStaffCount),
+    lowStockDrugsCount: toNumberOrNull(d.lowStockDrugsCount),
+    aiAlertsCount: toNumberOrNull(d.aiAlertsCount)
+  };
+}
+
+function normalizeVisits(d = {}) {
+  return {
+    totalVisits: toNumberOrNull(d.totalVisits),
+    completedVisits: toNumberOrNull(d.completedVisits),
+    inProgressVisits: toNumberOrNull(d.inProgressVisits),
+    waitingVisits: toNumberOrNull(d.waitingVisits),
+    cancelledAppointments: toNumberOrNull(d.cancelledAppointments),
+    dailyStats: (Array.isArray(d.dailyStats) ? d.dailyStats : []).map((row) => ({
+      date: row.date,
+      total: toNumberOrNull(row.total) ?? 0,
+      completed: toNumberOrNull(row.completed) ?? 0
+    }))
+  };
+}
+
+function normalizeRevenue(d = {}) {
+  const methods = {};
+  PAYMENT_METHODS.forEach((m) => {
+    methods[m] = toNumberOrNull(d[METHOD_FIELDS[m]]);
+  });
+  return {
+    totalRevenue: toNumberOrNull(d.totalRevenue),
+    insuranceAmount: toNumberOrNull(d.insuranceAmount),
+    patientCollected: toNumberOrNull(d.patientCollected),
+    totalInvoices: toNumberOrNull(d.totalInvoices),
+    paidInvoicesCount: toNumberOrNull(d.paidInvoicesCount),
+    pendingInvoicesCount: toNumberOrNull(d.pendingInvoicesCount),
+    refundedInvoicesCount: toNumberOrNull(d.refundedInvoicesCount),
+    refundedAmount: toNumberOrNull(d.refundedAmount),
+    cashRevenue: methods.CASH,
+    vietQrRevenue: methods.VIETQR,
+    bankTransferRevenue: methods.BANK_TRANSFER,
+    cardRevenue: methods.CARD,
+    methods,
+    dailyRevenues: (Array.isArray(d.dailyRevenues) ? d.dailyRevenues : []).map((row) => ({
+      date: row.date,
+      amount: toNumberOrNull(row.amount) ?? 0,
+      invoiceCount: toNumberOrNull(row.invoiceCount) ?? 0
+    }))
+  };
+}
+
+function normalizeDiagnoses(list) {
+  return (Array.isArray(list) ? list : []).map((d) => ({
+    icd10Code: d.icd10Code,
+    diseaseName: d.diseaseName || d.icd10Code,
+    count: toNumberOrNull(d.count) ?? 0,
+    percentage: toNumberOrNull(d.percentage)
+  }));
+}
+
+const percentOf = (part, whole) => {
+  if (part === null || part === undefined || !whole) return null;
+  return (part / whole) * 100;
 };
 
-const generateDailyRevenues = () => {
-  const list = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const base = 18000000 + (6 - i) * 1500000 + Math.floor(Math.random() * 3000000);
-    list.push({ date: dateStr, amount: base, invoiceCount: 18 + i * 2 });
-  }
-  return list;
-};
+/**
+ * Cơ cấu thu theo phương thức thanh toán. Doanh thu theo phương thức = tiền thực thu từ người bệnh,
+ * nên mẫu số tỷ lệ là patientCollected (không phải totalRevenue – vốn gồm cả phần BHYT chi trả).
+ */
+export function getMethodBreakdown(revenue) {
+  const denominator = revenue?.patientCollected;
+  return PAYMENT_METHODS.map((method) => {
+    const amount = revenue?.methods?.[method] ?? null;
+    return {
+      method,
+      label: PAYMENT_METHOD_LABELS[method] || method,
+      amount,
+      percent: percentOf(amount, denominator)
+    };
+  });
+}
+
+/** BHYT chi trả vs người bệnh thanh toán, trên tổng chi phí hóa đơn đã thu (totalRevenue). */
+export function getPayerSplit(revenue) {
+  const total = revenue?.totalRevenue ?? null;
+  return {
+    total,
+    insurance: revenue?.insuranceAmount ?? null,
+    patient: revenue?.patientCollected ?? null,
+    insurancePercent: percentOf(revenue?.insuranceAmount, total),
+    patientPercent: percentOf(revenue?.patientCollected, total)
+  };
+}
+
+/** 1234 → "1.234"; null / không hợp lệ → "—". */
+export const formatCount = (value) =>
+  value === null || value === undefined || value === '' || !Number.isFinite(Number(value))
+    ? '—'
+    : Number(value).toLocaleString('vi-VN');
+
+/** 62.456 → "62,5%"; null → "—". */
+export function formatPercent(value, digits = 1) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return `${value.toLocaleString('vi-VN', { maximumFractionDigits: digits, minimumFractionDigits: 0 })}%`;
+}
 
 export const reportService = {
   async getKpiSummary() {
     try {
       const res = await apiClient.get('/reports/kpi-summary');
-      if (res && res.data) {
-        return res.data;
-      }
-    } catch {
-      // offline fallback
+      return normalizeKpi(unwrap(res));
+    } catch (err) {
+      throw toAppError(err, 'Không tải được chỉ số tổng quan.');
     }
-    return DEFAULT_KPI;
   },
 
   async getVisitsSummary(from, to) {
@@ -62,23 +180,10 @@ export const reportService = {
       if (from) params.from = from;
       if (to) params.to = to;
       const res = await apiClient.get('/reports/visits-summary', { params });
-      if (res && res.data) {
-        return res.data;
-      }
-    } catch {
-      // offline fallback
+      return normalizeVisits(unwrap(res));
+    } catch (err) {
+      throw toAppError(err, 'Không tải được thống kê lượt khám.');
     }
-    const dailyStats = generateDailyVisits();
-    const totalVisits = dailyStats.reduce((sum, d) => sum + d.total, 0);
-    const completedVisits = dailyStats.reduce((sum, d) => sum + d.completed, 0);
-    return {
-      totalVisits,
-      completedVisits,
-      inProgressVisits: Math.max(0, totalVisits - completedVisits - 3),
-      waitingVisits: 5,
-      cancelledAppointments: 4,
-      dailyStats
-    };
   },
 
   async getRevenueSummary(from, to) {
@@ -87,34 +192,20 @@ export const reportService = {
       if (from) params.from = from;
       if (to) params.to = to;
       const res = await apiClient.get('/reports/revenue', { params });
-      if (res && res.data) {
-        return res.data;
-      }
-    } catch {
-      // offline fallback
+      return normalizeRevenue(unwrap(res));
+    } catch (err) {
+      throw toAppError(err, 'Không tải được báo cáo doanh thu.');
     }
-    const dailyRevenues = generateDailyRevenues();
-    const totalRevenue = dailyRevenues.reduce((sum, d) => sum + d.amount, 0);
-    return {
-      totalRevenue,
-      totalInvoices: 145,
-      paidInvoicesCount: 138,
-      pendingInvoicesCount: 7,
-      cashRevenue: Math.round(totalRevenue * 0.38),
-      vietQrRevenue: Math.round(totalRevenue * 0.62),
-      dailyRevenues
-    };
   },
 
   async getTopDiagnoses(limit = 5) {
     try {
       const res = await apiClient.get('/reports/top-diagnoses', { params: { limit } });
-      if (res && res.data) {
-        return res.data;
-      }
-    } catch {
-      // offline fallback
+      return normalizeDiagnoses(unwrap(res));
+    } catch (err) {
+      throw toAppError(err, 'Không tải được mô hình bệnh tật.');
     }
-    return DEFAULT_TOP_DIAGNOSES.slice(0, limit);
   }
 };
+
+export default reportService;

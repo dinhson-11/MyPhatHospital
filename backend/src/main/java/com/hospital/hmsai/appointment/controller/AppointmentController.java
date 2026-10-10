@@ -1,9 +1,11 @@
 package com.hospital.hmsai.appointment.controller;
 
 import com.hospital.hmsai.appointment.dto.*;
+import com.hospital.hmsai.appointment.entity.AppointmentSource;
 import com.hospital.hmsai.appointment.service.AppointmentService;
 import com.hospital.hmsai.common.ApiResponse;
 import com.hospital.hmsai.security.CustomUserDetails;
+import com.hospital.hmsai.security.SecurityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +19,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -35,14 +38,29 @@ import java.time.LocalDate;
 public class AppointmentController {
 
     private final AppointmentService appointmentService;
+    private final SecurityService securityService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('PATIENT', 'RECEPTIONIST', 'ADMIN')")
-    @Operation(summary = "Đặt lịch khám mới", description = "Bệnh nhân hoặc lễ tân đặt lịch khám. Hệ thống tự kiểm tra trùng lịch bác sĩ.")
+    @Operation(summary = "Đặt lịch khám mới", description = "Bệnh nhân hoặc lễ tân đặt lịch khám. Hệ thống tự kiểm tra trùng lịch bác sĩ, "
+            + "giờ khám hợp lệ và thời điểm trong tương lai. Bệnh nhân chỉ đặt được cho chính mình (patientId bị bỏ qua).")
     public ResponseEntity<ApiResponse<AppointmentResponse>> create(
-            @Valid @RequestBody CreateAppointmentRequest request) {
+            @Valid @RequestBody CreateAppointmentRequest request,
+            Authentication authentication) {
         log.info("POST /api/v1/appointments – patientId: {}, doctorId: {}, time: {}",
                 request.getPatientId(), request.getDoctorId(), request.getScheduledAt());
+        if (SecurityService.isPatientOnly(authentication)) {
+            Long ownPatientId = securityService.currentPatientId(authentication);
+            if (ownPatientId == null) {
+                throw new AccessDeniedException("Tài khoản chưa được liên kết với hồ sơ bệnh nhân");
+            }
+            if (request.getPatientId() != null && !ownPatientId.equals(request.getPatientId())) {
+                log.warn("Bệnh nhân {} cố đặt lịch cho hồ sơ khác (patientId={}), đã ép về hồ sơ của chính mình",
+                        authentication.getName(), request.getPatientId());
+            }
+            request.setPatientId(ownPatientId);
+            request.setSource(AppointmentSource.PATIENT);
+        }
         AppointmentResponse response = appointmentService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Đặt lịch khám thành công"));
@@ -59,7 +77,8 @@ public class AppointmentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('PATIENT', 'RECEPTIONIST', 'DOCTOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'ADMIN') "
+            + "or (hasRole('PATIENT') and @securityService.isAppointmentOwner(#id, authentication))")
     @Operation(summary = "Xem chi tiết lịch hẹn", description = "Lấy thông tin chi tiết của 1 lịch hẹn theo ID.")
     public ResponseEntity<ApiResponse<AppointmentResponse>> getById(@PathVariable Long id) {
         log.info("GET /api/v1/appointments/{}", id);
@@ -123,8 +142,10 @@ public class AppointmentController {
     }
 
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('PATIENT', 'RECEPTIONIST', 'ADMIN')")
-    @Operation(summary = "Hủy lịch hẹn", description = "Bệnh nhân hoặc nhân viên y tế hủy lịch hẹn kèm lý do.")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST', 'ADMIN') "
+            + "or (hasRole('PATIENT') and @securityService.isAppointmentOwner(#id, authentication))")
+    @Operation(summary = "Hủy lịch hẹn", description = "Bệnh nhân (chỉ lịch của mình) hoặc nhân viên y tế hủy lịch hẹn kèm lý do. "
+            + "Không hủy được lịch đang có lượt khám IN_PROGRESS.")
     public ResponseEntity<ApiResponse<AppointmentResponse>> cancel(
             @PathVariable Long id,
             @RequestParam(required = false) String reason) {
@@ -144,7 +165,8 @@ public class AppointmentController {
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'ADMIN')")
-    @Operation(summary = "Cập nhật trạng thái lịch hẹn", description = "Cập nhật trạng thái tổng quát (BOOKED, CONFIRMED, COMPLETED, CANCELLED, NO_SHOW).")
+    @Operation(summary = "Cập nhật trạng thái lịch hẹn", description = "Chuyển trạng thái theo luồng: BOOKED → CONFIRMED/CANCELLED/NO_SHOW; "
+            + "CONFIRMED → COMPLETED/CANCELLED/NO_SHOW. CANCELLED, COMPLETED, NO_SHOW là trạng thái cuối; không chuyển về BOOKED.")
     public ResponseEntity<ApiResponse<AppointmentResponse>> updateStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateAppointmentStatusRequest request) {

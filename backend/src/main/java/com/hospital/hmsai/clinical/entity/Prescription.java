@@ -32,6 +32,10 @@ public class Prescription {
     @Builder.Default
     private List<PrescriptionItem> items = new ArrayList<>();
 
+    /** Lý do bác sĩ xác nhận kê đơn khi có cảnh báo nghiêm trọng (tương tác / dị ứng). */
+    @Column(name = "override_reason", length = 500)
+    private String overrideReason;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

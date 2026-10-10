@@ -1,119 +1,103 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import Modal from './Modal';
+
+const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll', 'wheel'];
 
 /**
- * AutoLogoutTimer: Tự động khóa màn hình và đăng xuất nhân viên sau thời gian không hoạt động
- * Tiêu chuẩn an toàn bệnh viện: 15 phút không thao tác chuột/bàn phím sẽ cảnh báo trước 60 giây.
+ * AutoLogoutTimer: tự động đăng xuất sau thời gian không thao tác (mặc định 15 phút),
+ * cảnh báo trước 60 giây. Khi đăng xuất, App.jsx đóng toàn bộ cửa sổ chứa dữ liệu bệnh nhân.
+ * Trong lúc cảnh báo, chỉ thao tác chủ động ("Tiếp tục làm việc") mới gia hạn phiên.
  */
 export default function AutoLogoutTimer({ idleTimeoutMs = 15 * 60 * 1000, warningTimeoutMs = 60 * 1000 }) {
   const { isAuthenticated, logout, user } = useAuth();
   const { showToast } = useToast();
   const [showWarning, setShowWarning] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [secondsLeft, setSecondsLeft] = useState(Math.round(warningTimeoutMs / 1000));
 
-  const lastActivityRef = useRef(Date.now());
-  const timerRef = useRef(null);
-  const countdownRef = useRef(null);
+  const lastActivityRef = useRef(0);
+  const warningRef = useRef(false);
 
-  const resetActivity = useCallback(() => {
+  const continueSession = useCallback(() => {
     lastActivityRef.current = Date.now();
-    if (showWarning) {
-      setShowWarning(false);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    }
-  }, [showWarning]);
+    warningRef.current = false;
+    setShowWarning(false);
+  }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setShowWarning(false);
-      return;
-    }
+    if (!isAuthenticated) return undefined;
 
-    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
-    const handleEvent = () => resetActivity();
+    lastActivityRef.current = Date.now();
+    const handleActivity = () => {
+      if (!warningRef.current) lastActivityRef.current = Date.now();
+    };
+    ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
 
-    events.forEach(evt => window.addEventListener(evt, handleEvent));
-
-    const checkInterval = setInterval(() => {
+    // Tính theo đồng hồ thực (không đếm lùi thủ công) để đúng cả khi tab bị trình duyệt làm chậm
+    const interval = setInterval(() => {
       const idleTime = Date.now() - lastActivityRef.current;
-      const warningThreshold = idleTimeoutMs - warningTimeoutMs;
-
       if (idleTime >= idleTimeoutMs) {
-        // Hết giờ hoàn toàn -> tự động đăng xuất
+        clearInterval(interval);
+        warningRef.current = false;
         setShowWarning(false);
-        clearInterval(checkInterval);
-        if (countdownRef.current) clearInterval(countdownRef.current);
         logout();
-        showToast('Phiên làm việc đã tự động kết thúc để bảo mật thông tin y tế!', 'warning');
-      } else if (idleTime >= warningThreshold && !showWarning) {
-        // Đến ngưỡng cảnh báo 60s
+        showToast('Bạn đã được đăng xuất tự động sau thời gian không thao tác để bảo mật thông tin y tế.', 'warning');
+      } else if (idleTime >= idleTimeoutMs - warningTimeoutMs) {
+        warningRef.current = true;
         setShowWarning(true);
-        setSecondsLeft(Math.max(1, Math.round((idleTimeoutMs - idleTime) / 1000)));
-
-        countdownRef.current = setInterval(() => {
-          setSecondsLeft(prev => {
-            if (prev <= 1) {
-              clearInterval(countdownRef.current);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
+        setSecondsLeft(Math.max(1, Math.ceil((idleTimeoutMs - idleTime) / 1000)));
       }
-    }, 2000);
+    }, 1000);
 
     return () => {
-      events.forEach(evt => window.removeEventListener(evt, handleEvent));
-      clearInterval(checkInterval);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, handleActivity));
+      clearInterval(interval);
+      // Đăng xuất / đổi phiên: bỏ cảnh báo cũ để không hiện lại ở lần đăng nhập sau
+      warningRef.current = false;
+      setShowWarning(false);
     };
-  }, [isAuthenticated, idleTimeoutMs, warningTimeoutMs, logout, showToast, resetActivity, showWarning]);
+  }, [isAuthenticated, idleTimeoutMs, warningTimeoutMs, logout, showToast]);
 
-  if (!isAuthenticated || !showWarning) return null;
+  const handleLogoutNow = () => {
+    warningRef.current = false;
+    setShowWarning(false);
+    logout();
+    showToast('Bạn đã đăng xuất tài khoản.', 'info');
+  };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl border border-amber-300 dark:border-amber-700 animate-fade-in space-y-5">
-        <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 mx-auto flex items-center justify-center">
-          <span className="material-symbols-outlined text-4xl animate-bounce">
-            lock_clock
-          </span>
-        </div>
-
-        <div className="space-y-2">
-          <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-            Cảnh Báo Hết Hạn Phiên Làm Việc
-          </h3>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Để bảo mật hồ sơ bệnh án, hệ thống sẽ tự động đăng xuất tài khoản <strong className="text-teal-700 dark:text-teal-400">{user?.fullName || 'nhân viên'}</strong> sau:
-          </p>
-          <div className="text-3xl font-extrabold text-amber-600 dark:text-amber-400 font-mono py-2">
-            {secondsLeft} giây
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
-          <button
-            type="button"
-            onClick={resetActivity}
-            className="flex-1 btn btn-primary py-3 font-semibold shadow-md"
-          >
-            <span className="material-symbols-outlined text-lg">check_circle</span>
-            <span>Tiếp tục làm việc</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShowWarning(false);
-              logout();
-            }}
-            className="btn btn-outline py-3 text-slate-600 dark:text-slate-300"
-          >
+    <Modal
+      isOpen={isAuthenticated && showWarning}
+      onClose={continueSession}
+      title="Phiên làm việc sắp hết hạn"
+      icon="lock_clock"
+      size="sm"
+      footer={(
+        <>
+          <button type="button" onClick={handleLogoutNow} className="btn btn-secondary">
             Đăng xuất ngay
           </button>
-        </div>
+          <button type="button" onClick={continueSession} className="btn btn-primary" data-autofocus>
+            <span className="material-symbols-outlined" aria-hidden="true">check_circle</span>
+            <span>Tiếp tục làm việc</span>
+          </button>
+        </>
+      )}
+    >
+      <div className="text-center space-y-3 py-2">
+        <p className="text-sm text-slate-600">
+          Để bảo mật hồ sơ bệnh án, tài khoản{' '}
+          <strong className="text-slate-900">{user?.fullName || user?.username || 'của bạn'}</strong>{' '}
+          sẽ tự động đăng xuất sau:
+        </p>
+        <p className="text-3xl font-extrabold text-amber-700 tabular-nums">
+          {secondsLeft} giây
+        </p>
+        <p className="text-xs text-slate-500">
+          Các cửa sổ đang mở sẽ được đóng lại khi đăng xuất. Dữ liệu chưa lưu có thể bị mất.
+        </p>
       </div>
-    </div>
+    </Modal>
   );
 }

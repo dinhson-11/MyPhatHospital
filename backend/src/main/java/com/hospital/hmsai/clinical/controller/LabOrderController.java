@@ -24,7 +24,8 @@ public class LabOrderController {
     private final LabOrderService labOrderService;
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'ADMIN', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'ADMIN') "
+            + "or (hasRole('PATIENT') and @securityService.isLabOrderPatient(#id, authentication))")
     @Operation(summary = "Xem chi tiết chỉ định cận lâm sàng", description = "Tra cứu thông tin chỉ định xét nghiệm và kết quả theo ID.")
     public ResponseEntity<ApiResponse<LabOrderResponse>> getById(@PathVariable Long id) {
         log.info("GET /api/v1/lab-orders/{}", id);
@@ -34,7 +35,8 @@ public class LabOrderController {
 
     @PutMapping("/{id}/result")
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'ADMIN')")
-    @Operation(summary = "Nhập kết quả cận lâm sàng", description = "Điều dưỡng hoặc kỹ thuật viên phòng Lab cập nhật kết luận xét nghiệm và đường dẫn file.")
+    @Operation(summary = "Nhập kết quả cận lâm sàng", description = "Điều dưỡng hoặc kỹ thuật viên phòng Lab cập nhật kết luận xét nghiệm và đường dẫn file. "
+            + "Mỗi chỉ định chỉ nhập kết quả một lần.")
     public ResponseEntity<ApiResponse<LabResultResponse>> submitLabResult(
             @PathVariable Long id,
             @Valid @RequestBody UpdateLabResultRequest request) {

@@ -119,7 +119,8 @@ public class PatientController {
 
     @PostMapping("/{id}/allergies")
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'PATIENT')")
-    @Operation(summary = "Thêm dị ứng", description = "Bác sĩ/y tá thêm dị ứng cho bệnh nhân; PATIENT chỉ thêm được cho chính mình.")
+    @Operation(summary = "Thêm dị ứng", description = "Bác sĩ/y tá thêm dị ứng cho bệnh nhân; PATIENT chỉ thêm được cho chính mình. "
+            + "Dị ứng trùng tên (không phân biệt hoa thường/dấu) với dị ứng đã có → 409.")
     public ResponseEntity<ApiResponse<AllergyResponse>> addAllergy(
             @PathVariable Long id,
             @Valid @RequestBody CreateAllergyRequest request,
@@ -132,14 +133,13 @@ public class PatientController {
     }
 
     @DeleteMapping("/{id}/allergies/{allergyId}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'PATIENT')")
-    @Operation(summary = "Xóa dị ứng", description = "Bác sĩ/y tá xóa dị ứng; PATIENT chỉ xóa được dị ứng của chính mình.")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE')")
+    @Operation(summary = "Xóa dị ứng", description = "Chỉ bác sĩ/điều dưỡng được xóa dị ứng (dữ liệu an toàn kê đơn). "
+            + "Bệnh nhân không được tự xóa dị ứng đã ghi nhận.")
     public ResponseEntity<ApiResponse<Void>> deleteAllergy(
             @PathVariable Long id,
-            @PathVariable Long allergyId,
-            Authentication authentication) {
+            @PathVariable Long allergyId) {
         log.info("DELETE /api/v1/patients/{}/allergies/{}", id, allergyId);
-        assertSelfAccessIfPatient(authentication, id);
         allergyService.delete(id, allergyId);
         return ResponseEntity.ok(ApiResponse.success(null, "Xóa dị ứng thành công"));
     }

@@ -1,5 +1,7 @@
 import api from './api';
 import { hoursCompact } from './hospitalHours';
+import { toAppError } from './apiError';
+import { formatDate } from '../utils/format';
 
 const LOCAL_STORAGE_KEY_SCHEDULES = 'hms_mock_schedules_v3';
 const LOCAL_STORAGE_KEY_VERSION = 'hms_schedule_version';
@@ -163,6 +165,26 @@ export const MOCK_STAFF_MEMBERS = [
   }
 ];
 
+/** Nhãn ca trực tiếng Việt + khung giờ (dùng chung cho giao diện và thông báo lỗi). */
+export const SHIFT_INFO = {
+  MORNING: { label: 'Sáng', time: '07:30 – 11:30' },
+  AFTERNOON: { label: 'Chiều', time: '13:30 – 17:00' },
+  NIGHT: { label: 'Đêm', time: '17:00 – 07:30' },
+  FULL_DAY: { label: 'Cả ngày', time: '07:30 – 17:00' }
+};
+export const SHIFT_ORDER = ['MORNING', 'AFTERNOON', 'NIGHT', 'FULL_DAY'];
+export const getShiftInfo = (shift) => SHIFT_INFO[shift] || SHIFT_INFO.FULL_DAY;
+
+/**
+ * Máy chủ đã phản hồi lỗi (403, 409, 500…) → báo lỗi cho giao diện thay vì âm thầm dùng dữ liệu mẫu.
+ * Chỉ khi không kết nối được máy chủ (offline / chạy demo) mới chuyển sang dữ liệu cục bộ.
+ */
+const rethrowServerError = (err, fallback) => {
+  if (err?.response) {
+    throw toAppError(err, fallback);
+  }
+};
+
 const getMondayDate = (refDate = new Date()) => {
   const d = new Date(refDate);
   const day = d.getDay();
@@ -183,7 +205,6 @@ const formatDateStr = (dateObj) => {
  */
 export const generateBaseSchedulesForMonday = (monday) => {
   const schedules = [];
-  let seq = 1;
 
   const addShift = (staff, dayOffset, shift, note) => {
     const shiftDate = new Date(monday);
@@ -343,7 +364,7 @@ const saveStoredSchedules = (list) => {
 
 export const scheduleService = {
   /**
-   * Lấy danh bạ nhân sự y tế (FR-8.1)
+   * Lấy danh bạ nhân sự y tế
    */
   async getStaffList(departmentId) {
     try {
@@ -351,8 +372,9 @@ export const scheduleService = {
       if (res?.success && Array.isArray(res?.data) && res.data.length > 0) {
         return res.data;
       }
-    } catch {
-      // Fallback cục bộ chuẩn
+    } catch (err) {
+      rethrowServerError(err, 'Không tải được danh sách nhân viên y tế.');
+      // Không kết nối được máy chủ → dùng danh bạ cục bộ
     }
 
     if (departmentId) {
@@ -362,7 +384,7 @@ export const scheduleService = {
   },
 
   /**
-   * Tra cứu lịch trực theo tuần/tháng (FR-8.2)
+   * Tra cứu lịch trực theo tuần/tháng
    */
   async getSchedules(params = {}) {
     try {
@@ -370,8 +392,9 @@ export const scheduleService = {
       if (res?.success && Array.isArray(res?.data) && res.data.length > 0) {
         return res.data;
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      rethrowServerError(err, 'Không tải được lịch trực.');
+      // Không kết nối được máy chủ → dùng lịch trực cục bộ
     }
 
     let schedules = getStoredSchedules();
@@ -413,10 +436,9 @@ export const scheduleService = {
       if (res?.success && res?.data) {
         return res.data;
       }
-    } catch (e) {
-      if (e.response?.data?.message) {
-        throw new Error(e.response.data.message);
-      }
+    } catch (err) {
+      rethrowServerError(err, 'Không xếp được lịch trực.');
+      // Không kết nối được máy chủ → lưu cục bộ
     }
 
     // Fallback Offline & Chống trùng ca
@@ -427,7 +449,8 @@ export const scheduleService = {
       s.shift === data.shift
     );
     if (isConflict) {
-      throw new Error(`Nhân viên đã có lịch trực ca ${data.shift} vào ngày ${data.workDate}.`);
+      const info = getShiftInfo(data.shift);
+      throw new Error(`Nhân viên đã có lịch trực ca ${info.label} (${info.time}) vào ngày ${formatDate(data.workDate)}.`);
     }
 
     const staff = MOCK_STAFF_MEMBERS.find(s => s.id === Number(data.staffId)) || {};
@@ -458,8 +481,9 @@ export const scheduleService = {
       if (res?.success) {
         return true;
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      rethrowServerError(err, 'Không xóa được ca trực.');
+      // Không kết nối được máy chủ → xóa cục bộ
     }
 
     let schedules = getStoredSchedules();

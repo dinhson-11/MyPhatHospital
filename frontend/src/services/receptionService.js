@@ -1,207 +1,150 @@
 import apiClient from './api';
+import { toAppError } from './apiError';
+import { patientService } from './patientService';
+import { visitService } from './visitService';
 
-const RECEPTION_QUEUE_KEY = 'hms_reception_queue';
+/**
+ * Dịch vụ quầy tiếp đón.
+ *  - Hàng đợi = lịch hẹn thật (GET /appointments) + đánh dấu "đã vào phòng khám" nếu đã có ca khám
+ *    gắn với lịch hẹn (GET /visits).
+ *  - Xác nhận lịch, check-in (tạo ca khám), tạo/cập nhật hồ sơ: chỉ báo thành công khi máy chủ đã lưu.
+ *  - Không còn hàng đợi mẫu hay hồ sơ/ca khám giả khi mất kết nối.
+ */
 
-const DEFAULT_TODAY_QUEUE = [
-  {
-    id: 101,
-    patientId: 1,
-    patientCode: 'BN-260928-001',
-    fullName: 'Trần Đức Minh',
-    dob: '1988-05-14',
-    phone: '0912345678',
-    gender: 'MALE',
-    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
-    doctorName: 'TS.BS Vi Mai Anh',
-    doctorId: 1,
-    appointmentTime: '08:30 - 09:00',
-    symptoms: 'Ho dai dẳng kèm tức ngực nhẹ khi vận động',
-    status: 'CONFIRMED'
-  },
-  {
-    id: 102,
-    patientId: 2,
-    patientCode: 'BN-260928-002',
-    fullName: 'Lê Thị Thu Thủy',
-    dob: '1992-11-20',
-    phone: '0987654321',
-    gender: 'FEMALE',
-    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
-    doctorName: 'ThS. BS. Lê Minh Trí',
-    doctorId: 2,
-    appointmentTime: '09:00 - 09:30',
-    symptoms: 'Hồi hộp, tim đập nhanh sau bữa ăn',
-    status: 'BOOKED'
-  },
-  {
-    id: 103,
-    patientId: 3,
-    patientCode: 'BN-260928-003',
-    fullName: 'Nguyễn Văn Bình',
-    dob: '1975-02-10',
-    phone: '0933221100',
-    gender: 'MALE',
-    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
-    doctorName: 'BSCKI. Vũ Thị Hà',
-    doctorId: 3,
-    appointmentTime: '09:30 - 10:00',
-    symptoms: 'Đau âm ỉ thượng vị, ợ hơi',
-    status: 'CONFIRMED'
-  }
-];
-
-const getLocalQueue = () => {
-  const raw = localStorage.getItem(RECEPTION_QUEUE_KEY);
-  if (!raw) {
-    localStorage.setItem(RECEPTION_QUEUE_KEY, JSON.stringify(DEFAULT_TODAY_QUEUE));
-    return [...DEFAULT_TODAY_QUEUE];
-  }
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [...DEFAULT_TODAY_QUEUE];
-  }
+const pad = (n) => String(n).padStart(2, '0');
+const localDateOf = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const timeOf = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const saveLocalQueue = (list) => {
-  localStorage.setItem(RECEPTION_QUEUE_KEY, JSON.stringify(list));
+const pageContent = (res) => {
+  const data = res?.data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.content)) return data.content;
+  return [];
 };
+
+function toQueueItem(a, visitByAppointment) {
+  const visit = visitByAppointment.get(a.id);
+  return {
+    id: a.id,
+    patientId: a.patientId ?? null,
+    patientCode: a.patientCode || '',
+    fullName: a.patientName || '',
+    patientName: a.patientName || '',
+    departmentName: a.departmentName || '',
+    doctorName: a.doctorName || '',
+    doctorId: a.doctorId ?? null,
+    scheduledAt: a.scheduledAt || null,
+    date: localDateOf(a.scheduledAt),
+    appointmentTime: timeOf(a.scheduledAt),
+    symptoms: a.symptom || a.notes || '',
+    appointmentStatus: a.status,
+    // Trạng thái hàng đợi: CHECKED_IN khi đã có ca khám gắn với lịch hẹn
+    status: visit ? 'CHECKED_IN' : a.status,
+    visitId: visit?.id ?? null
+  };
+}
 
 export const receptionService = {
-  async getTodayQueue() {
+  /**
+   * Danh sách lịch hẹn cho quầy tiếp đón.
+   * @param {{ date?: string }} options date dạng yyyy-MM-dd để lọc theo ngày (giờ địa phương)
+   */
+  async getTodayQueue({ date } = {}) {
+    let appointments;
     try {
-      const res = await apiClient.get('/appointments');
-      if (res && res.data) {
-        const items = res.data.content || res.data;
-        if (Array.isArray(items) && items.length > 0) {
-          return items.map((a) => ({
-            id: a.id,
-            patientId: a.patientId || a.patient?.id || 1,
-            patientCode: a.patientCode || a.patient?.patientCode || `BN-${a.id}`,
-            fullName: a.patientName || a.patient?.fullName || 'Bệnh nhân',
-            dob: a.patient?.dob || '1990-01-01',
-            phone: a.patient?.phone || '0900000000',
-            gender: a.patient?.gender || 'MALE',
-            departmentName: a.departmentName || a.department?.name || 'Khoa Khám bệnh / Cấp cứu ban đầu',
-            doctorName: a.doctorName || a.doctor?.user?.fullName || 'BS. Trực lâm sàng',
-            doctorId: a.doctorId || a.doctor?.id || 1,
-            appointmentTime: a.scheduledAt ? new Date(a.scheduledAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '08:30',
-            symptoms: a.symptomNotes || 'Đến khám theo hẹn',
-            status: a.status || 'CONFIRMED'
-          }));
-        }
-      }
-    } catch {
-      // offline fallback
+      const res = await apiClient.get('/appointments', { params: { size: 200, sort: 'scheduledAt,asc' } });
+      appointments = pageContent(res);
+    } catch (err) {
+      throw toAppError(err, 'Không tải được danh sách lịch hẹn.');
     }
-    return getLocalQueue();
+
+    // Trạng thái check-in lấy từ ca khám thật; nếu không tải được thì vẫn hiển thị lịch hẹn.
+    const visitByAppointment = new Map();
+    try {
+      const visits = await visitService.getVisits({ size: 200 });
+      visits.forEach((v) => { if (v.appointmentId) visitByAppointment.set(v.appointmentId, v); });
+    } catch {
+      // bỏ qua – chỉ mất thông tin "đã vào phòng khám"
+    }
+
+    const items = appointments.map((a) => toQueueItem(a, visitByAppointment));
+    const filtered = date ? items.filter((i) => i.date === date) : items;
+    return filtered.sort((x, y) => String(x.scheduledAt || '').localeCompare(String(y.scheduledAt || '')));
   },
 
+  /** Lễ tân xác nhận lịch BOOKED → CONFIRMED. */
   async confirmAppointment(appointmentId) {
     try {
       const res = await apiClient.patch(`/appointments/${appointmentId}/confirm`);
-      if (res && res.data) return { success: true };
-    } catch {
-      // offline fallback
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Không xác nhận được lịch hẹn.');
     }
-    const queue = getLocalQueue();
-    const updated = queue.map((item) =>
-      item.id === appointmentId ? { ...item, status: 'CONFIRMED' } : item
-    );
-    saveLocalQueue(updated);
-    return { success: true };
   },
 
-  async checkInPatient(appointmentOrId, assignedRoom) {
-    let appointment = appointmentOrId;
-    const queue = getLocalQueue();
-    if (typeof appointmentOrId === 'number' || typeof appointmentOrId === 'string') {
-      const found = queue.find((q) => q.id === Number(appointmentOrId));
-      appointment = found || { id: Number(appointmentOrId), patientId: 1, doctorId: 1, symptoms: 'Tiếp nhận khám' };
+  /**
+   * Check-in: tạo ca khám từ lịch hẹn đã xác nhận.
+   * Bắt buộc lịch hẹn có bệnh nhân và bác sĩ phụ trách thật (không gán mặc định).
+   */
+  async checkInPatient(appointment) {
+    if (!appointment || typeof appointment !== 'object') {
+      throw new Error('Thiếu thông tin lịch hẹn để check-in.');
     }
-    try {
-      const payload = {
-        patientId: appointment.patientId || 1,
-        doctorId: appointment.doctorId || 1,
-        appointmentId: appointment.id,
-        chiefComplaint: appointment.symptoms || 'Tiếp nhận tại quầy lễ tân'
-      };
-      const res = await apiClient.post('/visits', payload);
-      if (res && res.data) {
-        return { success: true, visitId: res.data?.id, status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám đa khoa' };
-      }
-    } catch {
-      // offline fallback
+    if (!appointment.patientId) {
+      throw new Error('Lịch hẹn chưa gắn với hồ sơ bệnh nhân – vui lòng kiểm tra lại hồ sơ.');
     }
-    const updated = queue.map((item) =>
-      item.id === appointment.id ? { ...item, status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám ban đầu 101 (Tầng 1)' } : item
-    );
-    saveLocalQueue(updated);
-    return { success: true, visitId: Date.now(), status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám ban đầu 101 (Tầng 1)' };
-  },
-
-  async quickRegisterPatient(patientData) {
-    try {
-      const res = await apiClient.post('/patients', patientData);
-      if (res && res.data) {
-        return { success: true, patient: res.data };
-      }
-    } catch {
-      // offline fallback
+    if (!appointment.doctorId) {
+      throw new Error('Lịch hẹn chưa có bác sĩ phụ trách – vui lòng phân công bác sĩ trước khi check-in.');
     }
-    const newCode = `BN-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newPatient = {
-      id: Date.now(),
-      patientCode: newCode,
-      ...patientData
-    };
-    // Tự động đưa vào hàng đợi hôm nay
-    const queue = getLocalQueue();
-    queue.push({
-      id: Date.now(),
-      patientId: newPatient.id,
-      patientCode: newPatient.patientCode,
-      fullName: newPatient.fullName,
-      patientName: newPatient.fullName,
-      ticketNumber: `TN-${queue.length + 1}`,
-      dob: newPatient.dob,
-      phone: newPatient.phoneNumber || newPatient.phone,
-      gender: newPatient.gender,
-      departmentName: 'Khoa Tiếp Nhận Ban Đầu',
-      doctorName: 'BS. Trực khám',
-      doctorId: 1,
-      appointmentTime: 'Ngay bây giờ',
-      symptoms: 'Bệnh nhân mới đăng ký tại quầy',
-      status: 'WAITING'
+    const visit = await visitService.createVisit({
+      patientId: appointment.patientId,
+      doctorId: appointment.doctorId,
+      appointmentId: appointment.id,
+      chiefComplaint: appointment.symptoms || undefined
     });
-    saveLocalQueue(queue);
-    return { success: true, patient: newPatient };
+    return { visitId: visit?.id ?? null, visit, status: 'CHECKED_IN' };
+  },
+
+  /** Tạo hồ sơ bệnh nhân tại quầy (kèm thẻ BHYT nếu có). */
+  async quickRegisterPatient(patientData) {
+    const patient = await patientService.createPatient(patientData);
+    return { success: true, patient };
   },
 
   async createPatientProfile(patientData) {
-    const res = await this.quickRegisterPatient(patientData);
-    return res.patient;
+    return patientService.createPatient(patientData);
   },
 
-  async getWaitingQueue() {
-    const items = await this.getTodayQueue();
-    return items.map((it, idx) => ({
-      ...it,
-      patientName: it.fullName || it.patientName,
-      ticketNumber: it.ticketNumber || `TN-${idx + 1}`
-    }));
+  async updatePatientProfile(patientId, patientData) {
+    return patientService.updatePatient(patientId, patientData);
   },
 
-  async searchWaitingPatients(query) {
-    const queue = await this.getWaitingQueue();
+  async searchPatients(keyword) {
+    return patientService.searchPatients(keyword);
+  },
+
+  async getWaitingQueue(options) {
+    const items = await this.getTodayQueue(options);
+    return items.map((it, idx) => ({ ...it, ticketNumber: `STT-${idx + 1}` }));
+  },
+
+  async searchWaitingPatients(query, options) {
+    const queue = await this.getWaitingQueue(options);
     if (!query) return queue;
     const lower = query.toLowerCase();
-    return queue.filter(
-      (q) =>
-        (q.fullName && q.fullName.toLowerCase().includes(lower)) ||
-        (q.patientName && q.patientName.toLowerCase().includes(lower)) ||
-        (q.patientCode && q.patientCode.toLowerCase().includes(lower)) ||
-        (q.phone && q.phone.includes(lower))
-    );
+    return queue.filter((q) =>
+      (q.fullName || '').toLowerCase().includes(lower)
+      || (q.patientCode || '').toLowerCase().includes(lower));
   }
 };
+
+export default receptionService;

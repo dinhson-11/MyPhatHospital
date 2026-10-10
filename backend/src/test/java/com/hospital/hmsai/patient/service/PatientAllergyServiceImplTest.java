@@ -1,5 +1,6 @@
 package com.hospital.hmsai.patient.service;
 
+import com.hospital.hmsai.common.exception.DuplicateResourceException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
 import com.hospital.hmsai.patient.dto.AllergyResponse;
 import com.hospital.hmsai.patient.dto.CreateAllergyRequest;
@@ -135,6 +136,24 @@ class PatientAllergyServiceImplTest {
 
         // Then
         assertEquals(AllergySeverity.MILD, result.getSeverity());
+    }
+
+    @Test
+    @DisplayName("Thêm dị ứng trùng tên (khác hoa/thường, dấu, khoảng trắng) → 409 DuplicateResourceException")
+    void createAllergy_Duplicate_ThrowsDuplicateResource() {
+        Patient patient = Patient.builder().id(1L).patientCode("BN-001").build();
+        PatientAllergy existing = PatientAllergy.builder()
+                .id(5L).patient(patient).allergen("Hải sản").severity(AllergySeverity.MODERATE).build();
+        CreateAllergyRequest request = CreateAllergyRequest.builder()
+                .allergen("  HAI SAN ")
+                .severity(AllergySeverity.SEVERE)
+                .build();
+
+        when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
+        when(allergyRepository.findByPatientId(1L)).thenReturn(List.of(existing));
+
+        assertThrows(DuplicateResourceException.class, () -> allergyService.create(1L, request));
+        verify(allergyRepository, never()).save(any());
     }
 
     // ==================== DELETE ====================
