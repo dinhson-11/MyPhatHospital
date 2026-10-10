@@ -22,6 +22,7 @@ async def send_message(request: ChatMessageRequest) -> ChatMessageResponse:
     Nhận tin nhắn từ bệnh nhân, phân loại intent và trả về phản hồi phù hợp.
 
     Intent types:
+    - **EMERGENCY**: Dấu hiệu cấp cứu (cờ đỏ) → hướng dẫn gọi 115 / hotline cấp cứu (ưu tiên cao nhất)
     - **SYMPTOM_CHECK**: Phân tích triệu chứng → gợi ý chuyên khoa
     - **BOOKING**: Hỏi đặt lịch khám
     - **FAQ**: Câu hỏi về giờ khám, BHYT, chi phí, địa chỉ...

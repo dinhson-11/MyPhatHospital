@@ -13,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -312,5 +314,97 @@ class ChatServiceImplTest {
 
         assertThat(testSession.getEndedAt()).isNotNull();
         verify(sessionRepository).save(testSession);
+    }
+
+    // =========================================================================
+    // Fallback cục bộ: dấu hiệu cờ đỏ (đồng bộ với AI Service) & so khớp nguyên từ
+    // =========================================================================
+    private ChatMessageResponseDto sendWithAiDown(String message) {
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(testSession));
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(AiChatbotResponse.class)))
+                .thenThrow(new RestClientException("Connection refused"));
+        when(messageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> inv.getArgument(0));
+        return chatService.sendMessage(SendChatMessageRequest.builder().sessionId(10L).message(message).build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Tôi bị đau ngực dữ dội",
+            "đau thắt ngực kèm vã mồ hôi",
+            "đau ngực lan ra tay trái",
+            "bố tôi méo miệng, nói ngọng",
+            "mẹ tôi yếu nửa người",
+            "con tôi không thở được, môi tím",
+            "bị sốc phản vệ sau tiêm",
+            "sau khi uống thuốc bị sưng môi",
+            "dị ứng hải sản rồi khó thở",
+            "tôi vừa bị ngất",
+            "ho ra máu",
+            "đang mang thai bị ra máu",
+            "có bầu 8 tuần đau bụng dữ dội",
+            "tôi uống thuốc quá liều",
+            "lỡ uống quá liều thuốc ngủ",
+            "bé 2 tháng tuổi bị sốt",
+            "trẻ sơ sinh bị sốt",
+            "dot quy",
+            "dau nguc du doi kho tho",
+            "uong thuoc qua lieu"
+    })
+    @DisplayName("Fallback: mọi dấu hiệu cờ đỏ (kể cả gõ không dấu) → EMERGENCY, không hiện nút đặt lịch")
+    void fallback_redFlags_returnEmergency(String message) {
+        ChatMessageResponseDto response = sendWithAiDown(message);
+
+        assertThat(response.getIntent()).as(message).isEqualTo("EMERGENCY");
+        assertThat(response.getShowBookingButton()).isFalse();
+        assertThat(response.getMessage()).contains("115").contains("0789 065 493");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"tôi muốn chết", "muon chet", "tôi không muốn sống nữa", "tôi định tự tử"})
+    @DisplayName("Fallback: ý định tự sát → EMERGENCY kèm đường dây hỗ trợ tâm lý")
+    void fallback_suicide_includesMentalHealthSupport(String message) {
+        ChatMessageResponseDto response = sendWithAiDown(message);
+
+        assertThat(response.getIntent()).isEqualTo("EMERGENCY");
+        assertThat(response.getMessage()).contains("115").contains("Hỗ trợ tâm lý");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Tôi bị đau ngực trái và hồi hộp",
+            "tôi bị đau họng và ngạt mũi",
+            "đau từ từ tăng dần",
+            "bé 2 tuổi bị sốt",
+            "con tôi bị sốt 2 ngày nay"
+    })
+    @DisplayName("Fallback: không leo thang nhầm ('ngạt' ≠ 'ngất', 'từ từ' ≠ 'tự tử', trẻ ≥ 3 tháng)")
+    void fallback_nonEmergency_notEscalated(String message) {
+        assertThat(sendWithAiDown(message).getIntent()).as(message).isNotEqualTo("EMERGENCY");
+    }
+
+    @Test
+    @DisplayName("Fallback: 'ho' khớp nguyên từ – 'cho', 'khoa' không bị coi là triệu chứng hô hấp")
+    void fallback_hoKeyword_wordBoundary() {
+        ChatMessageResponseDto response = sendWithAiDown("cho tôi hỏi khoa nào khám");
+
+        assertThat(response.getSuggestedDepartment().getReason())
+                .isEqualTo("Khám sức khỏe tổng quát và sàng lọc ban đầu");
+    }
+
+    @Test
+    @DisplayName("Fallback: tin nhắn có triệu chứng không bị trả lời như FAQ giờ khám")
+    void fallback_symptomMessage_notAnsweredAsFaq() {
+        ChatMessageResponseDto response = sendWithAiDown("đau bụng mấy giờ nay rồi");
+
+        assertThat(response.getIntent()).isEqualTo("SYMPTOM_CHECK");
+        assertThat(response.getSuggestedDepartment()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Fallback: 'có bầu' / 'mang bầu' → Sản - Phụ khoa")
+    void fallback_colloquialPregnancy_routesToObgyn() {
+        ChatMessageResponseDto response = sendWithAiDown("tôi có bầu được 3 tháng muốn đi khám");
+
+        assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(3);
     }
 }

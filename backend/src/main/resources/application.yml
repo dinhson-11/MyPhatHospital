@@ -38,6 +38,21 @@ ai-service:
   base-url: ${AI_SERVICE_URL:http://localhost:8000}
   timeout: 3000   # 3 giây (NFR-3)
 
+# Viện phí (FR-7)
+billing:
+  consultation-fee: ${BILLING_CONSULTATION_FEE:150000}
+  insurance:
+    base-salary: ${BHYT_BASE_SALARY:2340000}      # Mức lương cơ sở hiện hành (VNĐ) – cập nhật khi Nhà nước điều chỉnh
+    low-cost-threshold-ratio: 0.15                 # Chi phí < 15% lương cơ sở → BHYT chi trả 100%
+  vietqr:
+    # Để trống = tắt VietQR (giao diện chỉ cho thu tiền mặt / thẻ / chuyển khoản có mã GD)
+    bank-bin: ${VIETQR_BANK_BIN:}
+    bank-name: ${VIETQR_BANK_NAME:}
+    account-no: ${VIETQR_ACCOUNT_NO:}
+    account-name: ${VIETQR_ACCOUNT_NAME:}
+    template: compact2
+    demo: false
+
 # Swagger / OpenAPI
 springdoc:
   api-docs:

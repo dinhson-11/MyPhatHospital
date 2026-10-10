@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import scheduleService from '../../services/scheduleService';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import Modal from '../common/Modal';
+import { useConfirm } from '../common/ConfirmDialog';
+import scheduleService, { SHIFT_ORDER, getShiftInfo } from '../../services/scheduleService';
+import { getErrorMessage } from '../../services/apiError';
 import { useAuth } from '../../context/AuthContext';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { formatDate, todayISO } from '../../utils/format';
 
 const DEPARTMENTS_LIST = [
   { id: '', name: 'Tất cả khoa phòng' },
@@ -17,6 +20,77 @@ const DEPARTMENTS_LIST = [
   { id: '17', name: 'Dịch vụ Bảo hiểm Y tế (BHYT)' }
 ];
 
+const DAY_NAMES = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+const DEFAULT_ROOM = 'Phòng khám ban đầu 101 (Tầng 1)';
+
+/** Màu phân loại ca (không dùng đỏ/vàng để tránh nhầm với cảnh báo) + biểu tượng để không chỉ dựa vào màu. */
+const SHIFT_STYLE = {
+  MORNING: { icon: 'light_mode', badge: 'bg-sky-50 text-sky-800 border-sky-200' },
+  AFTERNOON: { icon: 'wb_twilight', badge: 'bg-teal-50 text-teal-800 border-teal-200' },
+  NIGHT: { icon: 'dark_mode', badge: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
+  FULL_DAY: { icon: 'schedule', badge: 'bg-slate-100 text-slate-700 border-slate-200' }
+};
+
+const pad = (n) => String(n).padStart(2, '0');
+/** yyyy-MM-dd theo giờ máy (không dùng toISOString để tránh lệch ngày do UTC). */
+const toLocalISODate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+function getWeekDays(weekOffset) {
+  const monday = new Date();
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) + weekOffset * 7);
+  return DAY_NAMES.map((dayName, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return { dateStr: toLocalISODate(d), dayName };
+  });
+}
+
+const shiftRank = (shift) => {
+  const idx = SHIFT_ORDER.indexOf(shift);
+  return idx === -1 ? SHIFT_ORDER.length : idx;
+};
+
+function ShiftItem({ item, dayName, canDelete, onDelete }) {
+  const info = getShiftInfo(item.shift);
+  const style = SHIFT_STYLE[item.shift] || SHIFT_STYLE.FULL_DAY;
+  const department = item.specialty || item.departmentName;
+
+  return (
+    <li className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-xs">
+      <div className="flex items-start justify-between gap-1.5">
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${style.badge}`}>
+          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">{style.icon}</span>
+          {info.label}
+        </span>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(item, dayName)}
+            aria-label={`Xóa ca ${info.label} ngày ${formatDate(item.workDate)} của ${item.staffName}`}
+            title="Xóa ca trực"
+            className="-mt-1 -mr-1 w-8 h-8 shrink-0 rounded-lg text-slate-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/40"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-slate-500 tabular-nums">{info.time}</p>
+      <p className="mt-1.5 text-sm font-semibold text-slate-900 leading-snug break-words">{item.staffName}</p>
+      {department && (
+        <p className="text-slate-600 line-clamp-2" title={department}>{department}</p>
+      )}
+      <p className="mt-1.5 flex items-start gap-1 text-slate-600">
+        <span className="material-symbols-outlined text-[14px] text-slate-400 mt-px" aria-hidden="true">meeting_room</span>
+        <span className="break-words min-w-0">{item.roomNo || 'Phòng trực'}</span>
+      </p>
+      {item.note && (
+        <p className="mt-1 text-slate-500 italic line-clamp-2" title={item.note}>{item.note}</p>
+      )}
+    </li>
+  );
+}
+
 export default function StaffScheduleModal({
   isOpen,
   onClose,
@@ -24,128 +98,157 @@ export default function StaffScheduleModal({
   initialDeptId = '',
   initialStaffId = ''
 }) {
-  const { user, isAdmin, isAuthenticated, isDoctor, isReceptionist, isNurse, isPharmacist, isAccountant } = useAuth();
+  const { isAdmin, isAuthenticated, isDoctor, isReceptionist, isNurse, isPharmacist, isAccountant } = useAuth();
   const canView = isAuthenticated && (isAdmin || isDoctor || isReceptionist || isNurse || isPharmacist || isAccountant);
-  useEscapeKey(isOpen, () => {
-    if (showAddModal) {
-      setShowAddModal(false);
-    } else {
-      onClose();
-    }
-  });
+  const active = Boolean(isOpen && canView);
+  const confirm = useConfirm();
 
-  const [schedules, setSchedules] = useState([]);
-  const [staffList, setStaffList] = useState([]);
   const [selectedDeptId, setSelectedDeptId] = useState(initialDeptId || '');
   const [selectedStaffId, setSelectedStaffId] = useState(initialStaffId || '');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(0);
 
-  // Đồng bộ bộ lọc khi modal được mở lại với bác sĩ/khoa khác
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedDeptId(initialDeptId || '');
-      setSelectedStaffId(initialStaffId || '');
-    }
-  }, [isOpen, initialDeptId, initialStaffId]);
-
-  // Tuần hiện tại
-  const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  // Kết quả tải dữ liệu gắn với "khóa truy vấn": khóa khác kết quả hiện có ⇒ đang tải
+  const [scheduleResult, setScheduleResult] = useState({ key: null, data: [], error: '' });
+  const [scheduleReloadToken, setScheduleReloadToken] = useState(0);
+  const [staffResult, setStaffResult] = useState({ token: null, list: [], error: '' });
+  const [staffReloadToken, setStaffReloadToken] = useState(0);
 
   // Form xếp lịch trực mới (Admin)
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStaffId, setNewStaffId] = useState('');
   const [newDeptId, setNewDeptId] = useState('1');
-  const [newDate, setNewDate] = useState('');
+  const [newDate, setNewDate] = useState(todayISO());
   const [newShift, setNewShift] = useState('MORNING');
-  const [newRoom, setNewRoom] = useState('Phòng khám ban đầu 101 (Tầng 1)');
+  const [newRoom, setNewRoom] = useState(DEFAULT_ROOM);
   const [newNote, setNewNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  useEffect(() => {
+  const ids = {
+    form: useId(),
+    dept: useId(),
+    staff: useId(),
+    search: useId(),
+    newStaff: useId(),
+    newDate: useId(),
+    newShift: useId(),
+    newDept: useId(),
+    newRoom: useId(),
+    newNote: useId()
+  };
+
+  // Đồng bộ bộ lọc khi modal được mở lại với bác sĩ/khoa khác (điều chỉnh state ngay khi render)
+  const openSyncKey = `${Boolean(isOpen)}|${initialDeptId}|${initialStaffId}`;
+  const [prevOpenSyncKey, setPrevOpenSyncKey] = useState(openSyncKey);
+  if (openSyncKey !== prevOpenSyncKey) {
+    setPrevOpenSyncKey(openSyncKey);
     if (isOpen) {
-      loadStaff();
-      // Set default newDate là ngày hôm nay
-      setNewDate(new Date().toISOString().split('T')[0]);
+      setSelectedDeptId(initialDeptId || '');
+      setSelectedStaffId(initialStaffId || '');
+    } else {
+      setShowAddModal(false);
     }
-  }, [isOpen]);
+  }
 
+  const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset]);
+  const weekStart = weekDays[0].dateStr;
+  const weekEnd = weekDays[6].dateStr;
+  const todayStr = todayISO();
+
+  const scheduleKey = [selectedDeptId, selectedStaffId, weekStart, weekEnd, scheduleReloadToken].join('|');
+  const loading = active && scheduleResult.key !== scheduleKey;
+  const schedules = scheduleResult.data;
+  const loadError = loading ? '' : scheduleResult.error;
+  const staffList = staffResult.list;
+  const staffError = staffResult.token === staffReloadToken ? staffResult.error : '';
+
+  const reloadSchedules = useCallback(() => setScheduleReloadToken(t => t + 1), []);
+  const reloadStaff = useCallback(() => setStaffReloadToken(t => t + 1), []);
+
+  // Tải danh bạ nhân sự mỗi lần mở
   useEffect(() => {
-    if (isOpen) {
-      loadSchedules();
-    }
-  }, [isOpen, currentWeekOffset, selectedDeptId, selectedStaffId]);
-
-  const loadStaff = async () => {
-    try {
-      const list = await scheduleService.getStaffList();
-      setStaffList(list);
-      if (list && list.length > 0 && !newStaffId) {
-        setNewStaffId(String(list[0].id));
-        setNewDeptId(String(list[0].departmentId || 1));
-        setNewRoom(list[0].roomNo || 'Phòng khám ban đầu 101 (Tầng 1)');
+    if (!active) return undefined;
+    let cancelled = false;
+    scheduleService.getStaffList().then(
+      (list) => {
+        if (!cancelled) setStaffResult({ token: staffReloadToken, list: Array.isArray(list) ? list : [], error: '' });
+      },
+      (err) => {
+        if (!cancelled) {
+          setStaffResult(prev => ({
+            token: staffReloadToken,
+            list: prev.list,
+            error: getErrorMessage(err, 'Không tải được danh sách nhân viên y tế.')
+          }));
+        }
       }
-    } catch (e) {
-      console.error(e);
-    }
+    );
+    return () => { cancelled = true; };
+  }, [active, staffReloadToken]);
+
+  // Tải lịch trực theo tuần + bộ lọc; phản hồi cũ (đổi tuần liên tục) bị bỏ qua
+  useEffect(() => {
+    if (!active) return undefined;
+    let cancelled = false;
+    scheduleService.getSchedules({
+      departmentId: selectedDeptId || undefined,
+      staffId: selectedStaffId || undefined,
+      startDate: weekStart,
+      endDate: weekEnd
+    }).then(
+      (data) => {
+        if (!cancelled) setScheduleResult({ key: scheduleKey, data: Array.isArray(data) ? data : [], error: '' });
+      },
+      (err) => {
+        if (!cancelled) {
+          setScheduleResult({
+            key: scheduleKey,
+            data: [],
+            error: getErrorMessage(err, 'Không tải được lịch trực. Vui lòng thử lại.')
+          });
+        }
+      }
+    );
+    return () => { cancelled = true; };
+  }, [active, scheduleKey, selectedDeptId, selectedStaffId, weekStart, weekEnd]);
+
+  const applyStaffDefaults = (staff) => {
+    if (!staff) return;
+    setNewStaffId(String(staff.id));
+    if (staff.departmentId) setNewDeptId(String(staff.departmentId));
+    setNewRoom(staff.roomNo || DEFAULT_ROOM);
+  };
+
+  const openAddForm = () => {
+    if (!newStaffId && staffList.length > 0) applyStaffDefaults(staffList[0]);
+    setNewDate(todayISO());
+    setFormError('');
+    setShowAddModal(true);
+  };
+
+  const closeAddForm = () => {
+    setShowAddModal(false);
+    setFormError('');
   };
 
   const handleStaffSelectInAdd = (staffIdStr) => {
-    setNewStaffId(staffIdStr);
-    const s = staffList.find(item => item.id === Number(staffIdStr));
-    if (s) {
-      if (s.departmentId) setNewDeptId(String(s.departmentId));
-      if (s.roomNo) setNewRoom(s.roomNo);
-    }
-  };
-
-  const getWeekDays = () => {
-    const today = new Date();
-    // Chuyển về Thứ 2 của tuần này
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + currentWeekOffset * 7;
-    const monday = new Date(today.setDate(diff));
-
-    const week = [];
-    const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
-
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      week.push({
-        dateStr: d.toISOString().split('T')[0],
-        dayName: dayNames[i],
-        displayDate: `${d.getDate()}/${d.getMonth() + 1}`
-      });
-    }
-    return week;
-  };
-
-  const weekDays = getWeekDays();
-
-  const loadSchedules = async () => {
-    setLoading(true);
-    try {
-      const startDate = weekDays[0].dateStr;
-      const endDate = weekDays[6].dateStr;
-      const data = await scheduleService.getSchedules({
-        departmentId: selectedDeptId || undefined,
-        staffId: selectedStaffId || undefined,
-        startDate,
-        endDate
-      });
-      setSchedules(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
+    const staff = staffList.find(item => String(item.id) === staffIdStr);
+    if (staff) {
+      applyStaffDefaults(staff);
+    } else {
+      setNewStaffId(staffIdStr);
     }
   };
 
   const handleAddSchedule = async (e) => {
     e.preventDefault();
-    if (!newStaffId || !newDate) return;
+    if (!newStaffId || !newDate) {
+      setFormError('Vui lòng chọn nhân viên và ngày trực.');
+      return;
+    }
     setIsSubmitting(true);
+    setFormError('');
     try {
       await scheduleService.createSchedule({
         staffId: Number(newStaffId),
@@ -158,450 +261,408 @@ export default function StaffScheduleModal({
       onShowToast?.('Xếp lịch trực thành công!', 'success');
       setShowAddModal(false);
       setNewNote('');
-      loadSchedules();
+      reloadSchedules();
     } catch (err) {
-      onShowToast?.(err.message || 'Lỗi khi xếp lịch trực', 'error');
+      setFormError(getErrorMessage(err, 'Không xếp được lịch trực. Vui lòng thử lại.'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteSchedule = async (id, staffName) => {
-    if (!window.confirm(`Xác nhận xóa ca trực của ${staffName}?`)) return;
+  const handleDeleteSchedule = async (item, dayName) => {
+    const info = getShiftInfo(item.shift);
+    const ok = await confirm({
+      title: 'Xóa ca trực này?',
+      message: 'Ca trực sẽ bị xóa khỏi bảng phân công. Thao tác này không thể hoàn tác.',
+      details: [
+        `Nhân viên: ${item.staffName}`,
+        `Ngày: ${dayName ? `${dayName}, ` : ''}${formatDate(item.workDate)}`,
+        `Ca: ${info.label} (${info.time})`,
+        item.roomNo ? `Phòng: ${item.roomNo}` : null
+      ].filter(Boolean),
+      confirmText: 'Xóa ca trực',
+      tone: 'danger'
+    });
+    if (!ok) return;
     try {
-      await scheduleService.deleteSchedule(id);
-      onShowToast?.('Đã xóa ca trực!', 'success');
-      loadSchedules();
+      await scheduleService.deleteSchedule(item.id);
+      onShowToast?.('Đã xóa ca trực.', 'success');
+      reloadSchedules();
     } catch (err) {
-      onShowToast?.('Lỗi khi xóa ca trực', 'error');
+      onShowToast?.(getErrorMessage(err, 'Không xóa được ca trực. Vui lòng thử lại.'), 'error');
     }
   };
 
-  const getShiftBadge = (shift) => {
-    switch (shift) {
-      case 'MORNING':
-        return {
-          label: 'Sáng (07:30 - 11:30)',
-          short: 'Ca Sáng',
-          time: '07:30 - 11:30',
-          class: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
-        };
-      case 'AFTERNOON':
-        return {
-          label: 'Chiều (13:30 - 17:00)',
-          short: 'Ca Chiều',
-          time: '13:30 - 17:00',
-          class: 'bg-teal-100 text-teal-900 border-teal-300 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800'
-        };
-      case 'NIGHT':
-        return {
-          label: 'Đêm (17:00 - 07:30)',
-          short: 'Trực Đêm Cấp Cứu',
-          time: '17:00 - 07:30',
-          class: 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800'
-        };
-      default:
-        return {
-          label: 'Cả ngày (07:30 - 17:00)',
-          short: 'Cả ngày',
-          time: '07:30 - 17:00',
-          class: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800'
-        };
-    }
-  };
-
-  // Lọc thêm theo từ khóa tìm kiếm nếu có
-  const filteredSchedules = schedules.filter(item => {
-    if (!searchKeyword.trim()) return true;
-    const kw = searchKeyword.toLowerCase();
-    return (
-      (item.staffName && item.staffName.toLowerCase().includes(kw)) ||
-      (item.specialty && item.specialty.toLowerCase().includes(kw)) ||
-      (item.roomNo && item.roomNo.toLowerCase().includes(kw)) ||
-      (item.note && item.note.toLowerCase().includes(kw))
+  // Lọc thêm theo từ khóa tìm kiếm
+  const keyword = searchKeyword.trim().toLowerCase();
+  const filteredSchedules = useMemo(() => {
+    if (!keyword) return schedules;
+    return schedules.filter(item =>
+      [item.staffName, item.specialty, item.departmentName, item.roomNo, item.note]
+        .some(v => v && String(v).toLowerCase().includes(keyword))
     );
-  });
+  }, [schedules, keyword]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const schedulesByDay = useMemo(() => {
+    const map = {};
+    filteredSchedules.forEach(item => {
+      (map[item.workDate] = map[item.workDate] || []).push(item);
+    });
+    Object.values(map).forEach(list =>
+      list.sort((a, b) => shiftRank(a.shift) - shiftRank(b.shift)
+        || String(a.staffName || '').localeCompare(String(b.staffName || ''), 'vi'))
+    );
+    return map;
+  }, [filteredSchedules]);
+
   const todaySchedulesCount = schedules.filter(s => s.workDate === todayStr).length;
 
-  if (!isOpen || !canView) return null;
+  if (!canView) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-teal-100 dark:border-slate-800 w-full max-w-7xl max-h-[94vh] flex flex-col overflow-hidden">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-teal-900 via-teal-800 to-emerald-800 text-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center backdrop-blur-md shrink-0 shadow-sm border border-white/20">
-              <span className="material-symbols-outlined text-white text-[26px]">calendar_month</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold tracking-tight">Lịch Trực Nhân Viên Y Tế</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 uppercase tracking-wider">
-                  Mỹ Phát Hospital
-                </span>
-              </div>
-              <p className="text-xs text-teal-100/90 mt-0.5">
-                Bảng phân công trực ban bác sĩ chuyên khoa & điều dưỡng • Cấp cứu trực 24/24: <strong className="text-white">0789 065 493</strong>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block px-2.5 py-1 text-[10px] font-mono text-teal-100/80 border border-teal-100/30 rounded-lg">
-              ESC
-            </span>
-            <button 
-              onClick={onClose} 
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer"
-              title="Đóng (Esc)"
-            >
-              <span className="material-symbols-outlined text-white text-[20px]">close</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Toolbar: Điều hướng tuần, lọc khoa & nút Thêm lịch */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/50 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5 shadow-2xs">
-              <button
-                onClick={() => setCurrentWeekOffset(prev => prev - 1)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer transition-colors"
-                title="Tuần trước"
-              >
-                <span className="material-symbols-outlined text-base">chevron_left</span>
-              </button>
-              <button
-                onClick={() => setCurrentWeekOffset(0)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg cursor-pointer transition-colors ${
-                  currentWeekOffset === 0
-                    ? 'bg-teal-700 text-white shadow-2xs'
-                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-                }`}
-              >
-                Tuần này
-              </button>
-              <button
-                onClick={() => setCurrentWeekOffset(prev => prev + 1)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer transition-colors"
-                title="Tuần sau"
-              >
-                <span className="material-symbols-outlined text-base">chevron_right</span>
-              </button>
-            </div>
-
-            <div className="text-xs text-slate-600 dark:text-slate-300 ml-1 hidden md:block">
-              Từ <strong>{weekDays[0].displayDate}</strong> đến <strong>{weekDays[6].displayDate}</strong>
-            </div>
-          </div>
-
-          {/* Quick Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Lọc chuyên khoa */}
-            <select
-              value={selectedDeptId}
-              onChange={(e) => setSelectedDeptId(e.target.value)}
-              className="text-xs px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium focus:ring-2 focus:ring-teal-600 focus:outline-none"
-            >
-              {DEPARTMENTS_LIST.map((dept) => (
-                <option key={dept.id || 'all'} value={dept.id}>
-                  {dept.name}
-                </option>
-              ))}
-            </select>
-
-            {/* Lọc đích danh Bác sĩ */}
-            <select
-              value={selectedStaffId}
-              onChange={(e) => setSelectedStaffId(e.target.value)}
-              className="text-xs px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium focus:ring-2 focus:ring-teal-600 focus:outline-none max-w-[200px] truncate"
-            >
-              <option value="">Tất cả Bác sĩ & Nhân sự</option>
-              {staffList.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.fullName}
-                </option>
-              ))}
-            </select>
-
-            {/* Tìm kiếm nhanh */}
-            <div className="relative hidden xl:block">
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="Tìm tên bác sĩ, phòng..."
-                className="text-xs pl-8 pr-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 w-44 focus:w-56 transition-all focus:ring-2 focus:ring-teal-600 focus:outline-none"
-              />
-              <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-slate-400">
-                search
-              </span>
-            </div>
-
-            {/* Quyền ADMIN: xếp lịch trực mới */}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-3.5 py-1.5 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl shadow-xs hover:shadow flex items-center gap-1.5 transition-all cursor-pointer hover:scale-102"
-            >
-              <span className="material-symbols-outlined text-[16px]">add_circle</span>
-              <span>Xếp ca trực</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Thông tin tóm tắt & Ca trực hôm nay */}
-        <div className="px-6 py-2 bg-teal-50/60 dark:bg-slate-800/30 border-b border-teal-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 shrink-0">
-          <div className="flex items-center gap-4">
-            <span className="inline-flex items-center gap-1.5 font-medium text-teal-900 dark:text-teal-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              <span>Hôm nay có <strong>{todaySchedulesCount}</strong> ca trực sẵn sàng phục vụ</span>
-            </span>
-            <span className="text-slate-300 dark:text-slate-700">|</span>
-            <span className="hidden sm:inline">Tổng <strong>{filteredSchedules.length}</strong> ca trực trong tuần</span>
-          </div>
-
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-              <span>Sáng (07:30 - 11:30)</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
-              <span>Chiều (13:30 - 17:00)</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-              <span>Đêm Cấp Cứu (17:00 - 07:30)</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Lịch trực 7 ngày trong tuần */}
-        <div className="flex-1 overflow-x-auto overflow-y-auto p-4 bg-slate-100/50 dark:bg-slate-950/40 relative">
-          {loading && (
-            <div className="absolute top-2 right-4 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-800 text-white text-[11px] font-semibold shadow-md animate-pulse">
-              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              <span>Đang cập nhật...</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-7 gap-3 min-w-[1050px]">
-            {weekDays.map((day, idx) => {
-              const daySchedules = filteredSchedules.filter(s => s.workDate === day.dateStr);
-              const isToday = day.dateStr === todayStr;
-
-              return (
-                <div
-                  key={idx}
-                  className={`flex flex-col rounded-2xl border transition-all duration-200 overflow-hidden ${
-                    isToday
-                      ? 'border-teal-500 bg-teal-50/20 dark:bg-teal-950/20 shadow-md ring-2 ring-teal-500/20'
-                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs'
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Lịch Trực Nhân Viên Y Tế"
+        subtitle={(
+          <>
+            Phân công trực bác sĩ chuyên khoa &amp; điều dưỡng · Cấp cứu 24/24:{' '}
+            <a href="tel:0789065493" className="font-semibold text-primary hover:underline whitespace-nowrap">
+              0789 065 493
+            </a>
+          </>
+        )}
+        icon="calendar_month"
+        size="full"
+        bodyClassName="overflow-y-auto bg-slate-50 sm:rounded-b-2xl"
+      >
+        {/* Thanh công cụ: điều hướng tuần, bộ lọc, xếp ca */}
+        <div className="lg:sticky lg:top-0 z-10 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div role="group" aria-label="Chọn tuần" className="inline-flex items-center rounded-xl border border-slate-300 bg-white p-0.5 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setWeekOffset(prev => prev - 1)}
+                  aria-label="Tuần trước"
+                  title="Tuần trước"
+                  className="w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWeekOffset(0)}
+                  aria-pressed={weekOffset === 0}
+                  className={`h-9 px-3 text-sm font-semibold rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                    weekOffset === 0 ? 'bg-primary text-white' : 'text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  {/* Cột Header ngày */}
-                  <div className={`p-3 text-center border-b ${
-                    isToday
-                      ? 'bg-gradient-to-r from-teal-700 to-emerald-700 text-white font-bold'
-                      : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-semibold'
-                  }`}>
-                    <div className="flex items-center justify-center gap-1">
-                      <span className="text-xs uppercase tracking-wide">{day.dayName}</span>
-                      {isToday && (
-                        <span className="px-1.5 py-0.2 rounded-full bg-white/25 text-[9px] font-extrabold uppercase">
-                          Hôm nay
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-base font-black mt-0.5">{day.displayDate}</div>
-                  </div>
-
-                  {/* Danh sách ca trực trong ngày */}
-                  <div className="flex-1 p-2.5 space-y-2.5 min-h-[300px] overflow-y-auto">
-                    {daySchedules.length > 0 ? (
-                      daySchedules.map((item) => {
-                        const shiftBadge = getShiftBadge(item.shift);
-                        return (
-                          <div
-                            key={item.id}
-                            className="p-3 rounded-xl border bg-white dark:bg-slate-800/90 shadow-2xs space-y-1.5 text-xs transition-all duration-200 hover:shadow-md hover:border-teal-300 dark:hover:border-teal-700 group"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border tracking-tight ${shiftBadge.class}`}>
-                                {shiftBadge.short}
-                              </span>
-                              {isAdmin && (
-                                <button
-                                  onClick={() => handleDeleteSchedule(item.id, item.staffName)}
-                                  className="text-slate-300 hover:text-red-500 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="Hủy ca trực"
-                                >
-                                  <span className="material-symbols-outlined text-[15px]">delete</span>
-                                </button>
-                              )}
-                            </div>
-
-                            <div>
-                              <p className="font-bold text-slate-900 dark:text-slate-100 leading-snug">
-                                {item.staffName}
-                              </p>
-                              <p className="text-[11px] text-teal-800 dark:text-teal-300 font-medium truncate mt-0.5">
-                                {item.specialty || item.departmentName}
-                              </p>
-                            </div>
-
-                            <div className="pt-1 border-t border-slate-100 dark:border-slate-800/80 space-y-0.5">
-                              <p className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1 font-mono">
-                                <span className="material-symbols-outlined text-[13px] text-teal-600">meeting_room</span>
-                                <span className="truncate">{item.roomNo || 'Phòng trực'}</span>
-                              </p>
-                              {item.note && (
-                                <p className="text-[10px] text-slate-400 dark:text-slate-500 italic truncate" title={item.note}>
-                                  {item.note}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-full text-slate-300 dark:text-slate-600 text-[11px] italic py-10">
-                        <span className="material-symbols-outlined text-2xl text-slate-200 dark:text-slate-700 mb-1">event_busy</span>
-                        <span>Không có ca trực</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Modal Thêm ca trực (Admin) */}
-        {showAddModal && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 w-full max-w-lg space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-teal-700">event_available</span>
-                  Xếp Lịch Trực Cho Nhân Viên
-                </h3>
+                  Tuần này
+                </button>
                 <button
-                  onClick={() => setShowAddModal(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 flex items-center justify-center cursor-pointer"
+                  type="button"
+                  onClick={() => setWeekOffset(prev => prev + 1)}
+                  aria-label="Tuần sau"
+                  title="Tuần sau"
+                  className="w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
-                  <span className="material-symbols-outlined text-base">close</span>
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">chevron_right</span>
                 </button>
               </div>
 
-              <form onSubmit={handleAddSchedule} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nhân viên y tế:</label>
-                  <select
-                    value={newStaffId}
-                    onChange={(e) => handleStaffSelectInAdd(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                    required
-                  >
-                    {staffList.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.fullName} ({s.specialty})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <p className="text-sm text-slate-700 tabular-nums" aria-live="polite">
+                <strong>{formatDate(weekStart)}</strong> – <strong>{formatDate(weekEnd)}</strong>
+              </p>
+            </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Ngày trực:</label>
-                    <input
-                      type="date"
-                      value={newDate}
-                      onChange={(e) => setNewDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                      required
-                    />
-                  </div>
+            {isAdmin && (
+              <button type="button" onClick={openAddForm} className="btn btn-primary btn-sm">
+                <span className="material-symbols-outlined" aria-hidden="true">add</span>
+                <span>Xếp ca trực</span>
+              </button>
+            )}
+          </div>
 
-                  <div>
-                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Ca trực:</label>
-                    <select
-                      value={newShift}
-                      onChange={(e) => setNewShift(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                    >
-                      <option value="MORNING">Ca Sáng (07:30 - 11:30)</option>
-                      <option value="AFTERNOON">Ca Chiều (13:30 - 17:00)</option>
-                      <option value="NIGHT">Ca Đêm / Cấp cứu (17:00 - 07:30)</option>
-                      <option value="FULL_DAY">Ca Cả ngày (07:30 - 17:00)</option>
-                    </select>
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label htmlFor={ids.dept} className="sr-only">Lọc theo khoa phòng</label>
+              <select
+                id={ids.dept}
+                value={selectedDeptId}
+                onChange={(e) => setSelectedDeptId(e.target.value)}
+                className="select"
+              >
+                {DEPARTMENTS_LIST.map((dept) => (
+                  <option key={dept.id || 'all'} value={dept.id}>{dept.name}</option>
+                ))}
+              </select>
+            </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Khoa / Phòng ban:</label>
-                    <select
-                      value={newDeptId}
-                      onChange={(e) => setNewDeptId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                    >
-                      {DEPARTMENTS_LIST.filter(d => d.id !== '').map(d => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+            <div>
+              <label htmlFor={ids.staff} className="sr-only">Lọc theo nhân viên</label>
+              <select
+                id={ids.staff}
+                value={selectedStaffId}
+                onChange={(e) => setSelectedStaffId(e.target.value)}
+                className="select"
+              >
+                <option value="">Tất cả bác sĩ &amp; nhân sự</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.fullName}</option>
+                ))}
+              </select>
+            </div>
 
-                  <div>
-                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Phòng trực:</label>
-                    <input
-                      type="text"
-                      value={newRoom}
-                      onChange={(e) => setNewRoom(e.target.value)}
-                      placeholder="VD: Phòng khám ban đầu 101"
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Ghi chú phân công:</label>
-                  <input
-                    type="text"
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    placeholder="VD: Phụ trách ca khám ngoại trú, sơ cấp cứu..."
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-600 focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 text-xs font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="px-5 py-2 text-xs font-bold rounded-xl bg-teal-700 hover:bg-teal-800 text-white shadow-sm cursor-pointer transition-colors"
-                  >
-                    {isSubmitting ? 'Đang lưu...' : 'Lưu ca trực'}
-                  </button>
-                </div>
-              </form>
+            <div className="input-group">
+              <label htmlFor={ids.search} className="sr-only">Tìm theo tên, chuyên khoa, phòng</label>
+              <span className="input-icon material-symbols-outlined" aria-hidden="true">search</span>
+              <input
+                id={ids.search}
+                type="search"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                placeholder="Tìm tên bác sĩ, phòng..."
+                className="input"
+              />
             </div>
           </div>
-        )}
 
-      </div>
-    </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
+            {weekOffset === 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+                <span>Hôm nay có <strong className="text-slate-900">{todaySchedulesCount}</strong> ca trực</span>
+              </span>
+            )}
+            <span>Tổng <strong className="text-slate-900">{filteredSchedules.length}</strong> ca trong tuần</span>
+            <span role="status" className="inline-flex items-center gap-1.5 text-primary">
+              {loading && (
+                <>
+                  <span className="spinner" aria-hidden="true"></span>
+                  <span>Đang tải lịch trực...</span>
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+
+        <div className="px-4 sm:px-6 pt-4 space-y-3 empty:hidden">
+          {loadError && (
+            <div className="alert alert-error" role="alert">
+              <span className="material-symbols-outlined" aria-hidden="true">error</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold">Lỗi tải lịch trực</p>
+                <p>{loadError}</p>
+              </div>
+              <button type="button" onClick={reloadSchedules} className="btn btn-secondary btn-sm shrink-0">
+                <span className="material-symbols-outlined" aria-hidden="true">refresh</span>
+                <span>Thử lại</span>
+              </button>
+            </div>
+          )}
+
+          {staffError && (
+            <div className="alert alert-warning" role="alert">
+              <span className="material-symbols-outlined" aria-hidden="true">warning</span>
+              <p className="flex-1 min-w-0">{staffError}</p>
+              <button type="button" onClick={reloadStaff} className="btn btn-secondary btn-sm shrink-0">
+                <span className="material-symbols-outlined" aria-hidden="true">refresh</span>
+                <span>Thử lại</span>
+              </button>
+            </div>
+          )}
+
+          {keyword && !loading && schedules.length > 0 && filteredSchedules.length === 0 && (
+            <div className="alert alert-info">
+              <span className="material-symbols-outlined" aria-hidden="true">search_off</span>
+              <p className="flex-1 min-w-0">Không có ca trực nào khớp với “{searchKeyword.trim()}”.</p>
+              <button type="button" onClick={() => setSearchKeyword('')} className="btn btn-secondary btn-sm shrink-0">
+                Xóa tìm kiếm
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Lịch trực 7 ngày: thẻ xếp chồng trên màn hình nhỏ, lưới 7 cột từ lg trở lên */}
+        <section role="region" aria-label="Lịch trực tuần" aria-busy={loading} className="p-4 sm:p-6">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 lg:gap-2">
+            {weekDays.map((day) => {
+              const daySchedules = schedulesByDay[day.dateStr] || [];
+              const isToday = day.dateStr === todayStr;
+              const headingId = `${ids.form}-day-${day.dateStr}`;
+
+              return (
+                <li
+                  key={day.dateStr}
+                  aria-labelledby={headingId}
+                  className={`min-w-0 flex flex-col rounded-xl border bg-white overflow-hidden ${
+                    isToday ? 'border-primary ring-2 ring-primary/15' : 'border-slate-200'
+                  }`}
+                >
+                  <h3
+                    id={headingId}
+                    className={`flex flex-wrap items-center justify-between lg:flex-col lg:justify-center gap-x-2 gap-y-0.5 px-3 py-2 border-b ${
+                      isToday ? 'bg-primary text-white border-primary' : 'bg-slate-50 text-slate-800 border-slate-200'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold">{day.dayName}</span>
+                      {isToday && (
+                        <span className="px-2 py-0.5 rounded-full bg-white/20 text-xs font-semibold">Hôm nay</span>
+                      )}
+                    </span>
+                    <span className={`text-xs tabular-nums ${isToday ? 'text-white/90' : 'text-slate-600'}`}>
+                      {formatDate(day.dateStr)}
+                      <span className="lg:hidden"> · {daySchedules.length} ca</span>
+                    </span>
+                  </h3>
+
+                  {daySchedules.length > 0 ? (
+                    <ul className="flex-1 p-2 space-y-2">
+                      {daySchedules.map((item) => (
+                        <ShiftItem
+                          key={item.id}
+                          item={item}
+                          dayName={day.dayName}
+                          canDelete={isAdmin}
+                          onDelete={handleDeleteSchedule}
+                        />
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="flex-1 flex items-center justify-center gap-1.5 px-3 py-4 lg:py-8 text-xs text-slate-500">
+                      <span className="material-symbols-outlined text-[18px] text-slate-400" aria-hidden="true">event_busy</span>
+                      <span>Không có ca trực</span>
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </Modal>
+
+      {/* Form xếp ca trực mới (Admin) – hộp thoại lồng, Esc chỉ đóng hộp thoại này */}
+      <Modal
+        isOpen={Boolean(isOpen && isAdmin && showAddModal)}
+        onClose={closeAddForm}
+        title="Xếp Lịch Trực Cho Nhân Viên"
+        icon="event_available"
+        size="md"
+        footer={(
+          <>
+            <button type="button" onClick={closeAddForm} className="btn btn-light">Hủy</button>
+            <button type="submit" form={ids.form} disabled={isSubmitting} className="btn btn-primary">
+              {isSubmitting ? 'Đang lưu...' : 'Lưu ca trực'}
+            </button>
+          </>
+        )}
+      >
+        <form id={ids.form} onSubmit={handleAddSchedule} className="space-y-4">
+          {formError && (
+            <div className="alert alert-error" role="alert">
+              <span className="material-symbols-outlined" aria-hidden="true">error</span>
+              <p className="flex-1 min-w-0">{formError}</p>
+            </div>
+          )}
+
+          <div className="form-field">
+            <label htmlFor={ids.newStaff} className="form-label">
+              Nhân viên y tế:<span className="required">*</span>
+            </label>
+            <select
+              id={ids.newStaff}
+              data-autofocus
+              value={newStaffId}
+              onChange={(e) => handleStaffSelectInAdd(e.target.value)}
+              className="select"
+              required
+            >
+              {!newStaffId && <option value="">-- Chọn nhân viên --</option>}
+              {staffList.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.fullName}{s.specialty ? ` (${s.specialty})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="form-field">
+              <label htmlFor={ids.newDate} className="form-label">
+                Ngày trực:<span className="required">*</span>
+              </label>
+              <input
+                id={ids.newDate}
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="input"
+                required
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor={ids.newShift} className="form-label">Ca trực:</label>
+              <select
+                id={ids.newShift}
+                value={newShift}
+                onChange={(e) => setNewShift(e.target.value)}
+                className="select"
+              >
+                {SHIFT_ORDER.map(shift => {
+                  const info = getShiftInfo(shift);
+                  return (
+                    <option key={shift} value={shift}>{info.label} ({info.time})</option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="form-field">
+              <label htmlFor={ids.newDept} className="form-label">Khoa / Phòng ban:</label>
+              <select
+                id={ids.newDept}
+                value={newDeptId}
+                onChange={(e) => setNewDeptId(e.target.value)}
+                className="select"
+              >
+                {DEPARTMENTS_LIST.filter(d => d.id !== '').map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-field">
+              <label htmlFor={ids.newRoom} className="form-label">Phòng trực:</label>
+              <input
+                id={ids.newRoom}
+                type="text"
+                value={newRoom}
+                onChange={(e) => setNewRoom(e.target.value)}
+                placeholder="VD: Phòng khám ban đầu 101"
+                className="input"
+              />
+            </div>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor={ids.newNote} className="form-label">Ghi chú phân công:</label>
+            <input
+              id={ids.newNote}
+              type="text"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              placeholder="VD: Phụ trách ca khám ngoại trú, sơ cấp cứu..."
+              className="input"
+            />
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }

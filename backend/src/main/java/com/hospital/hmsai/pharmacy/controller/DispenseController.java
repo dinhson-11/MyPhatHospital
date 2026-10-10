@@ -27,7 +27,8 @@ public class DispenseController {
 
     @PostMapping("/{id}/dispense")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
-    @Operation(summary = "Cấp phát thuốc theo đơn", description = "Kiểm tra tồn kho và tự động trừ kho cho tất cả thuốc trong đơn")
+    @Operation(summary = "Cấp phát thuốc theo đơn", description = "Chỉ cấp phát khi ca khám đã hoàn tất (bác sĩ đã chốt đơn). "
+            + "Kiểm tra hạn dùng, tồn kho (cộng dồn các dòng cùng thuốc) và trừ kho có khóa chống cấp phát trùng.")
     public ResponseEntity<ApiResponse<DispenseResponse>> dispensePrescription(
             @PathVariable Long id,
             @RequestBody(required = false) DispenseRequest request,
@@ -39,7 +40,8 @@ public class DispenseController {
     }
 
     @GetMapping("/{id}/dispense")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'DOCTOR', 'ADMIN', 'PATIENT', 'NURSE')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'DOCTOR', 'ADMIN', 'NURSE') "
+            + "or (hasRole('PATIENT') and @securityService.isPrescriptionPatient(#id, authentication))")
     @Operation(summary = "Xem thông tin cấp phát đơn thuốc", description = "Lấy chi tiết lượt cấp phát của đơn thuốc theo ID")
     public ResponseEntity<ApiResponse<DispenseResponse>> getDispenseByPrescriptionId(@PathVariable Long id) {
         log.info("GET /api/v1/prescriptions/{}/dispense", id);
@@ -48,7 +50,8 @@ public class DispenseController {
     }
 
     @GetMapping("/{id}/is-dispensed")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'DOCTOR', 'ADMIN', 'PATIENT', 'NURSE')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'DOCTOR', 'ADMIN', 'NURSE') "
+            + "or (hasRole('PATIENT') and @securityService.isPrescriptionPatient(#id, authentication))")
     @Operation(summary = "Kiểm tra trạng thái đã cấp phát", description = "Trả về true nếu đơn thuốc đã được cấp phát")
     public ResponseEntity<ApiResponse<Boolean>> isDispensed(@PathVariable Long id) {
         log.info("GET /api/v1/prescriptions/{}/is-dispensed", id);

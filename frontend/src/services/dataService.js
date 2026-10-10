@@ -389,12 +389,57 @@ let catalogSynced = false;
 export const isCatalogSynced = () => catalogSynced;
 
 /**
+ * Trạng thái đồng bộ danh mục bác sĩ: 'idle' (chưa gọi) | 'pending' | 'synced' | 'offline'.
+ * Ứng dụng render NGAY (không chờ backend); các màn hình cần mã bác sĩ thật (đặt lịch)
+ * theo dõi trạng thái này qua subscribeCatalog / getCatalogStatus (dùng với useSyncExternalStore).
+ */
+let catalogStatus = 'idle';
+let catalogVersion = 0;
+let pendingSync = null;
+const catalogListeners = new Set();
+
+export const getCatalogStatus = () => catalogStatus;
+/** Tăng mỗi khi dữ liệu DOCTORS / TRIAGE_RULES được cập nhật từ backend (dùng làm key để render lại). */
+export const getCatalogVersion = () => catalogVersion;
+
+export function subscribeCatalog(listener) {
+  catalogListeners.add(listener);
+  return () => catalogListeners.delete(listener);
+}
+
+function setCatalogStatus(status) {
+  catalogStatus = status;
+  catalogListeners.forEach((listener) => {
+    try {
+      listener(status);
+    } catch {
+      // bỏ qua lỗi của listener để không chặn listener khác
+    }
+  });
+}
+
+/**
  * Đồng bộ mã bác sĩ với backend (nguồn dữ liệu duy nhất là DB).
  * DOCTORS ở trên chỉ chứa nội dung trình bày (ảnh, kinh nghiệm...); `id` thật của bác sĩ
  * (staff_profiles.id) lấy từ GET /public/doctors, khớp theo `username`.
- * Gọi một lần trước khi render ứng dụng.
+ * Chạy nền khi khởi động (main.jsx); các lời gọi trùng nhau dùng chung một request.
  */
-export async function syncCatalogWithBackend() {
+export function syncCatalogWithBackend() {
+  if (pendingSync) return pendingSync;
+  setCatalogStatus('pending');
+  pendingSync = doSyncCatalog()
+    .then((ok) => {
+      if (ok) catalogVersion += 1;
+      setCatalogStatus(ok ? 'synced' : 'offline');
+      return ok;
+    })
+    .finally(() => {
+      pendingSync = null;
+    });
+  return pendingSync;
+}
+
+async function doSyncCatalog() {
   try {
     const res = await apiClient.get('/public/doctors', { skipAuth: true, timeout: 3000 });
     const remote = Array.isArray(res?.data) ? res.data : [];

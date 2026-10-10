@@ -1,47 +1,136 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
+import Modal from '../common/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import logoHospital from '../../assets/logo.png';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { getErrorMessage } from '../../services/apiError';
+
+/**
+ * Tài khoản mẫu để đăng nhập nhanh – CHỈ hiển thị ở môi trường phát triển (import.meta.env.DEV).
+ * Bản build production không hiển thị khối này để tránh lộ thông tin đăng nhập.
+ */
+const DEMO_ROLE_ACCOUNTS = [
+  { id: 'btn-demo-admin', username: 'admin', password: 'Admin@123', name: 'Ban Giám Đốc', role: 'Quản trị', icon: 'shield_person' },
+  { id: 'btn-demo-doctor', username: 'bs.maianh', password: 'Doctor@123', name: 'TS.BS Vi Mai Anh', role: 'Bác sĩ – Trưởng khoa', icon: 'stethoscope' },
+  { id: 'btn-demo-pharmacist', username: 'ds.quang', password: 'Pharmacist@123', name: 'DS. Lê Hải Quang', role: 'Dược sĩ', icon: 'medication' },
+  { id: 'btn-demo-receptionist', username: 'letan', password: 'Receptionist@123', name: 'CN. Thùy Linh', role: 'Tiếp đón – BHYT', icon: 'support_agent' },
+  { id: 'btn-demo-nurse', username: 'dieuduong', password: 'Nurse@123', name: 'ĐD. Thu Hà', role: 'Điều dưỡng', icon: 'vital_signs' },
+  { id: 'btn-demo-accountant', username: 'ketoan', password: 'Accountant@123', name: 'KT. Thị Hoa', role: 'Thu ngân – Viện phí', icon: 'payments' },
+  { id: 'btn-demo-patient', username: 'benhnhan', password: 'Password@123', name: 'Trần Đức Minh', role: 'Bệnh nhân', icon: 'person' }
+];
+
+const DEMO_DOCTOR_ACCOUNTS = [
+  { username: 'bs.maianh', name: 'TS.BS Vi Mai Anh', dept: 'Khám bệnh / Cấp cứu' },
+  { username: 'bs.nga', name: 'BSCKII. Lê Thị Nga', dept: 'Ngoại & Tiểu phẫu' },
+  { username: 'bs.vy', name: 'BSCKII. Phạm Lan Vy', dept: 'Sản – Phụ khoa' },
+  { username: 'bs.dung', name: 'ThS.BS Hoàng Thị Dung', dept: 'Tai Mũi Họng' },
+  { username: 'bs.sy', name: 'BS. Nguyễn Văn Sỹ', dept: 'YHCT – Phục hồi chức năng' },
+  { username: 'bs.hiep', name: 'ThS.BS Lê Tuấn Hiệp', dept: 'Thẩm mỹ / Tạo hình' },
+  { username: 'bs.an', name: 'TS.BS Trần Thị An', dept: 'Chẩn đoán hình ảnh' },
+  { username: 'bs.toan', name: 'ThS.BS Hoàng Văn Toán', dept: 'Xét nghiệm' }
+];
+const DEMO_DOCTOR_PASSWORD = 'Doctor@123';
+
+const TABS = [
+  { key: 'login', label: 'Đăng Nhập' },
+  { key: 'register', label: 'Đăng Ký Mới' }
+];
+
+const EMPTY_REGISTER = {
+  fullName: '',
+  username: '',
+  email: '',
+  phoneNumber: '',
+  password: '',
+  confirmPassword: ''
+};
+
+// Khớp ràng buộc của backend (RegisterRequest): ≥ 8 ký tự, có chữ hoa, chữ thường và chữ số
+const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+const PHONE_RULE = /^0\d{9,10}$/;
+
+function validateRegister(form) {
+  if (!form.fullName.trim() || !form.username.trim() || !form.email.trim() || !form.password) {
+    return 'Vui lòng điền đầy đủ các thông tin bắt buộc (*).';
+  }
+  if (form.username.trim().length < 3) return 'Tên đăng nhập cần tối thiểu 3 ký tự.';
+  if (form.phoneNumber.trim() && !PHONE_RULE.test(form.phoneNumber.trim())) {
+    return 'Số điện thoại không hợp lệ (10–11 chữ số, bắt đầu bằng 0).';
+  }
+  if (!PASSWORD_RULE.test(form.password)) {
+    return 'Mật khẩu cần tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và chữ số.';
+  }
+  if (form.password !== form.confirmPassword) return 'Mật khẩu xác nhận không khớp.';
+  return '';
+}
+
+function FormAlert({ id, message }) {
+  if (!message) return null;
+  return (
+    <div id={id} role="alert" className="alert alert-error">
+      <span className="material-symbols-outlined" aria-hidden="true">error</span>
+      <span>{message}</span>
+    </div>
+  );
+}
 
 export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
-  useEscapeKey(isOpen, onClose);
   const [tab, setTab] = useState(initialTab);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({
-    fullName: '',
-    username: '',
-    email: '',
-    phoneNumber: '',
-    password: '',
-    confirmPassword: ''
-  });
+  const [registerForm, setRegisterForm] = useState(EMPTY_REGISTER);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [prevOpenState, setPrevOpenState] = useState({ isOpen, initialTab });
+  const tabRefs = useRef({});
 
   const { login, register } = useAuth();
   const { showToast } = useToast();
 
-  useEffect(() => {
-    setTab(initialTab);
-  }, [initialTab, isOpen]);
+  // Mỗi lần mở (hoặc đổi tab yêu cầu): về đúng tab, xóa lỗi cũ và mật khẩu đã nhập trước đó.
+  // Điều chỉnh state ngay khi render thay vì trong effect để tránh render lặp.
+  if (prevOpenState.isOpen !== isOpen || prevOpenState.initialTab !== initialTab) {
+    setPrevOpenState({ isOpen, initialTab });
+    if (isOpen) {
+      setTab(initialTab);
+      setError('');
+      setLoginForm((prev) => ({ ...prev, password: '' }));
+      setRegisterForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+    }
+  }
 
-  if (!isOpen) return null;
+  const switchTab = (key, focus = false) => {
+    setTab(key);
+    setError('');
+    if (focus) tabRefs.current[key]?.focus();
+  };
+
+  const handleTabKeyDown = (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const index = TABS.findIndex((t) => t.key === tab);
+    let next = index;
+    if (event.key === 'ArrowRight') next = (index + 1) % TABS.length;
+    if (event.key === 'ArrowLeft') next = (index - 1 + TABS.length) % TABS.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = TABS.length - 1;
+    switchTab(TABS[next].key, true);
+  };
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!loginForm.username.trim() || !loginForm.password) {
-      showToast('Vui lòng nhập tên đăng nhập và mật khẩu', 'warning');
+      setError('Vui lòng nhập tên đăng nhập và mật khẩu.');
       return;
     }
 
+    setError('');
     setLoading(true);
     try {
-      const res = await login(loginForm.username, loginForm.password);
-      showToast(`Xin chào ${res.user.fullName}! Đăng nhập thành công`, 'success');
+      const res = await login(loginForm.username.trim(), loginForm.password);
+      showToast(`Xin chào ${res.user?.fullName || loginForm.username.trim()}! Đăng nhập thành công.`, 'success');
+      setLoginForm({ username: '', password: '' });
       onClose();
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Đăng nhập không thành công';
-      showToast(msg, 'error');
+      setError(getErrorMessage(err, 'Đăng nhập không thành công. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }
@@ -49,29 +138,30 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    if (!registerForm.fullName.trim() || !registerForm.username.trim() || !registerForm.email.trim() || !registerForm.password) {
-      showToast('Vui lòng điền đầy đủ các thông tin bắt buộc', 'warning');
-      return;
-    }
-    if (registerForm.password !== registerForm.confirmPassword) {
-      showToast('Mật khẩu xác nhận không khớp', 'warning');
+    const validation = validateRegister(registerForm);
+    if (validation) {
+      setError(validation);
       return;
     }
 
+    setError('');
     setLoading(true);
     try {
+      const phone = registerForm.phoneNumber.trim();
       const res = await register({
-        fullName: registerForm.fullName,
-        username: registerForm.username,
-        email: registerForm.email,
-        phoneNumber: registerForm.phoneNumber,
+        fullName: registerForm.fullName.trim(),
+        username: registerForm.username.trim(),
+        email: registerForm.email.trim(),
+        // authService.register đọc trường `phone`; giữ thêm phoneNumber cho tương thích
+        phone,
+        phoneNumber: phone,
         password: registerForm.password
       });
-      showToast(`Đăng ký thành công tài khoản cho ${res.user.fullName}!`, 'success');
+      showToast(`Đăng ký thành công tài khoản cho ${res.user?.fullName || registerForm.fullName.trim()}!`, 'success');
+      setRegisterForm(EMPTY_REGISTER);
       onClose();
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Đăng ký không thành công';
-      showToast(msg, 'error');
+      setError(getErrorMessage(err, 'Đăng ký không thành công. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }
@@ -79,439 +169,318 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
 
   const fillDemoAccount = (username, password) => {
     setLoginForm({ username, password });
+    setError('');
     setTab('login');
   };
 
+  const updateRegister = (field) => (e) => setRegisterForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const errorId = `auth-${tab}-error`;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="sm"
+      icon={tab === 'login' ? 'login' : 'person_add'}
+      title={tab === 'login' ? 'Đăng Nhập Hệ Thống' : 'Đăng Ký Tài Khoản'}
+      subtitle="Mỹ Phát Hospital"
+      bodyClassName="overflow-y-auto"
+    >
+      {/* Chuyển tab đăng nhập / đăng ký */}
+      <div role="tablist" aria-label="Chọn hình thức" className="tabs px-5 sm:px-6" onKeyDown={handleTabKeyDown}>
+        {TABS.map((t) => {
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              ref={(el) => { tabRefs.current[t.key] = el; }}
+              type="button"
+              role="tab"
+              id={`tab-btn-${t.key}`}
+              aria-selected={active}
+              aria-controls={`auth-panel-${t.key}`}
+              tabIndex={active ? 0 : -1}
+              onClick={() => switchTab(t.key)}
+              className={`tab flex-1 justify-center ${active ? 'is-active' : ''}`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div
-        className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden relative max-h-[92vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
+        role="tabpanel"
+        id={`auth-panel-${tab}`}
+        aria-labelledby={`tab-btn-${tab}`}
+        className="px-5 py-5 sm:px-6"
       >
-        {/* Header */}
-        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/80 p-1 flex items-center justify-center shadow-xs shrink-0">
-              <img
-                src={logoHospital}
-                alt="Logo Mỹ Phát Hospital"
-                className="w-full h-full object-contain rounded-full"
-                onError={(e) => {
-                  e.currentTarget.src = '/logo.png';
-                }}
+        {tab === 'login' ? (
+          <form onSubmit={handleLoginSubmit} noValidate className="space-y-4">
+            <FormAlert id={errorId} message={error} />
+
+            <div className="form-field">
+              <label htmlFor="login-username" className="form-label">
+                Tên đăng nhập<span className="required" aria-hidden="true">*</span>
+              </label>
+              <div className="input-group">
+                <span className="material-symbols-outlined input-icon" aria-hidden="true">person</span>
+                <input
+                  type="text"
+                  id="login-username"
+                  data-autofocus
+                  required
+                  autoComplete="username"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                  placeholder="Nhập tên đăng nhập"
+                  aria-invalid={Boolean(error) && !loginForm.username.trim()}
+                  aria-describedby={error ? errorId : undefined}
+                  className="input"
+                />
+              </div>
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="login-password" className="form-label">
+                Mật khẩu<span className="required" aria-hidden="true">*</span>
+              </label>
+              <div className="input-group">
+                <span className="material-symbols-outlined input-icon" aria-hidden="true">lock</span>
+                <input
+                  type="password"
+                  id="login-password"
+                  required
+                  autoComplete="current-password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                  placeholder="Nhập mật khẩu"
+                  aria-invalid={Boolean(error) && !loginForm.password}
+                  aria-describedby={error ? errorId : undefined}
+                  className="input"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              id="btn-submit-login"
+              disabled={loading}
+              aria-busy={loading}
+              className="btn btn-primary btn-lg btn-block"
+            >
+              {loading && <span className="spinner !w-4 !h-4 !border-white/40 !border-t-white" aria-hidden="true" />}
+              {loading ? 'Đang xác thực...' : 'Đăng Nhập'}
+            </button>
+
+            <p className="text-xs text-slate-500 text-center">
+              Chưa có tài khoản?{' '}
+              <button type="button" onClick={() => switchTab('register', true)} className="font-semibold text-primary hover:underline">
+                Đăng ký tài khoản bệnh nhân
+              </button>
+            </p>
+
+            {/* Đọc trực tiếp import.meta.env.DEV để bản build production loại bỏ hẳn khối này */}
+            {import.meta.env.DEV && (
+              <DemoAccounts selectedUsername={loginForm.username} onPick={fillDemoAccount} />
+            )}
+          </form>
+        ) : (
+          <form onSubmit={handleRegisterSubmit} noValidate className="space-y-3.5">
+            <FormAlert id={errorId} message={error} />
+
+            <div className="form-field">
+              <label htmlFor="reg-fullname" className="form-label">
+                Họ và tên<span className="required" aria-hidden="true">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                id="reg-fullname"
+                data-autofocus
+                autoComplete="name"
+                value={registerForm.fullName}
+                onChange={updateRegister('fullName')}
+                placeholder="Ví dụ: Nguyễn Văn An"
+                className="input"
               />
             </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-                {tab === 'login' ? 'Đăng Nhập Hệ Thống' : 'Đăng Ký Tài Khoản'}
-              </h3>
-              <p className="text-xs text-slate-500 font-medium">Mỹ Phát Hospital</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-200 rounded">
-              ESC
-            </span>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-              title="Đóng (Esc)"
-            >
-              <span className="material-symbols-outlined text-lg">close</span>
-            </button>
-          </div>
-        </div>
 
-        {/* Tab switch */}
-        <div className="flex border-b border-slate-100">
-          <button
-            type="button"
-            id="tab-btn-login"
-            onClick={() => setTab('login')}
-            className={`flex-1 py-3 text-center text-sm font-bold transition-colors border-b-2 ${
-              tab === 'login'
-                ? 'border-primary text-primary bg-primary/5'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Đăng Nhập
-          </button>
-          <button
-            type="button"
-            id="tab-btn-register"
-            onClick={() => setTab('register')}
-            className={`flex-1 py-3 text-center text-sm font-bold transition-colors border-b-2 ${
-              tab === 'register'
-                ? 'border-primary text-primary bg-primary/5'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Đăng Ký Mới
-          </button>
-        </div>
-
-        {/* Body Form */}
-        <div className="p-6 overflow-y-auto">
-          {tab === 'login' ? (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Tên đăng nhập hoặc Email
-                </label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-3 text-slate-400 text-lg">
-                    person
-                  </span>
-                  <input
-                    type="text"
-                    id="login-username"
-                    required
-                    value={loginForm.username}
-                    onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                    placeholder="Nhập tên đăng nhập (vd: benhnhan)"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mật khẩu
-                </label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-3 text-slate-400 text-lg">
-                    lock
-                  </span>
-                  <input
-                    type="password"
-                    id="login-password"
-                    required
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                    placeholder="Nhập mật khẩu"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                id="btn-submit-login"
-                disabled={loading}
-                className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl text-sm shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {loading ? 'Đang xác thực...' : 'Đăng Nhập'}
-              </button>
-
-              {/* Demo accounts quick-pick: Đồng bộ đầy đủ 7 Roles & Danh sách Bác sĩ Mỹ Phát Hospital */}
-              <div className="pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-2.5">
-                  <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[15px] text-teal-700">key</span>
-                    <span>Tài Khoản Đồng Bộ Hệ Thống:</span>
-                  </p>
-                  <span className="text-[10px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200/60">
-                    Bấm để điền & đăng nhập
-                  </span>
-                </div>
-
-                {/* 7 Vai trò cốt lõi */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
-                  <button
-                    type="button"
-                    id="btn-demo-admin"
-                    onClick={() => fillDemoAccount('admin', 'Admin@123')}
-                    className="p-2 text-xs text-left bg-blue-50/70 hover:bg-blue-100 text-blue-900 rounded-xl border border-blue-200 transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <span className="font-bold block truncate group-hover:text-blue-800">🛡️ Ban Giám Đốc</span>
-                    <span className="text-[10px] text-slate-500 block truncate">admin • Quản trị</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-demo-doctor"
-                    onClick={() => fillDemoAccount('bs.maianh', 'Doctor@123')}
-                    className="p-2 text-xs text-left bg-teal-50/80 hover:bg-teal-100 text-teal-900 rounded-xl border border-teal-200 transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <span className="font-bold block truncate group-hover:text-teal-800">👨‍⚕️ TS.BS Vi Mai Anh</span>
-                    <span className="text-[10px] text-slate-500 block truncate">bs.maianh • Trưởng khoa</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-demo-pharmacist"
-                    onClick={() => fillDemoAccount('ds.quang', 'Pharmacist@123')}
-                    className="p-2 text-xs text-left bg-emerald-50/70 hover:bg-emerald-100 text-emerald-900 rounded-xl border border-emerald-200 transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <span className="font-bold block truncate group-hover:text-emerald-800">💊 DS. Lê Hải Quang</span>
-                    <span className="text-[10px] text-slate-500 block truncate">ds.quang • Dược GPP</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-demo-receptionist"
-                    onClick={() => fillDemoAccount('letan', 'Receptionist@123')}
-                    className="p-2 text-xs text-left bg-amber-50/70 hover:bg-amber-100 text-amber-900 rounded-xl border border-amber-200 transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <span className="font-bold block truncate group-hover:text-amber-800">🛎️ CN. Thùy Linh</span>
-                    <span className="text-[10px] text-slate-500 block truncate">letan • Tiếp đón BHYT</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-demo-nurse"
-                    onClick={() => fillDemoAccount('dieuduong', 'Nurse@123')}
-                    className="p-2 text-xs text-left bg-rose-50/70 hover:bg-rose-100 text-rose-900 rounded-xl border border-rose-200 transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <span className="font-bold block truncate group-hover:text-rose-800">🩺 ĐD. Thu Hà</span>
-                    <span className="text-[10px] text-slate-500 block truncate">dieuduong • Sinh hiệu</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-demo-accountant"
-                    onClick={() => fillDemoAccount('ketoan', 'Accountant@123')}
-                    className="p-2 text-xs text-left bg-amber-50/70 hover:bg-amber-100 text-amber-900 rounded-xl border border-amber-200 transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <span className="font-bold block truncate group-hover:text-amber-800">💰 KT. Thị Hoa</span>
-                    <span className="text-[10px] text-slate-500 block truncate">ketoan • Thu viện phí</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-demo-patient"
-                    onClick={() => fillDemoAccount('benhnhan', 'Password@123')}
-                    className="p-2 text-xs text-left bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border border-slate-200 transition-all cursor-pointer shadow-2xs sm:col-span-3 group"
-                  >
-                    <span className="font-bold block truncate group-hover:text-slate-900">👤 Bệnh nhân: Trần Đức Minh</span>
-                    <span className="text-[10px] text-slate-500 block truncate">benhnhan • Đặt lịch & tra cứu hồ sơ</span>
-                  </button>
-                </div>
-
-                {/* Đồng bộ danh sách từng Bác sĩ chuyên khoa */}
-                <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/90">
-                  <p className="text-[11px] font-bold text-slate-700 mb-2 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[15px] text-teal-600">stethoscope</span>
-                      <span>Đăng nhập theo từng Bác sĩ chuyên khoa:</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-normal">Pass: Doctor@123</span>
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.maianh', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.maianh'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">TS.BS Vi Mai Anh</span>
-                      <span className="text-[9px] opacity-75 truncate">Khoa Khám bệnh / Cấp cứu</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.nga', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.nga'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">BSCKII. Lê Thị Nga</span>
-                      <span className="text-[9px] opacity-75 truncate">Ngoại & Tiểu phẫu</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.vy', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.vy'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">BSCKII. Phạm Lan Vy</span>
-                      <span className="text-[9px] opacity-75 truncate">Sản - Phụ khoa</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.dung', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.dung'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">ThS.BS Hoàng Thị Dung</span>
-                      <span className="text-[9px] opacity-75 truncate">Tai Mũi Họng</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.sy', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.sy'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">BS. Nguyễn Văn Sỹ</span>
-                      <span className="text-[9px] opacity-75 truncate">YHCT – Phục hồi chức năng</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.hiep', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.hiep'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">ThS.BS Lê Tuấn Hiệp</span>
-                      <span className="text-[9px] opacity-75 truncate">Thẩm mỹ / Tạo hình</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.an', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.an'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">TS.BS Trần Thị An</span>
-                      <span className="text-[9px] opacity-75 truncate">Chẩn đoán hình ảnh</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fillDemoAccount('bs.toan', 'Doctor@123')}
-                      className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.toan'
-                          ? 'bg-teal-700 text-white font-bold'
-                          : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
-                      }`}
-                    >
-                      <span className="truncate font-semibold">ThS.BS Hoàng Văn Toán</span>
-                      <span className="text-[9px] opacity-75 truncate">Khoa Xét nghiệm</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleRegisterSubmit} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Họ và tên bệnh nhân *
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="form-field">
+                <label htmlFor="reg-username" className="form-label">
+                  Tên đăng nhập<span className="required" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  id="reg-fullname"
-                  value={registerForm.fullName}
-                  onChange={(e) => setRegisterForm({ ...registerForm, fullName: e.target.value })}
-                  placeholder="Ví dụ: Nguyễn Văn An"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                  id="reg-username"
+                  autoComplete="username"
+                  value={registerForm.username}
+                  onChange={updateRegister('username')}
+                  placeholder="nguyenvanan"
+                  className="input"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Tên đăng nhập *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    id="reg-username"
-                    value={registerForm.username}
-                    onChange={(e) => setRegisterForm({ ...registerForm, username: e.target.value })}
-                    placeholder="nguyenvanan"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Số điện thoại
-                  </label>
-                  <input
-                    type="tel"
-                    id="reg-phone"
-                    value={registerForm.phoneNumber}
-                    onChange={(e) => setRegisterForm({ ...registerForm, phoneNumber: e.target.value })}
-                    placeholder="0912345678"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                  />
-                </div>
+              <div className="form-field">
+                <label htmlFor="reg-phone" className="form-label">Số điện thoại</label>
+                <input
+                  type="tel"
+                  id="reg-phone"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  value={registerForm.phoneNumber}
+                  onChange={updateRegister('phoneNumber')}
+                  placeholder="0912345678"
+                  className="input"
+                />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Địa chỉ Email *
+            <div className="form-field">
+              <label htmlFor="reg-email" className="form-label">
+                Email<span className="required" aria-hidden="true">*</span>
+              </label>
+              <input
+                type="email"
+                required
+                id="reg-email"
+                autoComplete="email"
+                value={registerForm.email}
+                onChange={updateRegister('email')}
+                placeholder="an.nguyen@gmail.com"
+                className="input"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="form-field">
+                <label htmlFor="reg-password" className="form-label">
+                  Mật khẩu<span className="required" aria-hidden="true">*</span>
                 </label>
                 <input
-                  type="email"
+                  type="password"
                   required
-                  id="reg-email"
-                  value={registerForm.email}
-                  onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                  placeholder="an.nguyen@gmail.com"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                  id="reg-password"
+                  autoComplete="new-password"
+                  aria-describedby="reg-password-hint"
+                  value={registerForm.password}
+                  onChange={updateRegister('password')}
+                  className="input"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Mật khẩu *
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    id="reg-password"
-                    value={registerForm.password}
-                    onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                    placeholder="••••••••"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Xác nhận MK *
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    id="reg-confirm-password"
-                    value={registerForm.confirmPassword}
-                    onChange={(e) => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
-                    placeholder="••••••••"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                  />
-                </div>
+              <div className="form-field">
+                <label htmlFor="reg-confirm-password" className="form-label">
+                  Nhập lại mật khẩu<span className="required" aria-hidden="true">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  id="reg-confirm-password"
+                  autoComplete="new-password"
+                  value={registerForm.confirmPassword}
+                  onChange={updateRegister('confirmPassword')}
+                  className="input"
+                />
               </div>
+            </div>
+            <p id="reg-password-hint" className="form-hint">
+              Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và chữ số.
+            </p>
 
-              <button
-                type="submit"
-                id="btn-submit-register"
-                disabled={loading}
-                className="w-full mt-3 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl text-sm shadow-md shadow-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {loading ? 'Đang tạo tài khoản...' : 'Tạo Tài Khoản Mới'}
+            <button
+              type="submit"
+              id="btn-submit-register"
+              disabled={loading}
+              aria-busy={loading}
+              className="btn btn-primary btn-lg btn-block !mt-5"
+            >
+              {loading && <span className="spinner !w-4 !h-4 !border-white/40 !border-t-white" aria-hidden="true" />}
+              {loading ? 'Đang tạo tài khoản...' : 'Tạo Tài Khoản Mới'}
+            </button>
+
+            <p className="text-xs text-slate-500 text-center">
+              Đã có tài khoản?{' '}
+              <button type="button" onClick={() => switchTab('login', true)} className="font-semibold text-primary hover:underline">
+                Đăng nhập
               </button>
-            </form>
-          )}
+            </p>
+          </form>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/** Khối chọn nhanh tài khoản mẫu – chỉ render khi import.meta.env.DEV. */
+function DemoAccounts({ selectedUsername, onPick }) {
+  return (
+    <section aria-labelledby="demo-accounts-title" className="pt-4 border-t border-slate-200 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="demo-accounts-title" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-base text-amber-600" aria-hidden="true">science</span>
+          Tài khoản thử nghiệm
+        </h3>
+        <span className="badge badge-warning">Chỉ hiện ở môi trường phát triển</span>
+      </div>
+      <p className="text-xs text-slate-500">Bấm vào một tài khoản để điền sẵn tên đăng nhập và mật khẩu.</p>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {DEMO_ROLE_ACCOUNTS.map((acc) => {
+          const active = selectedUsername === acc.username;
+          return (
+            <button
+              key={acc.id}
+              type="button"
+              id={acc.id}
+              aria-pressed={active}
+              onClick={() => onPick(acc.username, acc.password)}
+              className={`p-2 text-left rounded-lg border transition-colors ${
+                active
+                  ? 'bg-primary-fixed border-primary text-primary'
+                  : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300'
+              } ${acc.username === 'benhnhan' ? 'col-span-2 sm:col-span-3' : ''}`}
+            >
+              <span className="flex items-center gap-1.5 text-xs font-bold truncate">
+                <span className="material-symbols-outlined text-base shrink-0" aria-hidden="true">{acc.icon}</span>
+                <span className="truncate">{acc.name}</span>
+              </span>
+              <span className="block text-xs text-slate-500 truncate mt-0.5">{acc.username} • {acc.role}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+        <p className="text-xs font-bold text-slate-700 mb-2 flex flex-wrap items-center justify-between gap-1">
+          <span className="flex items-center gap-1">
+            <span className="material-symbols-outlined text-base text-primary" aria-hidden="true">stethoscope</span>
+            Bác sĩ theo chuyên khoa
+          </span>
+          <span className="font-normal text-slate-500">Mật khẩu: {DEMO_DOCTOR_PASSWORD}</span>
+        </p>
+        <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
+          {DEMO_DOCTOR_ACCOUNTS.map((doc) => {
+            const active = selectedUsername === doc.username;
+            return (
+              <button
+                key={doc.username}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onPick(doc.username, DEMO_DOCTOR_PASSWORD)}
+                className={`p-1.5 text-left rounded-lg text-xs transition-colors flex flex-col border ${
+                  active
+                    ? 'bg-primary border-primary text-white'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-primary-fixed'
+                }`}
+              >
+                <span className="truncate font-semibold">{doc.name}</span>
+                <span className="text-xs opacity-80 truncate">{doc.dept}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

@@ -59,6 +59,16 @@ public class Patient {
     @Column(name = "blood_type", length = 5)
     private String bloodType;
 
+    /** Mã thẻ BHYT 15 ký tự, VD: DN4010123456789. */
+    @Column(name = "insurance_number", length = 15)
+    private String insuranceNumber;
+
+    @Column(name = "insurance_valid_from")
+    private LocalDate insuranceValidFrom;
+
+    @Column(name = "insurance_valid_to")
+    private LocalDate insuranceValidTo;
+
     @OneToMany(mappedBy = "patient", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<PatientAllergy> allergies = new ArrayList<>();

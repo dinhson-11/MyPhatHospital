@@ -21,7 +21,10 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class CreateAppointmentRequest {
 
-    @NotNull(message = "Mã bệnh nhân không được để trống")
+    /**
+     * Bắt buộc với lễ tân/admin. Với tài khoản bệnh nhân, hệ thống tự dùng hồ sơ của chính người đăng nhập
+     * (giá trị gửi lên bị bỏ qua).
+     */
     private Long patientId;
 
     @NotNull(message = "Mã bác sĩ không được để trống")

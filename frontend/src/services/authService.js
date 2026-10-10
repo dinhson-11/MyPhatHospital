@@ -1,10 +1,13 @@
 import apiClient from './api';
+import { getErrorMessage, isNetworkError, NETWORK_ERROR_MESSAGE } from './apiError';
 
 const SEED_USERS_KEY = 'hms_registered_users';
 const TOKEN_KEY = 'hms_token';
 const USER_KEY = 'hms_user';
 
-const DEFAULT_SEEDS = [
+// Tài khoản mẫu CHỈ dùng cho môi trường phát triển / kiểm thử khi không có backend.
+// Bản build production: import.meta.env.DEV = false → mảng rỗng, mật khẩu mẫu không nằm trong bundle.
+const DEFAULT_SEEDS = !import.meta.env.DEV ? [] : [
   // --- QUẢN TRỊ VIÊN HỆ THỐNG & BAN GIÁM ĐỐC ---
   {
     id: 1,
@@ -242,7 +245,7 @@ export const authService = {
       }
       // Backend không truy cập được: chỉ cho phép tài khoản mẫu ở môi trường dev/test
       if (!import.meta.env.DEV) {
-        throw new Error('Không thể kết nối máy chủ. Vui lòng thử lại sau.');
+        throw new Error(NETWORK_ERROR_MESSAGE);
       }
     }
 
@@ -288,29 +291,19 @@ export const authService = {
       const res = await apiClient.post('/auth/register', { fullName, username, email, phone, password });
       if (res && res.data) {
         const { user, accessToken } = res.data;
+        // Không lưu mật khẩu vào trình duyệt – phiên đăng nhập chỉ giữ token và hồ sơ người dùng
         this.saveSession(user, accessToken);
-        // Đồng bộ vào seed users cục bộ
-        const users = getSeedUsers();
-        if (!users.some(u => u.username === username)) {
-          users.push({
-            id: user?.id || users.length + 1,
-            fullName,
-            username,
-            email,
-            phone,
-            password,
-            roles: user?.roles || ['PATIENT']
-          });
-          localStorage.setItem(SEED_USERS_KEY, JSON.stringify(users));
-        }
         return { success: true, user, token: accessToken };
       }
     } catch (err) {
       // Nếu backend chủ động trả về mã lỗi (như trùng username), re-throw lỗi
-      if (err.response) {
-        throw new Error(err.response.data?.message || 'Tên đăng nhập đã tồn tại trên hệ thống!');
+      if (err?.response) {
+        throw new Error(getErrorMessage(err, 'Không thể đăng ký tài khoản. Vui lòng kiểm tra lại thông tin.'));
       }
-      // Chỉ fallback khi backend offline / network error
+      // Backend không truy cập được: chỉ cho phép đăng ký cục bộ ở môi trường dev/test
+      if (!import.meta.env.DEV) {
+        throw new Error(isNetworkError(err) ? NETWORK_ERROR_MESSAGE : getErrorMessage(err, NETWORK_ERROR_MESSAGE));
+      }
     }
 
     // 2. Fallback offline

@@ -2,15 +2,19 @@ package com.hospital.hmsai.appointment.repository;
 
 import com.hospital.hmsai.appointment.entity.Appointment;
 import com.hospital.hmsai.appointment.entity.AppointmentStatus;
+import com.hospital.hmsai.user.entity.StaffProfile;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository cho entity Appointment.
@@ -52,6 +56,38 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     boolean existsByDoctorIdAndScheduledAtAndStatusNotCancelled(
             @Param("doctorId") Long doctorId,
             @Param("scheduledAt") LocalDateTime scheduledAt);
+
+    /**
+     * Kiểm tra trùng lịch bác sĩ bằng truy vấn có khóa (đọc dữ liệu mới nhất, không dùng snapshot cũ
+     * của transaction). Gọi SAU khi đã khóa hồ sơ bác sĩ bằng {@link #lockStaffProfileById(Long)}.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Appointment a WHERE a.doctor.id = :doctorId " +
+           "AND a.scheduledAt = :scheduledAt " +
+           "AND a.status <> com.hospital.hmsai.appointment.entity.AppointmentStatus.CANCELLED")
+    List<Appointment> findActiveByDoctorAndScheduledAtForUpdate(
+            @Param("doctorId") Long doctorId,
+            @Param("scheduledAt") LocalDateTime scheduledAt);
+
+    /**
+     * Khóa ghi hồ sơ bác sĩ (staff_profiles) để tuần tự hóa các yêu cầu đặt lịch cùng một bác sĩ,
+     * chống đặt trùng khung giờ khi hai yêu cầu đến đồng thời.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM StaffProfile s WHERE s.id = :id")
+    Optional<StaffProfile> lockStaffProfileById(@Param("id") Long id);
+
+    /** Khóa ghi lịch hẹn khi chuyển trạng thái / bắt đầu khám. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Appointment a WHERE a.id = :id")
+    Optional<Appointment> findByIdForUpdate(@Param("id") Long id);
+
+    /** Bệnh nhân đã có lịch hẹn (chưa hủy) khác vào cùng thời điểm chưa. */
+    boolean existsByPatientIdAndScheduledAtAndStatusNot(Long patientId, LocalDateTime scheduledAt,
+                                                        AppointmentStatus status);
+
+    /** Lịch hẹn có thuộc về tài khoản bệnh nhân (username) không. */
+    boolean existsByIdAndPatient_User_UsernameIgnoreCase(Long id, String username);
 
     /**
      * Lấy lịch hẹn theo bệnh nhân (qua user_id).

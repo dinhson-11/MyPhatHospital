@@ -85,11 +85,13 @@ public class DrugServiceImpl implements DrugService {
     @Transactional
     public DrugResponse createDrug(com.hospital.hmsai.pharmacy.dto.CreateDrugRequest request) {
         log.info("Thêm thuốc mới vào danh mục: code='{}', name='{}'", request.getCode(), request.getName());
-        if (drugRepository.existsByCode(request.getCode().trim())) {
-            throw new com.hospital.hmsai.common.exception.BusinessException("Mã thuốc " + request.getCode() + " đã tồn tại trong hệ thống");
+        // Chuẩn hóa mã TRƯỚC khi kiểm tra trùng (mã được lưu dạng chữ hoa)
+        String code = request.getCode().trim().toUpperCase(java.util.Locale.ROOT);
+        if (drugRepository.existsByCode(code)) {
+            throw new com.hospital.hmsai.common.exception.BusinessException("Mã thuốc " + code + " đã tồn tại trong hệ thống");
         }
         Drug drug = Drug.builder()
-                .code(request.getCode().trim().toUpperCase())
+                .code(code)
                 .name(request.getName().trim())
                 .unit(request.getUnit() != null ? request.getUnit().trim() : "Viên")
                 .price(request.getPrice())
@@ -105,11 +107,19 @@ public class DrugServiceImpl implements DrugService {
     @Transactional
     public DrugResponse updateStock(Long id, com.hospital.hmsai.pharmacy.dto.UpdateStockRequest request) {
         log.info("Cập nhật tồn kho thuốc ID: {}, type: {}, qty: {}", id, request.getAdjustmentType(), request.getQuantity());
-        Drug drug = drugRepository.findById(id)
+        // Khóa dòng thuốc để không mất cập nhật khi cấp phát / nhập kho đồng thời
+        Drug drug = drugRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Thuốc", "id", id));
 
         int current = drug.getStockQuantity() != null ? drug.getStockQuantity() : 0;
+        if (request.getQuantity() == null || request.getQuantity() < 0) {
+            throw new com.hospital.hmsai.common.exception.BusinessException("Số lượng điều chỉnh không được âm");
+        }
         int qty = request.getQuantity();
+        if (request.getAdjustmentType() != com.hospital.hmsai.pharmacy.dto.StockAdjustmentType.ADJUSTMENT && qty < 1) {
+            throw new com.hospital.hmsai.common.exception.BusinessException(
+                    "Số lượng nhập/xuất kho tối thiểu là 1");
+        }
 
         switch (request.getAdjustmentType()) {
             case IMPORT -> drug.setStockQuantity(current + qty);

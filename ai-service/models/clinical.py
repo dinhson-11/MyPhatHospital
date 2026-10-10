@@ -6,7 +6,7 @@ Pydantic models for AI Clinical Safety endpoints:
 """
 
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 MEDICAL_AI_DISCLAIMER: str = (
     "Kết quả do AI phân tích chỉ mang tính tham khảo, "
@@ -107,12 +107,35 @@ class PrescriptionSafetyResponse(BaseModel):
 # DIAGNOSIS SUGGESTION MODELS (FR-11.3 – Sprint 6)
 # ============================================================================
 
+class VitalSigns(BaseModel):
+    """Chỉ số sinh hiệu (tùy chọn). Nhận cả snake_case và camelCase (VitalSignsDto phía Java)."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    pulse: Optional[int] = Field(None, ge=0, le=300, description="Mạch (lần/phút)")
+    blood_pressure_systolic: Optional[int] = Field(
+        None, ge=0, le=350, validation_alias=AliasChoices("blood_pressure_systolic", "bloodPressureSystolic"),
+        description="Huyết áp tâm thu (mmHg)")
+    blood_pressure_diastolic: Optional[int] = Field(
+        None, ge=0, le=250, validation_alias=AliasChoices("blood_pressure_diastolic", "bloodPressureDiastolic"),
+        description="Huyết áp tâm trương (mmHg)")
+    temperature: Optional[float] = Field(None, ge=25, le=45, description="Thân nhiệt (°C)")
+    respiratory_rate: Optional[int] = Field(
+        None, ge=0, le=100, validation_alias=AliasChoices("respiratory_rate", "respiratoryRate"),
+        description="Nhịp thở (lần/phút)")
+    spo2: Optional[int] = Field(
+        None, ge=0, le=100, validation_alias=AliasChoices("spo2", "spO2", "SpO2"),
+        description="Độ bão hòa oxy máu (%)")
+
+
 class DiagnosisSuggestionRequest(BaseModel):
     """Yêu cầu gợi ý chẩn đoán từ triệu chứng bệnh nhân."""
     symptoms: str = Field(..., min_length=2, description="Mô tả triệu chứng bệnh nhân bằng ngôn ngữ tự nhiên")
-    patient_age: Optional[int] = Field(None, description="Tuổi bệnh nhân (hỗ trợ phân tích)")
+    patient_age: Optional[int] = Field(None, ge=0, le=130, description="Tuổi bệnh nhân (hỗ trợ phân tích)")
     patient_gender: Optional[str] = Field(None, description="Giới tính: MALE / FEMALE")
     medical_history: Optional[List[str]] = Field(default_factory=list, description="Tiền sử bệnh lý đã biết")
+    vital_signs: Optional[VitalSigns] = Field(
+        None, validation_alias=AliasChoices("vital_signs", "vitalSigns"),
+        description="Chỉ số sinh hiệu đo được (ưu tiên hơn giá trị đọc từ văn bản triệu chứng)")
 
 
 class DiagnosisSuggestionItem(BaseModel):

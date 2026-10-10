@@ -3,11 +3,13 @@ package com.hospital.hmsai.publicapi;
 import com.hospital.hmsai.appointment.dto.AppointmentResponse;
 import com.hospital.hmsai.appointment.dto.CreateAppointmentRequest;
 import com.hospital.hmsai.appointment.entity.AppointmentSource;
+import com.hospital.hmsai.appointment.repository.AppointmentRepository;
 import com.hospital.hmsai.appointment.service.AppointmentService;
 import com.hospital.hmsai.common.WorkingHours;
 import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
 import com.hospital.hmsai.patient.entity.Patient;
+import com.hospital.hmsai.patient.repository.PatientCodeGenerator;
 import com.hospital.hmsai.patient.repository.PatientRepository;
 import com.hospital.hmsai.user.entity.StaffProfile;
 import com.hospital.hmsai.user.repository.DepartmentRepository;
@@ -17,11 +19,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Dịch vụ phục vụ cổng thông tin công khai: danh mục bác sĩ/khoa (nguồn dữ liệu duy nhất là DB)
@@ -39,6 +39,7 @@ public class PublicPortalService {
     private final DepartmentRepository departmentRepository;
     private final PatientRepository patientRepository;
     private final AppointmentService appointmentService;
+    private final AppointmentRepository appointmentRepository;
 
     @Transactional(readOnly = true)
     public List<PublicDepartmentResponse> getDepartments() {
@@ -86,6 +87,7 @@ public class PublicPortalService {
                 .notes(request.getNotes())
                 .source(AppointmentSource.PATIENT)
                 .build();
+        // AppointmentService.create khóa hồ sơ bác sĩ và kiểm tra lại trùng lịch trước khi lưu
         return appointmentService.create(create);
     }
 
@@ -102,35 +104,33 @@ public class PublicPortalService {
             }
             return doctor;
         }
-        // Không chọn bác sĩ: tự phân công bác sĩ của khoa
-        return staffProfileRepository.findByDepartmentId(request.getDepartmentId()).stream()
+        // Không chọn bác sĩ: tự phân công bác sĩ đầu tiên của khoa còn trống khung giờ này
+        List<StaffProfile> departmentDoctors = staffProfileRepository.findByDepartmentId(request.getDepartmentId()).stream()
                 .filter(p -> p.getUser() != null && hasRole(p, ROLE_DOCTOR))
-                .min(Comparator.comparing(StaffProfile::getId))
-                .orElseThrow(() -> new BusinessException("Chuyên khoa này hiện chưa có bác sĩ nhận lịch."));
+                .sorted(Comparator.comparing(StaffProfile::getId))
+                .toList();
+        if (departmentDoctors.isEmpty()) {
+            throw new BusinessException("Chuyên khoa này hiện chưa có bác sĩ nhận lịch.");
+        }
+        LocalDateTime slot = request.getScheduledAt().withSecond(0).withNano(0);
+        return departmentDoctors.stream()
+                .filter(p -> !appointmentRepository.existsByDoctorIdAndScheduledAtAndStatusNotCancelled(p.getId(), slot))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(
+                        "Tất cả bác sĩ của chuyên khoa đã kín lịch vào khung giờ này. Vui lòng chọn khung giờ khác."));
     }
 
     private Patient findOrCreatePatient(String fullName, String phone) {
         return patientRepository.findFirstByPhoneAndFullNameIgnoreCase(phone, fullName)
                 .orElseGet(() -> {
                     Patient created = patientRepository.save(Patient.builder()
-                            .patientCode(generatePatientCode())
+                            .patientCode(PatientCodeGenerator.generate(patientRepository::existsByPatientCode))
                             .fullName(fullName)
                             .phone(phone)
                             .build());
                     log.info("Tạo hồ sơ bệnh nhân từ đặt lịch công khai: {}", created.getPatientCode());
                     return created;
                 });
-    }
-
-    private String generatePatientCode() {
-        String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyMMdd"));
-        String code;
-        int retries = 0;
-        do {
-            code = "BN-" + datePart + "-" + String.format("%03d", ThreadLocalRandom.current().nextInt(1000));
-            retries++;
-        } while (patientRepository.existsByPatientCode(code) && retries < 10);
-        return code;
     }
 
     private boolean hasRole(StaffProfile p, String role) {

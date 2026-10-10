@@ -15,7 +15,10 @@ import java.util.List;
  * Quản lý chi tiết một lượt khám bệnh của bệnh nhân với bác sĩ.
  */
 @Entity
-@Table(name = "visits")
+@Table(name = "visits", uniqueConstraints = {
+        // Mỗi lịch hẹn chỉ gắn với tối đa 1 lượt khám (V21)
+        @UniqueConstraint(name = "uk_visits_appointment", columnNames = {"appointment_id"})
+})
 @Getter
 @Setter
 @Builder

@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,7 +69,7 @@ class ScheduleServiceImplTest {
                 .note("Trực sáng")
                 .build();
 
-        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShift(5L, today, WorkShift.MORNING)).thenReturn(false);
+        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShiftIn(5L, today, EnumSet.of(WorkShift.MORNING, WorkShift.FULL_DAY))).thenReturn(false);
         when(staffProfileRepository.findById(5L)).thenReturn(Optional.of(doctor));
         when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
 
@@ -104,7 +105,7 @@ class ScheduleServiceImplTest {
                 .shift(WorkShift.MORNING)
                 .build();
 
-        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShift(5L, today, WorkShift.MORNING)).thenReturn(true);
+        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShiftIn(5L, today, EnumSet.of(WorkShift.MORNING, WorkShift.FULL_DAY))).thenReturn(true);
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 scheduleService.createSchedule(request));
@@ -119,7 +120,7 @@ class ScheduleServiceImplTest {
         ScheduleRequest req2 = ScheduleRequest.builder()
                 .staffId(5L).departmentId(1L).workDate(today.plusDays(1)).shift(WorkShift.AFTERNOON).build();
 
-        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShift(any(), any(), any())).thenReturn(false);
+        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShiftIn(any(), any(), any())).thenReturn(false);
         when(staffProfileRepository.findById(5L)).thenReturn(Optional.of(doctor));
         when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
         when(staffScheduleRepository.save(any(StaffSchedule.class))).thenAnswer(i -> i.getArgument(0));
@@ -133,6 +134,45 @@ class ScheduleServiceImplTest {
         assertNotNull(responses);
         assertEquals(2, responses.size());
         verify(staffScheduleRepository, times(2)).save(any(StaffSchedule.class));
+    }
+
+    @Test
+    @DisplayName("Ca cả ngày (FULL_DAY) chồng lấn ca sáng/chiều đã có trong ngày → chặn")
+    void createSchedule_FullDayOverlapsMorning_ThrowsBusinessException() {
+        ScheduleRequest request = ScheduleRequest.builder()
+                .staffId(5L)
+                .departmentId(1L)
+                .workDate(today)
+                .shift(WorkShift.FULL_DAY)
+                .build();
+
+        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShiftIn(
+                5L, today, EnumSet.of(WorkShift.MORNING, WorkShift.AFTERNOON, WorkShift.FULL_DAY))).thenReturn(true);
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                scheduleService.createSchedule(request));
+        assertTrue(ex.getMessage().contains("đã có lịch trực"));
+        verify(staffScheduleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Ca đêm không chồng lấn ca cả ngày")
+    void createSchedule_NightOnlyConflictsWithNight() {
+        ScheduleRequest request = ScheduleRequest.builder()
+                .staffId(5L)
+                .departmentId(1L)
+                .workDate(today)
+                .shift(WorkShift.NIGHT)
+                .build();
+
+        when(staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShiftIn(5L, today, EnumSet.of(WorkShift.NIGHT)))
+                .thenReturn(false);
+        when(staffProfileRepository.findById(5L)).thenReturn(Optional.of(doctor));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
+        when(staffScheduleRepository.save(any(StaffSchedule.class))).thenAnswer(i -> i.getArgument(0));
+
+        ScheduleResponse response = scheduleService.createSchedule(request);
+        assertEquals(WorkShift.NIGHT, response.getShift());
     }
 
     @Test

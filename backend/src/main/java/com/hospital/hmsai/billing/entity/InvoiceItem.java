@@ -37,6 +37,14 @@ public class InvoiceItem {
     @Column(name = "description", nullable = false)
     private String description;
 
+    @Column(name = "quantity", nullable = false)
+    @Builder.Default
+    private Integer quantity = 1;
+
+    @Column(name = "unit_price", precision = 12, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal unitPrice = BigDecimal.ZERO;
+
     @Column(name = "amount", precision = 12, scale = 2, nullable = false)
     @Builder.Default
     private BigDecimal amount = BigDecimal.ZERO;

@@ -1,5 +1,7 @@
 package com.hospital.hmsai.patient.service.impl;
 
+import com.hospital.hmsai.clinical.safety.AllergyDrugMatcher;
+import com.hospital.hmsai.common.exception.DuplicateResourceException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
 import com.hospital.hmsai.patient.dto.AllergyResponse;
 import com.hospital.hmsai.patient.dto.CreateAllergyRequest;
@@ -50,9 +52,18 @@ public class PatientAllergyServiceImpl implements PatientAllergyService {
         Patient patient = patientRepository.findById(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bệnh nhân", "id", patientId));
 
+        // Chống trùng dị ứng (không phân biệt hoa/thường, dấu tiếng Việt, khoảng trắng)
+        String allergen = request.getAllergen().trim();
+        String normalized = AllergyDrugMatcher.normalize(allergen);
+        boolean duplicated = allergyRepository.findByPatientId(patientId).stream()
+                .anyMatch(existing -> AllergyDrugMatcher.normalize(existing.getAllergen()).equals(normalized));
+        if (duplicated) {
+            throw new DuplicateResourceException("Dị ứng", "tên", allergen);
+        }
+
         PatientAllergy allergy = PatientAllergy.builder()
                 .patient(patient)
-                .allergen(request.getAllergen())
+                .allergen(allergen)
                 .severity(request.getSeverity() != null ? request.getSeverity() : AllergySeverity.MILD)
                 .note(request.getNote())
                 .build();

@@ -6,6 +6,7 @@ import com.hospital.hmsai.hr.dto.BatchScheduleRequest;
 import com.hospital.hmsai.hr.dto.ScheduleRequest;
 import com.hospital.hmsai.hr.dto.ScheduleResponse;
 import com.hospital.hmsai.hr.entity.StaffSchedule;
+import com.hospital.hmsai.hr.entity.WorkShift;
 import com.hospital.hmsai.hr.repository.StaffScheduleRepository;
 import com.hospital.hmsai.hr.service.ScheduleService;
 import com.hospital.hmsai.user.entity.Department;
@@ -19,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -35,11 +38,13 @@ public class ScheduleServiceImpl implements ScheduleService {
     public ScheduleResponse createSchedule(ScheduleRequest request) {
         log.info("Xếp lịch trực: staffId={}, date={}, shift={}", request.getStaffId(), request.getWorkDate(), request.getShift());
 
-        // 1. Kiểm tra chống trùng ca trực trong cùng một ngày cho nhân viên
-        if (staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShift(
-                request.getStaffId(), request.getWorkDate(), request.getShift())) {
+        // 1. Kiểm tra chống trùng / chồng lấn ca trực trong cùng một ngày cho nhân viên
+        //    (FULL_DAY chồng lấn MORNING, AFTERNOON và FULL_DAY; NIGHT chỉ trùng NIGHT)
+        if (request.getShift() != null && staffScheduleRepository.existsByStaffProfileIdAndWorkDateAndShiftIn(
+                request.getStaffId(), request.getWorkDate(), overlappingShifts(request.getShift()))) {
             throw new BusinessException("Nhân viên ID " + request.getStaffId() +
-                    " đã có lịch trực ca " + request.getShift() + " vào ngày " + request.getWorkDate());
+                    " đã có lịch trực trùng hoặc chồng lấn với ca " + request.getShift()
+                    + " vào ngày " + request.getWorkDate());
         }
 
         // 2. Tìm StaffProfile và Department
@@ -104,5 +109,17 @@ public class ScheduleServiceImpl implements ScheduleService {
         StaffSchedule schedule = staffScheduleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lịch trực", "id", id));
         staffScheduleRepository.delete(schedule);
+    }
+
+    /**
+     * Các ca chồng lấn với ca cần xếp: ca cả ngày (FULL_DAY) bao trùm ca sáng và ca chiều.
+     */
+    static Set<WorkShift> overlappingShifts(WorkShift shift) {
+        return switch (shift) {
+            case MORNING -> EnumSet.of(WorkShift.MORNING, WorkShift.FULL_DAY);
+            case AFTERNOON -> EnumSet.of(WorkShift.AFTERNOON, WorkShift.FULL_DAY);
+            case FULL_DAY -> EnumSet.of(WorkShift.MORNING, WorkShift.AFTERNOON, WorkShift.FULL_DAY);
+            case NIGHT -> EnumSet.of(WorkShift.NIGHT);
+        };
     }
 }

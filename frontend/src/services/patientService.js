@@ -1,69 +1,61 @@
 import apiClient from './api';
-
-const PATIENT_PROFILE_KEY = 'hms_patient_profile';
-const PATIENT_ALLERGIES_KEY = 'hms_patient_allergies';
+import { toAppError } from './apiError';
 
 /**
- * Patient Service – Quản lý hồ sơ bệnh nhân & dị ứng.
- * Hỗ trợ fallback offline khi Backend chưa sẵn sàng (dev/test).
+ * Patient Service – hồ sơ bệnh nhân, thẻ BHYT & dị ứng.
+ *
+ * Dị ứng là dữ liệu an toàn người bệnh: KHÔNG bao giờ trả danh sách giả khi không tải được
+ * (trước đây trả "Penicillin" mẫu). Lỗi được ném ra để giao diện hiển thị "chưa xác định" + Thử lại.
  */
-
-// ==================== Dữ liệu mẫu offline ====================
-const DEFAULT_PROFILE = {
-  id: 1,
-  patientCode: 'BN-260928-001',
-  fullName: 'Trần Đức Minh',
-  dob: '1995-03-20',
-  gender: 'MALE',
-  nationalId: '001099012345',
-  address: '123 Lê Lợi, Phường 1, Quận 1, TP.HCM',
-  phone: '0912345678',
-  bloodType: 'O+',
-  createdAt: '2026-09-01T10:00:00'
-};
-
-const DEFAULT_ALLERGIES = [
-  { id: 1, allergen: 'Penicillin', severity: 'SEVERE', note: 'Phản ứng phản vệ, khó thở', createdAt: '2026-08-15T08:30:00' },
-  { id: 2, allergen: 'Hải sản (tôm, cua)', severity: 'MODERATE', note: 'Nổi mề đay toàn thân', createdAt: '2026-08-20T14:00:00' },
-  { id: 3, allergen: 'Phấn hoa', severity: 'MILD', note: 'Hắt xì, ngứa mũi theo mùa', createdAt: '2026-09-01T09:15:00' }
-];
-
-// ==================== Helpers ====================
-
-const getStoredProfile = () => {
-  const raw = localStorage.getItem(PATIENT_PROFILE_KEY);
-  if (!raw) {
-    localStorage.setItem(PATIENT_PROFILE_KEY, JSON.stringify(DEFAULT_PROFILE));
-    return { ...DEFAULT_PROFILE };
-  }
-  try { return JSON.parse(raw); } catch { return { ...DEFAULT_PROFILE }; }
-};
-
-const getStoredAllergies = () => {
-  const raw = localStorage.getItem(PATIENT_ALLERGIES_KEY);
-  if (!raw) {
-    localStorage.setItem(PATIENT_ALLERGIES_KEY, JSON.stringify(DEFAULT_ALLERGIES));
-    return [...DEFAULT_ALLERGIES];
-  }
-  try { return JSON.parse(raw); } catch { return [...DEFAULT_ALLERGIES]; }
-};
 
 // ==================== Validation ====================
 
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+/** Mã thẻ BHYT: 2 chữ cái in hoa + 1 chữ số mức hưởng (1–5) + 12 chữ số = 15 ký tự. */
+export const INSURANCE_NUMBER_REGEX = /^[A-Z]{2}[1-5][0-9]{12}$/;
+export const VN_MOBILE_REGEX = /^0\d{9,10}$/;
+
+/** Chuẩn hóa mã thẻ BHYT khi nhập: bỏ khoảng trắng, viết hoa, tối đa 15 ký tự. */
+export const normalizeInsuranceNumber = (value) =>
+  String(value || '').replace(/\s+/g, '').toUpperCase().slice(0, 15);
+
+/**
+ * Kiểm tra thông tin thẻ BHYT (dùng cho lễ tân tạo / cập nhật hồ sơ).
+ * @returns {Object} map field → thông báo lỗi
+ */
+export function validateInsurance({ insuranceNumber, insuranceValidFrom, insuranceValidTo } = {}) {
+  const errors = {};
+  const number = normalizeInsuranceNumber(insuranceNumber);
+  if (number && !INSURANCE_NUMBER_REGEX.test(number)) {
+    errors.insuranceNumber = 'Mã thẻ BHYT gồm 15 ký tự: 2 chữ cái, 1 chữ số mức hưởng (1–5) và 12 chữ số';
+  }
+  if (!number && (insuranceValidFrom || insuranceValidTo)) {
+    errors.insuranceNumber = 'Nhập mã thẻ BHYT trước khi nhập thời hạn thẻ';
+  }
+  if (insuranceValidFrom && insuranceValidTo && insuranceValidFrom > insuranceValidTo) {
+    errors.insuranceValidTo = 'Ngày hết hạn phải sau ngày bắt đầu hiệu lực';
+  }
+  return errors;
+}
+
 /**
  * Validate dữ liệu hồ sơ bệnh nhân (khớp ràng buộc Bean Validation phía Backend).
+ * @param {object} data
+ * @param {{ requirePhone?: boolean, includeInsurance?: boolean }} options
  * @returns {Object} map field → thông báo lỗi (rỗng nếu hợp lệ)
  */
-export const validatePatientProfile = (data = {}) => {
+export const validatePatientProfile = (data = {}, options = {}) => {
   const errors = {};
   if (!data.fullName || !data.fullName.trim()) {
     errors.fullName = 'Họ tên không được để trống';
   } else if (data.fullName.length > 150) {
     errors.fullName = 'Họ tên tối đa 150 ký tự';
   }
-  if (data.phone && !/^0[0-9]{9,10}$/.test(data.phone)) {
+  const phone = String(data.phone || '').replace(/[\s.]/g, '');
+  if (options.requirePhone && !phone) {
+    errors.phone = 'Vui lòng nhập số điện thoại';
+  } else if (phone && !VN_MOBILE_REGEX.test(phone)) {
     errors.phone = 'Số điện thoại không hợp lệ';
   }
   if (data.nationalId && data.nationalId.length > 20) {
@@ -78,112 +70,159 @@ export const validatePatientProfile = (data = {}) => {
   if (data.bloodType && !BLOOD_TYPES.includes(data.bloodType)) {
     errors.bloodType = 'Nhóm máu không hợp lệ';
   }
+  if (options.includeInsurance) Object.assign(errors, validateInsurance(data));
   return errors;
+};
+
+/** Trạng thái hiệu lực thẻ BHYT để hiển thị. */
+export function insuranceStatus(patient, today = new Date()) {
+  if (!patient?.insuranceNumber) return { code: 'NONE', label: 'Chưa có thẻ BHYT' };
+  const pad = (n) => String(n).padStart(2, '0');
+  const iso = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  if (patient.insuranceValidTo && String(patient.insuranceValidTo).slice(0, 10) < iso) {
+    return { code: 'EXPIRED', label: 'Thẻ đã hết hạn' };
+  }
+  if (patient.insuranceValidFrom && String(patient.insuranceValidFrom).slice(0, 10) > iso) {
+    return { code: 'NOT_YET', label: 'Thẻ chưa đến ngày hiệu lực' };
+  }
+  return { code: 'VALID', label: 'Thẻ còn hiệu lực' };
+}
+
+const PROFILE_FIELDS = ['fullName', 'dob', 'gender', 'nationalId', 'address', 'phone', 'bloodType'];
+const INSURANCE_FIELDS = ['insuranceNumber', 'insuranceValidFrom', 'insuranceValidTo'];
+
+/** Bỏ chuỗi rỗng (gửi null) để backend không lỗi parse ngày/enum. */
+function buildPatientPayload(data = {}, { includeInsurance }) {
+  const fields = includeInsurance ? [...PROFILE_FIELDS, ...INSURANCE_FIELDS] : PROFILE_FIELDS;
+  const payload = {};
+  for (const f of fields) {
+    if (!(f in data)) continue;
+    let v = data[f];
+    if (typeof v === 'string') v = v.trim();
+    if (f === 'phone' && v) v = v.replace(/[\s.]/g, '');
+    if (f === 'insuranceNumber' && v) v = normalizeInsuranceNumber(v);
+    payload[f] = v === '' || v === undefined ? null : v;
+  }
+  return payload;
+}
+
+const pageContent = (res) => {
+  const data = res?.data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.content)) return data.content;
+  return [];
 };
 
 // ==================== Service API ====================
 
 export const patientService = {
-
-  /**
-   * Lấy hồ sơ bệnh nhân hiện tại (GET /patients/me).
-   */
+  /** Hồ sơ của bệnh nhân đang đăng nhập (GET /patients/me). */
   async getMyProfile() {
     try {
       const res = await apiClient.get('/patients/me');
-      if (res && res.data) return res.data;
-    } catch {
-      // Fallback offline
+      return res?.data ?? null;
+    } catch (err) {
+      throw toAppError(err, 'Không tải được hồ sơ bệnh nhân.');
     }
-    return getStoredProfile();
   },
 
   /**
-   * Cập nhật hồ sơ bệnh nhân (PUT /patients/me).
+   * Bệnh nhân tự cập nhật hồ sơ (PUT /patients/me).
+   * Thông tin thẻ BHYT KHÔNG được gửi – chỉ quầy tiếp đón cập nhật.
    */
   async updateMyProfile(updateData) {
     try {
-      const res = await apiClient.put('/patients/me', updateData);
-      if (res && res.data) return res.data;
-    } catch {
-      // Fallback offline
+      const res = await apiClient.put('/patients/me', buildPatientPayload(updateData, { includeInsurance: false }));
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Không lưu được hồ sơ.');
     }
-
-    // Offline: lưu vào localStorage
-    const current = getStoredProfile();
-    const updated = { ...current, ...updateData, updatedAt: new Date().toISOString() };
-    localStorage.setItem(PATIENT_PROFILE_KEY, JSON.stringify(updated));
-    return updated;
   },
 
-  /**
-   * Lấy danh sách dị ứng (GET /patients/{id}/allergies).
-   */
+  /** Tìm kiếm bệnh nhân cho nhân viên (GET /patients?keyword=). */
+  async searchPatients(keyword = '', { size = 20 } = {}) {
+    try {
+      const params = { size };
+      if (keyword && keyword.trim()) params.keyword = keyword.trim();
+      const res = await apiClient.get('/patients', { params });
+      return pageContent(res);
+    } catch (err) {
+      throw toAppError(err, 'Không tìm được hồ sơ bệnh nhân.');
+    }
+  },
+
+  /** Giữ tương thích tên hàm cũ. */
+  async getPatients(keyword = '') {
+    return this.searchPatients(keyword);
+  },
+
+  async getPatientById(id) {
+    try {
+      const res = await apiClient.get(`/patients/${id}`);
+      return res?.data ?? null;
+    } catch (err) {
+      throw toAppError(err, `Không tải được hồ sơ bệnh nhân #${id}.`);
+    }
+  },
+
+  /** Lễ tân tạo hồ sơ (có thể kèm thẻ BHYT). */
+  async createPatient(data) {
+    try {
+      const res = await apiClient.post('/patients', buildPatientPayload(data, { includeInsurance: true }));
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Không tạo được hồ sơ bệnh nhân.');
+    }
+  },
+
+  /** Lễ tân cập nhật hồ sơ (có thể kèm thẻ BHYT). */
+  async updatePatient(id, data) {
+    try {
+      const res = await apiClient.put(`/patients/${id}`, buildPatientPayload(data, { includeInsurance: true }));
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Không cập nhật được hồ sơ bệnh nhân.');
+    }
+  },
+
+  /** Danh sách dị ứng (GET /patients/{id}/allergies). Lỗi → ném ra, KHÔNG trả dữ liệu mẫu. */
   async getAllergies(patientId) {
+    if (!patientId) throw new Error('Thiếu mã bệnh nhân để tải thông tin dị ứng.');
     try {
       const res = await apiClient.get(`/patients/${patientId}/allergies`);
-      if (res && res.data) return res.data;
-    } catch {
-      // Fallback offline
+      return Array.isArray(res?.data) ? res.data : [];
+    } catch (err) {
+      throw toAppError(err, 'Không tải được thông tin dị ứng.');
     }
-    return getStoredAllergies();
   },
 
-  /**
-   * Lấy danh sách dị ứng của bệnh nhân hiện tại.
-   */
   async getMyAllergies() {
-    try {
-      const profile = await this.getMyProfile();
-      if (profile && profile.id) {
-        return await this.getAllergies(profile.id);
-      }
-    } catch {
-      // Fallback offline
-    }
-    return getStoredAllergies();
+    const profile = await this.getMyProfile();
+    if (!profile?.id) return [];
+    return this.getAllergies(profile.id);
   },
 
-  /**
-   * Thêm dị ứng mới (POST /patients/{id}/allergies).
-   */
-  async addAllergy(patientId, allergyData) {
+  async addAllergy(patientId, { allergen, severity, note } = {}) {
     try {
-      const res = await apiClient.post(`/patients/${patientId}/allergies`, allergyData);
-      if (res && res.data) return res.data;
-    } catch {
-      // Fallback offline
+      const res = await apiClient.post(`/patients/${patientId}/allergies`, {
+        allergen: String(allergen || '').trim(),
+        severity: severity || 'MILD',
+        note: note ? String(note).trim() : undefined
+      });
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Không thêm được dị ứng.');
     }
-
-    // Offline: lưu vào localStorage
-    const allergies = getStoredAllergies();
-    const newAllergy = {
-      id: Date.now(),
-      allergen: allergyData.allergen,
-      severity: allergyData.severity || 'MILD',
-      note: allergyData.note || '',
-      createdAt: new Date().toISOString()
-    };
-    allergies.push(newAllergy);
-    localStorage.setItem(PATIENT_ALLERGIES_KEY, JSON.stringify(allergies));
-    return newAllergy;
   },
 
-  /**
-   * Xóa dị ứng (DELETE /patients/{id}/allergies/{allergyId}).
-   */
   async deleteAllergy(patientId, allergyId) {
     try {
       await apiClient.delete(`/patients/${patientId}/allergies/${allergyId}`);
       return true;
-    } catch {
-      // Fallback offline
+    } catch (err) {
+      throw toAppError(err, 'Không xóa được dị ứng.');
     }
-
-    // Offline: xóa khỏi localStorage
-    const allergies = getStoredAllergies();
-    const filtered = allergies.filter(a => a.id !== allergyId);
-    localStorage.setItem(PATIENT_ALLERGIES_KEY, JSON.stringify(filtered));
-    return true;
   }
 };
+
+export default patientService;

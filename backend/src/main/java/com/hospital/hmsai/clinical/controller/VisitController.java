@@ -4,6 +4,7 @@ import com.hospital.hmsai.clinical.dto.*;
 import com.hospital.hmsai.clinical.entity.VisitStatus;
 import com.hospital.hmsai.clinical.service.VisitService;
 import com.hospital.hmsai.common.ApiResponse;
+import com.hospital.hmsai.security.SecurityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -16,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,13 +30,20 @@ import java.util.List;
 public class VisitController {
 
     private final VisitService visitService;
+    private final SecurityService securityService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'NURSE', 'ADMIN')")
-    @Operation(summary = "Bắt đầu ca khám bệnh", description = "Bác sĩ hoặc điều dưỡng tạo lượt khám mới (từ lịch hẹn hoặc trực tiếp).")
+    @Operation(summary = "Bắt đầu ca khám bệnh", description = "Bác sĩ hoặc điều dưỡng tạo lượt khám mới (từ lịch hẹn hoặc trực tiếp). "
+            + "Chỉ BÁC SĨ/ADMIN được ghi chẩn đoán; chẩn đoán do lễ tân/điều dưỡng gửi lên bị bỏ qua.")
     public ResponseEntity<ApiResponse<VisitResponse>> createVisit(
-            @Valid @RequestBody CreateVisitRequest request) {
+            @Valid @RequestBody CreateVisitRequest request,
+            Authentication authentication) {
         log.info("POST /api/v1/visits – patientId: {}, doctorId: {}", request.getPatientId(), request.getDoctorId());
+        if (!SecurityService.hasAnyRole(authentication, "DOCTOR", "ADMIN")) {
+            request.setDiagnosisCode(null);
+            request.setDiagnosisNote(null);
+        }
         VisitResponse response = visitService.createVisit(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Bắt đầu lượt khám bệnh thành công"));
@@ -54,7 +63,8 @@ public class VisitController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'RECEPTIONIST', 'ADMIN', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'RECEPTIONIST', 'ADMIN') "
+            + "or (hasRole('PATIENT') and @securityService.isVisitPatient(#id, authentication))")
     @Operation(summary = "Chi tiết ca khám bệnh", description = "Xem chi tiết ca khám kèm sinh hiệu, đơn thuốc và kết quả cận lâm sàng.")
     public ResponseEntity<ApiResponse<VisitResponse>> getVisitById(@PathVariable Long id) {
         log.info("GET /api/v1/visits/{}", id);
@@ -63,19 +73,24 @@ public class VisitController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'ADMIN')")
-    @Operation(summary = "Cập nhật sinh hiệu và chẩn đoán", description = "Bác sĩ cập nhật thông tin sinh hiệu, lý do khám, mã ICD-10 và ghi chú lâm sàng.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'NURSE') "
+            + "or (hasRole('DOCTOR') and @securityService.isVisitDoctor(#id, authentication))")
+    @Operation(summary = "Cập nhật sinh hiệu và chẩn đoán", description = "Bác sĩ phụ trách (hoặc ADMIN) cập nhật sinh hiệu, lý do khám, mã ICD-10 và ghi chú lâm sàng. "
+            + "Điều dưỡng chỉ được cập nhật sinh hiệu. Sinh hiệu được gộp: chỉ số không gửi lên giữ nguyên.")
     public ResponseEntity<ApiResponse<VisitResponse>> updateVisit(
             @PathVariable Long id,
-            @Valid @RequestBody UpdateVisitRequest request) {
+            @Valid @RequestBody UpdateVisitRequest request,
+            Authentication authentication) {
         log.info("PUT /api/v1/visits/{} – diagnosis: {}", id, request.getDiagnosisCode());
-        VisitResponse response = visitService.updateVisit(id, request);
+        boolean clinicalEditor = SecurityService.hasAnyRole(authentication, "ADMIN")
+                || (SecurityService.hasAnyRole(authentication, "DOCTOR") && securityService.isVisitDoctor(id, authentication));
+        VisitResponse response = visitService.updateVisit(id, request, !clinicalEditor);
         return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật thông tin ca khám thành công"));
     }
 
     @PatchMapping("/{id}/complete")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN')")
-    @Operation(summary = "Hoàn tất ca khám bệnh", description = "Bác sĩ xác nhận hoàn tất ca khám, cập nhật trạng thái COMPLETED và lưu vào bệnh án EMR.")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('DOCTOR') and @securityService.isVisitDoctor(#id, authentication))")
+    @Operation(summary = "Hoàn tất ca khám bệnh", description = "Bác sĩ phụ trách xác nhận hoàn tất ca khám (bắt buộc có mã chẩn đoán ICD-10), cập nhật trạng thái COMPLETED và lưu vào bệnh án EMR.")
     public ResponseEntity<ApiResponse<VisitResponse>> completeVisit(@PathVariable Long id) {
         log.info("PATCH /api/v1/visits/{}/complete", id);
         VisitResponse response = visitService.completeVisit(id);
@@ -83,8 +98,9 @@ public class VisitController {
     }
 
     @PostMapping("/{id}/prescriptions")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN')")
-    @Operation(summary = "Kê đơn thuốc cho ca khám", description = "Bác sĩ thêm danh sách thuốc điều trị cho bệnh nhân kèm liều dùng và cách dùng.")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('DOCTOR') and @securityService.isVisitDoctor(#id, authentication))")
+    @Operation(summary = "Kê đơn thuốc cho ca khám", description = "Bác sĩ phụ trách kê đơn kèm liều dùng và cách dùng. Đơn có tương tác thuốc nghiêm trọng "
+            + "hoặc dị ứng mức trung bình/nặng bị chặn (400 PRESCRIPTION_SAFETY_BLOCK) cho tới khi bác sĩ nhập overrideReason.")
     public ResponseEntity<ApiResponse<PrescriptionResponse>> createPrescription(
             @PathVariable Long id,
             @Valid @RequestBody CreatePrescriptionRequest request) {
@@ -95,7 +111,8 @@ public class VisitController {
     }
 
     @GetMapping("/{id}/prescriptions")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'PHARMACIST', 'NURSE', 'RECEPTIONIST', 'ADMIN', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'PHARMACIST', 'NURSE', 'RECEPTIONIST', 'ADMIN') "
+            + "or (hasRole('PATIENT') and @securityService.isVisitPatient(#id, authentication))")
     @Operation(summary = "Xem đơn thuốc của ca khám", description = "Lấy danh sách các đơn thuốc đã kê trong lượt khám này.")
     public ResponseEntity<ApiResponse<List<PrescriptionResponse>>> getPrescriptions(@PathVariable Long id) {
         log.info("GET /api/v1/visits/{}/prescriptions", id);
@@ -104,8 +121,8 @@ public class VisitController {
     }
 
     @PostMapping("/{id}/lab-orders")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN')")
-    @Operation(summary = "Chỉ định cận lâm sàng", description = "Bác sĩ chỉ định các xét nghiệm hoặc chẩn đoán hình ảnh cần thực hiện.")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('DOCTOR') and @securityService.isVisitDoctor(#id, authentication))")
+    @Operation(summary = "Chỉ định cận lâm sàng", description = "Bác sĩ phụ trách chỉ định các xét nghiệm hoặc chẩn đoán hình ảnh cần thực hiện.")
     public ResponseEntity<ApiResponse<LabOrderResponse>> createLabOrder(
             @PathVariable Long id,
             @Valid @RequestBody CreateLabOrderRequest request) {
@@ -116,7 +133,8 @@ public class VisitController {
     }
 
     @GetMapping("/{id}/lab-orders")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'ADMIN', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'ADMIN') "
+            + "or (hasRole('PATIENT') and @securityService.isVisitPatient(#id, authentication))")
     @Operation(summary = "Danh sách cận lâm sàng của ca khám", description = "Lấy danh sách các xét nghiệm đã chỉ định kèm kết quả (nếu có).")
     public ResponseEntity<ApiResponse<List<LabOrderResponse>>> getLabOrders(@PathVariable Long id) {
         log.info("GET /api/v1/visits/{}/lab-orders", id);

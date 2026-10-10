@@ -14,12 +14,21 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RevenueSummaryResponse {
+    /** Tổng chi phí của hóa đơn đã thu trong kỳ (gồm phần BHYT). */
     private BigDecimal totalRevenue;
+    /** Phần BHYT chi trả – khoản phải thu từ cơ quan BHXH. */
+    private BigDecimal insuranceAmount;
+    /** Tiền thực thu từ người bệnh. */
+    private BigDecimal patientCollected;
     private long totalInvoices;
     private long paidInvoicesCount;
     private long pendingInvoicesCount;
+    private long refundedInvoicesCount;
+    private BigDecimal refundedAmount;
     private BigDecimal cashRevenue;
     private BigDecimal vietQrRevenue;
+    private BigDecimal bankTransferRevenue;
+    private BigDecimal cardRevenue;
     private List<DailyRevenueStat> dailyRevenues;
 
     @Data

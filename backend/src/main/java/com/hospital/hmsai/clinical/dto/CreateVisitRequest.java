@@ -1,5 +1,6 @@
 package com.hospital.hmsai.clinical.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +23,7 @@ public class CreateVisitRequest {
 
     private String chiefComplaint;
 
+    @Valid
     private VitalSignsDto vitalSigns;
 
     private String diagnosisCode;

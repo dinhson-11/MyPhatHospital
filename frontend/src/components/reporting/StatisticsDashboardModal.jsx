@@ -1,895 +1,518 @@
-import React, { useState, useEffect } from 'react';
-import { reportService } from '../../services/reportService';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import React, { useId, useMemo, useState } from 'react';
+import Modal from '../common/Modal';
+import { useAuth } from '../../context/AuthContext';
+import {
+  reportService,
+  getReportRange,
+  getMethodBreakdown,
+  getPayerSplit,
+  formatPercent,
+  formatCount
+} from '../../services/reportService';
+import { formatVND, formatDate } from '../../utils/format';
+import { useAsyncData } from './useAsyncData';
+import { Icon, ErrorPanel, EmptyPanel, KpiCard, KpiSkeleton, BlockSkeleton } from './ReportStates';
 
-export default function StatisticsDashboardModal({ isOpen, onClose, onShowToast }) {
-  useEscapeKey(isOpen, onClose);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'visits' | 'revenue' | 'diagnoses'
-  const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState('7days');
+const RANGE_OPTIONS = [
+  { value: '7days', label: '7 ngày qua' },
+  { value: '30days', label: '30 ngày qua' },
+  { value: 'this_month', label: 'Tháng này' }
+];
 
-  const [kpi, setKpi] = useState({
-    totalPatients: 1284,
-    todayAppointments: 42,
-    todayVisits: 38,
-    todayRevenue: 28450000,
-    activeStaffCount: 48,
-    lowStockDrugsCount: 3,
-    aiAlertsCount: 64
-  });
+const TABS = [
+  { key: 'overview', label: 'Tổng quan', icon: 'dashboard', adminOnly: true },
+  { key: 'visits', label: 'Lượt khám', icon: 'how_to_reg', adminOnly: true },
+  { key: 'revenue', label: 'Doanh thu & viện phí', icon: 'payments', adminOnly: false },
+  { key: 'diagnoses', label: 'Mô hình bệnh (ICD-10)', icon: 'monitoring', adminOnly: true }
+];
 
-  const [visitsData, setVisitsData] = useState({
-    totalVisits: 245,
-    completedVisits: 220,
-    inProgressVisits: 18,
-    waitingVisits: 7,
-    cancelledAppointments: 5,
-    dailyStats: []
-  });
+/** Màu cố định cho từng phương thức thanh toán (dùng chung cho thanh tỷ lệ và chú thích). */
+const METHOD_COLORS = {
+  CASH: 'bg-amber-500',
+  VIETQR: 'bg-primary',
+  BANK_TRANSFER: 'bg-sky-500',
+  CARD: 'bg-teal-500'
+};
 
-  const [revenueData, setRevenueData] = useState({
-    totalRevenue: 198500000,
-    totalInvoices: 145,
-    paidInvoicesCount: 138,
-    pendingInvoicesCount: 7,
-    cashRevenue: 75430000,
-    vietQrRevenue: 123070000,
-    dailyRevenues: []
-  });
+const Section = ({ title, subtitle, actions, children, className = '' }) => (
+  <section className={`card p-5 ${className}`}>
+    <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+      <div>
+        <h3 className="text-heading">{title}</h3>
+        {subtitle && <p className="text-caption mt-0.5">{subtitle}</p>}
+      </div>
+      {actions}
+    </div>
+    {children}
+  </section>
+);
 
-  const [diagnoses, setDiagnoses] = useState([]);
+/** Thanh tỷ lệ xếp chồng + chú thích. items: [{ key, label, amount, percent, colorClass }] */
+function StackedShare({ items, ariaLabel }) {
+  const visible = items.filter((i) => i.percent > 0);
+  return (
+    <div>
+      <div className="flex w-full h-3 rounded-full overflow-hidden bg-slate-100" role="img" aria-label={ariaLabel}>
+        {visible.map((i) => (
+          <div key={i.key} className={i.colorClass} style={{ width: `${Math.min(100, i.percent)}%` }} />
+        ))}
+      </div>
+      <ul className="mt-4 space-y-2.5">
+        {items.map((i) => (
+          <li key={i.key} className="flex items-center justify-between gap-3 text-sm">
+            <span className="flex items-center gap-2 min-w-0">
+              <span className={`w-3 h-3 rounded-full shrink-0 ${i.colorClass}`} aria-hidden="true" />
+              <span className="text-slate-700 truncate">{i.label}</span>
+            </span>
+            <span className="flex items-baseline gap-2 shrink-0 tabular-nums">
+              <span className="font-semibold text-slate-900">{formatVND(i.amount)}</span>
+              <span className="text-xs text-slate-500 w-14 text-right">{formatPercent(i.percent)}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    if (isOpen) {
-      loadAllData();
-    }
-  }, [isOpen, dateRange]);
+function MethodBreakdown({ revenue }) {
+  const breakdown = getMethodBreakdown(revenue);
+  if (!revenue?.patientCollected) {
+    return <EmptyPanel icon="payments" title="Chưa có khoản thu từ người bệnh" text="Không có hóa đơn nào được thu trong khoảng thời gian này." />;
+  }
+  return (
+    <StackedShare
+      ariaLabel={`Cơ cấu thu theo phương thức: ${breakdown.map((m) => `${m.label} ${formatPercent(m.percent)}`).join(', ')}`}
+      items={breakdown.map((m) => ({ key: m.method, label: m.label, amount: m.amount, percent: m.percent, colorClass: METHOD_COLORS[m.method] }))}
+    />
+  );
+}
 
-  const loadAllData = async () => {
-    setLoading(true);
-    try {
-      const [kpiRes, visitsRes, revRes, diagRes] = await Promise.all([
-        reportService.getKpiSummary(),
-        reportService.getVisitsSummary(),
-        reportService.getRevenueSummary(),
-        reportService.getTopDiagnoses(5)
-      ]);
-      if (kpiRes) setKpi(kpiRes);
-      if (visitsRes) setVisitsData(visitsRes);
-      if (revRes) setRevenueData(revRes);
-      if (diagRes) setDiagnoses(diagRes);
-    } catch (err) {
-      console.error('Lỗi khi tải báo cáo thống kê:', err);
-      onShowToast?.('Không thể tải toàn bộ dữ liệu báo cáo mới nhất', 'warning');
-    } finally {
-      setLoading(false);
-    }
+function PayerSplit({ revenue }) {
+  const split = getPayerSplit(revenue);
+  if (!split.total) {
+    return <EmptyPanel icon="health_and_safety" title="Chưa có doanh thu" text="Không có hóa đơn nào được thu trong khoảng thời gian này." />;
+  }
+  return (
+    <StackedShare
+      ariaLabel={`BHYT chi trả ${formatPercent(split.insurancePercent)}, người bệnh thanh toán ${formatPercent(split.patientPercent)}`}
+      items={[
+        { key: 'patient', label: 'Người bệnh thanh toán', amount: split.patient, percent: split.patientPercent, colorClass: 'bg-primary' },
+        { key: 'insurance', label: 'BHYT chi trả', amount: split.insurance, percent: split.insurancePercent, colorClass: 'bg-teal-500' }
+      ]}
+    />
+  );
+}
+
+function VisitsChart({ visits }) {
+  const rows = visits?.dailyStats || [];
+  if (rows.length === 0 || rows.every((r) => !r.total)) {
+    return <EmptyPanel icon="bar_chart" title="Chưa có lượt khám" text="Không có lượt khám nào trong khoảng thời gian này." />;
+  }
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  const dense = rows.length > 10;
+  return (
+    <div
+      className="h-52 flex items-end gap-1 sm:gap-2 pt-6"
+      role="img"
+      aria-label={`Biểu đồ lượt khám theo ngày: ${rows.map((r) => `${formatDate(r.date)} ${r.total} lượt`).join('; ')}`}
+    >
+      {rows.map((day) => (
+        <div key={day.date} className="flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1">
+          {!dense && <span className="text-xs font-semibold text-slate-700 tabular-nums">{day.total}</span>}
+          <div
+            className="w-full max-w-[36px] rounded-t-lg bg-primary"
+            style={{ height: `${Math.max((day.total / max) * 100, day.total ? 4 : 1)}%` }}
+            title={`${formatDate(day.date)}: ${day.total} lượt khám (${day.completed} hoàn tất)`}
+          />
+          {!dense && <span className="text-xs text-slate-500 whitespace-nowrap">{formatDate(day.date).slice(0, 5)}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DiagnosisList({ diagnoses }) {
+  if (!diagnoses?.length) {
+    return <EmptyPanel icon="monitoring" title="Chưa có dữ liệu chẩn đoán" text="Số liệu xuất hiện khi bác sĩ hoàn tất khám và ghi mã ICD-10." />;
+  }
+  const max = Math.max(1, ...diagnoses.map((d) => d.count));
+  return (
+    <ul className="space-y-3">
+      {diagnoses.map((d) => (
+        <li key={d.icd10Code} className="space-y-1.5">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate text-slate-800" title={d.diseaseName}>
+              <span className="font-mono font-bold text-primary mr-2">{d.icd10Code}</span>
+              {d.diseaseName}
+            </span>
+            <span className="shrink-0 text-xs font-semibold text-slate-600 tabular-nums">
+              {formatCount(d.count)} ca · {formatPercent(d.percentage)}
+            </span>
+          </div>
+          <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden" aria-hidden="true">
+            <div className="h-full rounded-full bg-secondary" style={{ width: `${Math.round((d.count / max) * 100)}%` }} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Hiển thị nội dung theo trạng thái tải: khung chờ → lỗi (thử lại) → nội dung. */
+function Loadable({ resource, skeleton, children }) {
+  if (resource.status === 'loading' || resource.status === 'idle') return skeleton;
+  if (resource.status === 'error') return <ErrorPanel compact message={resource.error} onRetry={resource.reload} />;
+  return children(resource.data);
+}
+
+export default function StatisticsDashboardModal({ isOpen, onClose }) {
+  const { isAdmin, isAccountant } = useAuth();
+  const canSeeOps = isAdmin; // KPI, lượt khám, mô hình bệnh: chỉ ADMIN (theo quyền backend)
+  const canSeeRevenue = isAdmin || isAccountant;
+
+  const tabs = useMemo(
+    () => TABS.filter((t) => (t.adminOnly ? canSeeOps : canSeeRevenue)),
+    [canSeeOps, canSeeRevenue]
+  );
+  const [activeTab, setActiveTab] = useState(tabs[0]?.key || 'revenue');
+  const [rangeKey, setRangeKey] = useState('7days');
+  const range = getReportRange(rangeKey);
+  const rangeLabel = `${formatDate(range.from)} – ${formatDate(range.to)}`;
+  const tabsId = useId();
+  const rangeSelectId = useId();
+
+  // Tab hiện tại luôn hợp lệ theo quyền (suy ra khi render, không cần effect)
+  const currentTab = tabs.some((t) => t.key === activeTab) ? activeTab : tabs[0]?.key;
+
+  const dataKey = `${rangeKey}:${range.from}:${range.to}`;
+  const kpi = useAsyncData(() => reportService.getKpiSummary(), { enabled: isOpen && canSeeOps, key: dataKey });
+  const visits = useAsyncData(() => reportService.getVisitsSummary(range.from, range.to), { enabled: isOpen && canSeeOps, key: dataKey });
+  const revenue = useAsyncData(() => reportService.getRevenueSummary(range.from, range.to), { enabled: isOpen && canSeeRevenue, key: dataKey });
+  const diagnoses = useAsyncData(() => reportService.getTopDiagnoses(10), { enabled: isOpen && canSeeOps, key: dataKey });
+
+  const resources = [canSeeOps && kpi, canSeeOps && visits, canSeeRevenue && revenue, canSeeOps && diagnoses].filter(Boolean);
+  const anyLoading = resources.some((r) => r.status === 'loading');
+  const refreshAll = () => resources.forEach((r) => r.reload());
+
+  const handlePrint = () => {
+    document.body.classList.add('print-dialog');
+    const cleanup = () => document.body.classList.remove('print-dialog');
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.print();
+    cleanup();
   };
 
-  if (!isOpen) return null;
-
-  const formatVND = (num) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+  const handleTabKeyDown = (event, index) => {
+    let next = null;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = tabs.length - 1;
+    if (next === null) return;
+    event.preventDefault();
+    setActiveTab(tabs[next].key);
+    document.getElementById(`${tabsId}-tab-${tabs[next].key}`)?.focus();
   };
 
-  const maxVisitCount = visitsData?.dailyStats?.length
-    ? Math.max(...visitsData.dailyStats.map((d) => d.total), 1)
-    : 40;
+  if (!canSeeRevenue && !canSeeOps) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Báo cáo & thống kê" icon="query_stats" size="sm">
+        <ErrorPanel title="Không có quyền truy cập" message="Chỉ quản trị viên và kế toán được xem báo cáo thống kê." />
+      </Modal>
+    );
+  }
 
-  const maxRevenueAmount = revenueData?.dailyRevenues?.length
-    ? Math.max(...revenueData.dailyRevenues.map((d) => d.amount), 1)
-    : 30000000;
-
-  const handleExportReport = () => {
-    onShowToast?.('Đang xuất báo cáo tổng hợp PDF/Excel...', 'info');
-    setTimeout(() => {
-      window.print();
-    }, 500);
-  };
+  const rev = revenue.data;
 
   return (
-    <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={onClose}>
-      <div
-        className="modal-content modal-large"
-        style={{
-          maxWidth: '1100px',
-          width: '95%',
-          maxHeight: '92vh',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '0',
-          overflow: 'hidden',
-          borderRadius: '16px'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #005440 0%, #00796b 100%)',
-            color: '#fff',
-            padding: '20px 24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '10px',
-                background: 'rgba(255,255,255,0.18)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                query_stats
-              </span>
-            </div>
-            <div>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
-                Trung Tâm Báo Cáo & Thống Kê Bệnh Viện (BI)
-              </h2>
-              <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#e0f2f1' }}>
-                Số liệu khám chữa bệnh, doanh thu viện phí, mô hình bệnh tật & KPI vận hành
-              </p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={handleExportReport}
-              style={{
-                backgroundColor: 'rgba(255,255,255,0.15)',
-                color: '#fff',
-                borderColor: 'rgba(255,255,255,0.3)',
-                padding: '6px 14px',
-                fontSize: '0.85rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                print
-              </span>
-              In Báo Cáo
-            </button>
-            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#e0f2f1', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '4px', padding: '2px 6px' }}>
-              ESC
-            </span>
-            <button
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#fff',
-                cursor: 'pointer',
-                padding: '4px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              title="Đóng (Esc)"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                close
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Sub-header Tabs & Filters */}
-        <div
-          style={{
-            backgroundColor: '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
-            padding: '10px 24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}
-        >
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className={`btn ${activeTab === 'overview' ? 'btn-primary' : 'btn-light'}`}
-              style={{ padding: '6px 14px', fontSize: '0.88rem' }}
-              onClick={() => setActiveTab('overview')}
-            >
-              Tổng quan KPI
-            </button>
-            <button
-              className={`btn ${activeTab === 'visits' ? 'btn-primary' : 'btn-light'}`}
-              style={{ padding: '6px 14px', fontSize: '0.88rem' }}
-              onClick={() => setActiveTab('visits')}
-            >
-              Lượt khám & Khám bệnh
-            </button>
-            <button
-              className={`btn ${activeTab === 'revenue' ? 'btn-primary' : 'btn-light'}`}
-              style={{ padding: '6px 14px', fontSize: '0.88rem' }}
-              onClick={() => setActiveTab('revenue')}
-            >
-              Doanh thu & Viện phí
-            </button>
-            <button
-              className={`btn ${activeTab === 'diagnoses' ? 'btn-primary' : 'btn-light'}`}
-              style={{ padding: '6px 14px', fontSize: '0.88rem' }}
-              onClick={() => setActiveTab('diagnoses')}
-            >
-              Mô hình bệnh (ICD-10)
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.85rem',
-                backgroundColor: '#fff'
-              }}
-            >
-              <option value="7days">7 ngày qua</option>
-              <option value="30days">30 ngày qua</option>
-              <option value="this_month">Tháng hiện tại</option>
-            </select>
-
-            <button
-              className="btn btn-light"
-              style={{ padding: '6px 10px', fontSize: '0.85rem' }}
-              onClick={loadAllData}
-              disabled={loading}
-              title="Làm mới số liệu"
-            >
-              <span className={`material-symbols-outlined ${loading ? 'spin' : ''}`} style={{ fontSize: '18px' }}>
-                sync
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Body content */}
-        <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, backgroundColor: '#fcfdfd' }}>
-          {/* Top 4 KPI Cards (Hiển thị trong mọi tab hoặc tab overview) */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '16px',
-              marginBottom: '24px'
-            }}
-          >
-            {/* KPI 1 */}
-            <div
-              style={{
-                backgroundColor: '#fff',
-                padding: '16px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px'
-              }}
-            >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '10px',
-                  backgroundColor: '#e6fffa',
-                  color: '#005440',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                  groups
-                </span>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-                  Tổng bệnh nhân quản lý
-                </div>
-                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a' }}>
-                  {kpi.totalPatients?.toLocaleString('vi-VN')}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '2px' }}>
-                  +12 bệnh nhân mới hôm nay
-                </div>
-              </div>
-            </div>
-
-            {/* KPI 2 */}
-            <div
-              style={{
-                backgroundColor: '#fff',
-                padding: '16px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px'
-              }}
-            >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '10px',
-                  backgroundColor: '#eff6ff',
-                  color: '#1960a6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                  medical_services
-                </span>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-                  Lượt khám trong ngày
-                </div>
-                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a' }}>
-                  {kpi.todayVisits}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                  Hẹn trước: {kpi.todayAppointments} ca
-                </div>
-              </div>
-            </div>
-
-            {/* KPI 3 */}
-            <div
-              style={{
-                backgroundColor: '#fff',
-                padding: '16px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px'
-              }}
-            >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '10px',
-                  backgroundColor: '#fefce8',
-                  color: '#ca8a04',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                  payments
-                </span>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-                  Doanh thu hôm nay
-                </div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
-                  {formatVND(kpi.todayRevenue)}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                  Napas VietQR & Tiền mặt
-                </div>
-              </div>
-            </div>
-
-            {/* KPI 4 */}
-            <div
-              style={{
-                backgroundColor: '#fff',
-                padding: '16px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px'
-              }}
-            >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '10px',
-                  backgroundColor: '#f3e8ff',
-                  color: '#7e22ce',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                  smart_toy
-                </span>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-                  Cảnh báo AI an toàn
-                </div>
-                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a' }}>
-                  {kpi.aiAlertsCount}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#7e22ce', marginTop: '2px' }}>
-                  Ngăn ngừa tương tác & dị ứng
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* TAB 1: OVERVIEW */}
-          {activeTab === 'overview' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
-                  gap: '20px'
-                }}
-              >
-                {/* Biểu đồ số lượt khám 7 ngày qua */}
-                <div
-                  style={{
-                    backgroundColor: '#fff',
-                    padding: '20px',
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '16px'
-                    }}
-                  >
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>
-                        Biểu Đồ Lượt Khám 7 Ngày Gần Nhất
-                      </h4>
-                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        Tổng {visitsData.totalVisits} lượt khám ({visitsData.completedVisits} đã hoàn tất)
-                      </span>
-                    </div>
-                    <span
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        backgroundColor: '#e6fffa',
-                        color: '#005440',
-                        fontSize: '0.75rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      +{visitsData.inProgressVisits} đang khám
-                    </span>
-                  </div>
-
-                  {/* SVG Bar Chart */}
-                  <div style={{ height: '200px', display: 'flex', alignItems: 'flex-end', gap: '12px', paddingTop: '20px' }}>
-                    {visitsData.dailyStats?.map((day, idx) => {
-                      const heightPercent = Math.round((day.total / maxVisitCount) * 100);
-                      const displayDate = day.date.substring(5); // MM-DD
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>
-                            {day.total}
-                          </span>
-                          <div
-                            style={{
-                              width: '100%',
-                              maxWidth: '36px',
-                              height: `${Math.max(heightPercent * 1.5, 12)}px`,
-                              background: 'linear-gradient(180deg, #005440 0%, #0d9488 100%)',
-                              borderRadius: '6px 6px 0 0',
-                              transition: 'height 0.4s ease'
-                            }}
-                            title={`Ngày ${day.date}: ${day.total} lượt khám (${day.completed} hoàn tất)`}
-                          />
-                          <span style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>
-                            {displayDate}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Biểu đồ Cơ cấu Doanh thu & Hình thức thanh toán */}
-                <div
-                  style={{
-                    backgroundColor: '#fff',
-                    padding: '20px',
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '16px'
-                    }}
-                  >
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>
-                        Cơ Cấu Doanh Thu Viện Phí
-                      </h4>
-                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        Tổng thu: {formatVND(revenueData.totalRevenue)} ({revenueData.paidInvoicesCount} hóa đơn)
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Thanh so sánh VietQR vs Tiền mặt */}
-                  <div style={{ marginTop: '16px' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: '0.85rem',
-                        marginBottom: '6px'
-                      }}
-                    >
-                      <span style={{ color: '#1960a6', fontWeight: 600 }}>
-                        Chuyển khoản VietQR / Ngân hàng (
-                        {Math.round((revenueData.vietQrRevenue / (revenueData.totalRevenue || 1)) * 100)}%)
-                      </span>
-                      <span style={{ fontWeight: 600 }}>{formatVND(revenueData.vietQrRevenue)}</span>
-                    </div>
-                    <div
-                      style={{
-                        width: '100%',
-                        height: '14px',
-                        backgroundColor: '#e2e8f0',
-                        borderRadius: '7px',
-                        overflow: 'hidden',
-                        display: 'flex'
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${Math.round((revenueData.vietQrRevenue / (revenueData.totalRevenue || 1)) * 100)}%`,
-                          background: 'linear-gradient(90deg, #1960a6 0%, #38bdf8 100%)'
-                        }}
-                      />
-                      <div
-                        style={{
-                          width: `${Math.round((revenueData.cashRevenue / (revenueData.totalRevenue || 1)) * 100)}%`,
-                          background: 'linear-gradient(90deg, #ca8a04 0%, #facc15 100%)'
-                        }}
-                      />
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: '0.85rem',
-                        marginTop: '10px'
-                      }}
-                    >
-                      <span style={{ color: '#ca8a04', fontWeight: 600 }}>
-                        Tiền mặt tại quầy (
-                        {Math.round((revenueData.cashRevenue / (revenueData.totalRevenue || 1)) * 100)}%)
-                      </span>
-                      <span style={{ fontWeight: 600 }}>{formatVND(revenueData.cashRevenue)}</span>
-                    </div>
-                  </div>
-
-                  {/* Thông tin hóa đơn chờ */}
-                  <div
-                    style={{
-                      marginTop: '22px',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      backgroundColor: '#f8fafc',
-                      border: '1px dashed #cbd5e1',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="material-symbols-outlined" style={{ color: '#eab308', fontSize: '20px' }}>
-                        pending_actions
-                      </span>
-                      <span style={{ fontSize: '0.85rem', color: '#475569' }}>
-                        Hóa đơn viện phí đang chờ thanh toán:
-                      </span>
-                    </div>
-                    <span style={{ fontWeight: 700, color: '#b45309', fontSize: '0.9rem' }}>
-                      {revenueData.pendingInvoicesCount} hóa đơn
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bảng Top 5 bệnh phổ biến */}
-              <div
-                style={{
-                  backgroundColor: '#fff',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                  <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>
-                    Top 5 Mặt Bệnh Phổ Biến Khám Chữa (ICD-10)
-                  </h4>
-                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Thống kê tự động từ hệ thống EMR</span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {diagnoses.map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem' }}>
-                        <span style={{ fontWeight: 600, color: '#334155' }}>
-                          <span
-                            style={{
-                              padding: '2px 6px',
-                              backgroundColor: '#f1f5f9',
-                              borderRadius: '4px',
-                              marginRight: '8px',
-                              fontFamily: 'monospace',
-                              color: '#005440',
-                              fontWeight: 700
-                            }}
-                          >
-                            {item.icd10Code}
-                          </span>
-                          {item.diseaseName}
-                        </span>
-                        <span style={{ color: '#64748b', fontWeight: 500 }}>
-                          {item.count} ca ({item.percentage}%)
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '8px',
-                          backgroundColor: '#f1f5f9',
-                          borderRadius: '4px',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${item.percentage}%`,
-                            height: '100%',
-                            backgroundColor: idx === 0 ? '#005440' : idx === 1 ? '#0d9488' : idx === 2 ? '#1960a6' : '#64748b',
-                            borderRadius: '4px'
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: VISITS DETAILS */}
-          {activeTab === 'visits' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div
-                style={{
-                  backgroundColor: '#fff',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0'
-                }}
-              >
-                <h4 style={{ margin: '0 0 12px', fontSize: '1rem', color: '#1e293b' }}>
-                  Chi Tiết Thống Kê Lượt Khám Hàng Ngày
-                </h4>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
-                      <th style={{ padding: '10px 12px' }}>Ngày</th>
-                      <th style={{ padding: '10px 12px' }}>Tổng lượt tiếp nhận</th>
-                      <th style={{ padding: '10px 12px' }}>Đã hoàn tất khám</th>
-                      <th style={{ padding: '10px 12px' }}>Tỷ lệ hoàn thành</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visitsData.dailyStats?.map((row, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px 12px', fontWeight: 600 }}>{row.date}</td>
-                        <td style={{ padding: '10px 12px' }}>{row.total} ca</td>
-                        <td style={{ padding: '10px 12px', color: '#16a34a', fontWeight: 600 }}>
-                          {row.completed} ca
-                        </td>
-                        <td style={{ padding: '10px 12px' }}>
-                          <span
-                            style={{
-                              padding: '2px 8px',
-                              borderRadius: '12px',
-                              backgroundColor: '#e6fffa',
-                              color: '#005440',
-                              fontWeight: 600,
-                              fontSize: '0.8rem'
-                            }}
-                          >
-                            {Math.round((row.completed / (row.total || 1)) * 100)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: REVENUE DETAILS */}
-          {activeTab === 'revenue' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div
-                style={{
-                  backgroundColor: '#fff',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0'
-                }}
-              >
-                <h4 style={{ margin: '0 0 12px', fontSize: '1rem', color: '#1e293b' }}>
-                  Chi Tiết Doanh Thu Thu Viện Phí Từng Ngày
-                </h4>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
-                      <th style={{ padding: '10px 12px' }}>Ngày</th>
-                      <th style={{ padding: '10px 12px' }}>Số hóa đơn</th>
-                      <th style={{ padding: '10px 12px' }}>Doanh số phát sinh</th>
-                      <th style={{ padding: '10px 12px' }}>Trung bình / Hóa đơn</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {revenueData.dailyRevenues?.map((row, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px 12px', fontWeight: 600 }}>{row.date}</td>
-                        <td style={{ padding: '10px 12px' }}>{row.invoiceCount} đơn</td>
-                        <td style={{ padding: '10px 12px', color: '#16a34a', fontWeight: 700 }}>
-                          {formatVND(row.amount)}
-                        </td>
-                        <td style={{ padding: '10px 12px', color: '#64748b' }}>
-                          {formatVND(Math.round(row.amount / (row.invoiceCount || 1)))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: DIAGNOSES */}
-          {activeTab === 'diagnoses' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div
-                style={{
-                  backgroundColor: '#fff',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0'
-                }}
-              >
-                <h4 style={{ margin: '0 0 12px', fontSize: '1rem', color: '#1e293b' }}>
-                  Bảng Mã Bệnh ICD-10 Chi Tiết
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {diagnoses.map((d, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div>
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            fontFamily: 'monospace',
-                            backgroundColor: '#e6fffa',
-                            color: '#005440',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            marginRight: '10px'
-                          }}
-                        >
-                          {d.icd10Code}
-                        </span>
-                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{d.diseaseName}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <span style={{ color: '#64748b', fontSize: '0.88rem' }}>{d.count} bệnh nhân</span>
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            color: '#005440',
-                            fontSize: '0.92rem',
-                            backgroundColor: '#fff',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1'
-                          }}
-                        >
-                          {d.percentage}%
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            padding: '12px 24px',
-            backgroundColor: '#f8fafc',
-            borderTop: '1px solid #e2e8f0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}
-        >
-          <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#16a34a' }}>
-              verified
-            </span>
-            Dữ liệu thống kê thời gian thực từ cơ sở dữ liệu HMS-AI Mỹ Phát Hospital
-          </div>
-          <button className="btn btn-secondary" onClick={onClose} style={{ padding: '6px 16px', fontSize: '0.88rem' }}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Báo cáo & thống kê bệnh viện"
+      subtitle="Lượt khám, doanh thu viện phí, mô hình bệnh tật – số liệu trực tiếp từ hệ thống"
+      icon="query_stats"
+      size="full"
+      bodyClassName="overflow-y-auto"
+      footer={(
+        <>
+          <p className="mr-auto text-xs text-slate-500 flex items-center gap-1.5">
+            <Icon name="info" className="text-[16px]" />
+            Doanh thu ghi nhận theo ngày thu tiền; hóa đơn đã hoàn tiền không được tính.
+          </p>
+          <button type="button" className="btn btn-secondary" onClick={handlePrint}>
+            <Icon name="print" />
+            <span>In báo cáo</span>
+          </button>
+          <button type="button" className="btn btn-primary" onClick={onClose}>
             Đóng
+          </button>
+        </>
+      )}
+    >
+      {/* Thanh công cụ: tab + khoảng thời gian */}
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-5 sm:px-6 pt-2 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <div className="flex gap-1 overflow-x-auto -mb-px" role="tablist" aria-label="Nhóm báo cáo">
+          {tabs.map((tab, index) => {
+            const selected = currentTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                id={`${tabsId}-tab-${tab.key}`}
+                aria-selected={selected}
+                aria-controls={`${tabsId}-panel`}
+                tabIndex={selected ? 0 : -1}
+                className={`tab ${selected ? 'is-active' : ''}`}
+                onClick={() => setActiveTab(tab.key)}
+                onKeyDown={(e) => handleTabKeyDown(e, index)}
+              >
+                <Icon name={tab.icon} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 pb-2">
+          <label htmlFor={rangeSelectId} className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+            Khoảng thời gian
+          </label>
+          <div className="w-36">
+            <select
+              id={rangeSelectId}
+              value={rangeKey}
+              onChange={(e) => setRangeKey(e.target.value)}
+              className="select select-sm"
+            >
+              {RANGE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary btn-icon"
+            onClick={refreshAll}
+            disabled={anyLoading}
+            aria-label="Làm mới số liệu"
+            title="Làm mới số liệu"
+          >
+            <Icon name="sync" className={anyLoading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
-    </div>
+
+      <div
+        id={`${tabsId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${tabsId}-tab-${currentTab}`}
+        className="px-5 sm:px-6 py-5 space-y-5 bg-slate-50/60"
+      >
+        <p className="text-xs text-slate-500">
+          Kỳ báo cáo: <strong className="text-slate-700">{rangeLabel}</strong>
+        </p>
+
+        {/* ===== TỔNG QUAN ===== */}
+        {currentTab === 'overview' && canSeeOps && (
+          <>
+            <Loadable resource={kpi} skeleton={<KpiSkeleton />}>
+              {(k) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <KpiCard label="Tổng bệnh nhân" icon="groups" value={formatCount(k.totalPatients)} hint="Hồ sơ đang quản lý" />
+                  <KpiCard label="Lượt khám hôm nay" icon="medical_services" value={formatCount(k.todayVisits)} hint="Tính theo thời điểm tiếp nhận" />
+                  <KpiCard label="Doanh thu hôm nay" icon="payments" tone="success" valueClassName="text-xl" value={formatVND(k.todayRevenue)} hint="Tổng chi phí hóa đơn đã thu (gồm BHYT)" />
+                  <KpiCard label="Gợi ý lâm sàng AI" icon="smart_toy" tone="neutral" value={formatCount(k.aiAlertsCount)} hint="Tổng số lượt AI hỗ trợ đã ghi nhận" />
+                </div>
+              )}
+            </Loadable>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <Section
+                title="Lượt khám theo ngày"
+                subtitle={visits.status === 'success'
+                  ? `Tổng ${formatCount(visits.data.totalVisits)} lượt · ${formatCount(visits.data.completedVisits)} đã hoàn tất`
+                  : rangeLabel}
+              >
+                <Loadable resource={visits} skeleton={<div className="skeleton h-52 w-full" />}>
+                  {(v) => <VisitsChart visits={v} />}
+                </Loadable>
+              </Section>
+
+              <Section
+                title="Cơ cấu thu theo phương thức"
+                subtitle={rev ? `Thực thu người bệnh: ${formatVND(rev.patientCollected)} · ${formatCount(rev.paidInvoicesCount)} hóa đơn` : 'Tỷ lệ trên số tiền thực thu từ người bệnh'}
+              >
+                <Loadable resource={revenue} skeleton={<BlockSkeleton rows={5} />}>
+                  {(r) => <MethodBreakdown revenue={r} />}
+                </Loadable>
+              </Section>
+            </div>
+
+            <Section title="Mô hình bệnh tật thường gặp (ICD-10)" subtitle="Tỷ lệ trên tổng số lượt khám có chẩn đoán">
+              <Loadable resource={diagnoses} skeleton={<BlockSkeleton rows={5} />}>
+                {(d) => <DiagnosisList diagnoses={d.slice(0, 5)} />}
+              </Loadable>
+            </Section>
+          </>
+        )}
+
+        {/* ===== LƯỢT KHÁM ===== */}
+        {currentTab === 'visits' && canSeeOps && (
+          <Loadable resource={visits} skeleton={<><KpiSkeleton /><BlockSkeleton rows={7} /></>}>
+            {(v) => (
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <KpiCard label="Tổng lượt khám" icon="how_to_reg" value={formatCount(v.totalVisits)} hint="Trong kỳ báo cáo" />
+                  <KpiCard label="Đã hoàn tất" icon="task_alt" tone="success" value={formatCount(v.completedVisits)} hint={v.totalVisits ? `Tỷ lệ ${formatPercent((v.completedVisits / v.totalVisits) * 100)}` : 'Trong kỳ báo cáo'} />
+                  <KpiCard label="Đang khám" icon="stethoscope" tone="warning" value={formatCount(v.inProgressVisits)} hint="Trong kỳ báo cáo" />
+                  <KpiCard label="Lịch hẹn đã hủy" icon="event_busy" tone="neutral" value={formatCount(v.cancelledAppointments)} hint="Toàn bộ thời gian" />
+                </div>
+
+                <Section title="Chi tiết lượt khám theo ngày" subtitle={rangeLabel}>
+                  {v.dailyStats.length === 0 ? (
+                    <EmptyPanel icon="bar_chart" title="Chưa có lượt khám" />
+                  ) : (
+                    <div className="table-wrap">
+                      <table className="table table-compact">
+                        <caption className="sr-only">Số lượt khám và tỷ lệ hoàn thành theo ngày</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Ngày</th>
+                            <th scope="col" className="text-right">Lượt tiếp nhận</th>
+                            <th scope="col" className="text-right">Đã hoàn tất</th>
+                            <th scope="col" className="text-right">Tỷ lệ hoàn thành</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {v.dailyStats.map((row) => (
+                            <tr key={row.date}>
+                              <td className="cell-primary">{formatDate(row.date)}</td>
+                              <td className="cell-num">{formatCount(row.total)}</td>
+                              <td className="cell-num text-emerald-700 font-semibold">{formatCount(row.completed)}</td>
+                              <td className="cell-num">{row.total ? formatPercent((row.completed / row.total) * 100) : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Section>
+              </>
+            )}
+          </Loadable>
+        )}
+
+        {/* ===== DOANH THU ===== */}
+        {currentTab === 'revenue' && canSeeRevenue && (
+          <Loadable resource={revenue} skeleton={<><KpiSkeleton /><BlockSkeleton rows={7} /></>}>
+            {(r) => (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <KpiCard label="Tổng doanh thu" icon="payments" tone="success" valueClassName="text-xl" value={formatVND(r.totalRevenue)} hint={`${formatCount(r.paidInvoicesCount)} hóa đơn đã thu (gồm phần BHYT)`} />
+                  <KpiCard label="Thực thu người bệnh" icon="point_of_sale" valueClassName="text-xl" value={formatVND(r.patientCollected)} hint="Tiền mặt, VietQR, chuyển khoản, thẻ" />
+                  <KpiCard label="BHYT chi trả" icon="health_and_safety" tone="accent" valueClassName="text-xl" value={formatVND(r.insuranceAmount)} hint="Phải thu từ cơ quan BHXH" />
+                  <KpiCard
+                    label="Đã hoàn tiền"
+                    icon="currency_exchange"
+                    tone="error"
+                    valueClassName="text-xl"
+                    value={formatVND(r.refundedAmount)}
+                    hint={`${formatCount(r.refundedInvoicesCount)} hóa đơn · không tính vào doanh thu`}
+                  />
+                </div>
+
+                {r.pendingInvoicesCount > 0 && (
+                  <div className="alert alert-warning">
+                    <Icon name="pending_actions" />
+                    <div>
+                      Có <strong>{formatCount(r.pendingInvoicesCount)}</strong> hóa đơn lập trong kỳ đang chờ thu tiền
+                      (tổng {formatCount(r.totalInvoices)} hóa đơn được lập).
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                  <Section title="Cơ cấu thu theo phương thức" subtitle="Tỷ lệ trên số tiền thực thu từ người bệnh">
+                    <MethodBreakdown revenue={r} />
+                  </Section>
+                  <Section title="Nguồn chi trả" subtitle="BHYT chi trả so với người bệnh thanh toán, trên tổng doanh thu">
+                    <PayerSplit revenue={r} />
+                  </Section>
+                </div>
+
+                <Section title="Doanh thu theo ngày" subtitle={`${rangeLabel} · theo ngày thu tiền`}>
+                  {r.dailyRevenues.length === 0 ? (
+                    <EmptyPanel icon="receipt_long" title="Chưa có doanh thu trong kỳ" />
+                  ) : (
+                    <div className="table-wrap">
+                      <table className="table table-compact">
+                        <caption className="sr-only">Doanh thu và số hóa đơn đã thu theo ngày</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Ngày</th>
+                            <th scope="col" className="text-right">Số hóa đơn</th>
+                            <th scope="col" className="text-right">Doanh thu</th>
+                            <th scope="col" className="text-right">Trung bình / hóa đơn</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {r.dailyRevenues.map((row) => (
+                            <tr key={row.date}>
+                              <td className="cell-primary">{formatDate(row.date)}</td>
+                              <td className="cell-num">{formatCount(row.invoiceCount)}</td>
+                              <td className="cell-num font-semibold text-slate-900">{formatVND(row.amount)}</td>
+                              <td className="cell-num">{row.invoiceCount ? formatVND(row.amount / row.invoiceCount) : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Section>
+              </>
+            )}
+          </Loadable>
+        )}
+
+        {/* ===== MÔ HÌNH BỆNH ===== */}
+        {currentTab === 'diagnoses' && canSeeOps && (
+          <Section title="Bảng mã bệnh ICD-10 thường gặp" subtitle="10 chẩn đoán có số ca nhiều nhất (toàn bộ thời gian)">
+            <Loadable resource={diagnoses} skeleton={<BlockSkeleton rows={6} />}>
+              {(list) =>
+                list.length === 0 ? (
+                  <EmptyPanel icon="monitoring" title="Chưa có dữ liệu chẩn đoán" text="Số liệu xuất hiện khi bác sĩ hoàn tất khám và ghi mã ICD-10." />
+                ) : (
+                  <div className="table-wrap">
+                    <table className="table table-compact">
+                      <caption className="sr-only">Mã bệnh ICD-10, số ca và tỷ lệ</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Mã ICD-10</th>
+                          <th scope="col">Tên bệnh</th>
+                          <th scope="col" className="text-right">Số ca</th>
+                          <th scope="col" className="text-right">Tỷ lệ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {list.map((d) => (
+                          <tr key={d.icd10Code}>
+                            <td className="font-mono font-bold text-primary">{d.icd10Code}</td>
+                            <td className="cell-primary">{d.diseaseName}</td>
+                            <td className="cell-num">{formatCount(d.count)}</td>
+                            <td className="cell-num">{formatPercent(d.percentage)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              }
+            </Loadable>
+          </Section>
+        )}
+      </div>
+    </Modal>
   );
 }

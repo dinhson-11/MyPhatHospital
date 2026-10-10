@@ -33,4 +33,5 @@ async def suggest_diagnosis(request: DiagnosisSuggestionRequest) -> DiagnosisSug
         patient_age=request.patient_age,
         patient_gender=request.patient_gender,
         medical_history=request.medical_history,
+        vital_signs=request.vital_signs,
     )

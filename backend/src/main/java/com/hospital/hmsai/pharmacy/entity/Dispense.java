@@ -12,7 +12,10 @@ import java.time.LocalDateTime;
  * Ghi nhận lịch sử cấp phát thuốc theo đơn từ kho dược (FR-6.2).
  */
 @Entity
-@Table(name = "dispenses")
+@Table(name = "dispenses", uniqueConstraints = {
+        // Mỗi đơn thuốc chỉ được cấp phát một lần (V21)
+        @UniqueConstraint(name = "uk_dispenses_prescription", columnNames = {"prescription_id"})
+})
 @Data
 @Builder
 @NoArgsConstructor

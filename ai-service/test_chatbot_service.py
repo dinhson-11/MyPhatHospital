@@ -66,11 +66,12 @@ class TestChatbotService:
         assert "07h" in result.reply or "7h" in result.reply
 
     def test_emergency_escalation(self):
-        """Triệu chứng cấp cứu phải trả OUT_OF_SCOPE + số 115."""
+        """Triệu chứng cấp cứu phải trả intent EMERGENCY (frontend ChatMessage.jsx & Java fallback dùng EMERGENCY) + số 115."""
         result = ChatbotService.process_message("Tôi đang đau ngực dữ dội nghi nhồi máu cơ tim")
-        assert result.intent == "OUT_OF_SCOPE"
+        assert result.intent == "EMERGENCY"
         assert result.is_out_of_scope is True
         assert "115" in result.reply
+        assert result.show_booking_button is False
 
     def test_out_of_scope_blocked(self):
         """Câu hỏi ngoài phạm vi y tế phải bị chặn."""
@@ -162,3 +163,165 @@ class TestChatbotService:
         assert "07h30 – 11h30" in reply and "13h30 – 18h00" in reply
         assert "Thứ 2 – Thứ 7" in reply
         assert "kể cả ngày lễ" in reply
+
+
+class TestChatbotEmergencyRedFlags:
+    """C1/C2/H3: Dấu hiệu cờ đỏ phải trả EMERGENCY trước FAQ, ngoài phạm vi và luật Sản khoa."""
+
+    @pytest.mark.parametrize("message", [
+        # Đau ngực
+        "Tôi bị đau ngực dữ dội",
+        "đau ngực lan ra tay trái",
+        "đau thắt ngực kèm vã mồ hôi",
+        # Đột quỵ
+        "bố tôi tự nhiên méo miệng, nói ngọng",
+        "mẹ tôi yếu nửa người bên phải",
+        "liệt nửa người từ sáng",
+        "ông bị tê nửa người, nói khó",
+        "nghi bị tai biến",
+        # Đường thở
+        "khó thở dữ dội",
+        "con tôi không thở được",
+        "bé bị tím tái, môi tím",
+        # Phản vệ
+        "bị sốc phản vệ",
+        "sau khi uống thuốc bị sưng môi",
+        "dị ứng hải sản rồi khó thở",
+        # Co giật / ngất
+        "con tôi bị co giật",
+        "tôi vừa bị ngất",
+        "bà bị bất tỉnh",
+        # Chảy máu
+        "nôn ra máu nhiều",
+        "ho ra máu",
+        "vết thương chảy máu không cầm",
+        "sản phụ bị băng huyết",
+        # Ý định tự sát
+        "tôi muốn chết",
+        "tôi không muốn sống nữa",
+        "tôi định tự tử",
+        # Quá liều – thứ tự từ linh hoạt
+        "tôi uống thuốc quá liều",
+        "lỡ uống quá liều thuốc ngủ",
+        "uống thuốc trừ sâu",
+        # Trẻ nhỏ < 3 tháng có sốt
+        "bé 2 tháng tuổi bị sốt",
+        "trẻ sơ sinh bị sốt",
+        "con tôi 20 ngày tuổi sốt 38 độ",
+    ])
+    def test_red_flags_return_emergency(self, message):
+        result = ChatbotService.process_message(message)
+        assert result.intent == "EMERGENCY", message
+        assert "115" in result.reply
+        assert "0789 065 493" in result.reply
+        assert result.suggested_department is None
+
+    @pytest.mark.parametrize("message", [
+        "dot quy",
+        "muon chet",
+        "dau nguc du doi kho tho",
+        "me toi bi meo mieng noi kho",
+        "uong thuoc qua lieu",
+        "Tôi bị ĐỘT QUỴ",
+        # Unicode NFD (dấu tổ hợp) phải được chuẩn hóa NFC trước khi so khớp
+        __import__("unicodedata").normalize("NFD", "tôi muốn chết"),
+    ])
+    def test_unaccented_and_unnormalized_input_detected(self, message):
+        assert ChatbotService.process_message(message).intent == "EMERGENCY", message
+
+    def test_suicide_reply_includes_mental_health_support(self):
+        reply = ChatbotService.process_message("tôi muốn chết").reply
+        assert "115" in reply
+        assert "Hỗ trợ tâm lý" in reply
+        assert "0789 065 493" in reply
+
+    @pytest.mark.parametrize("message", [
+        "tôi đang mang thai bị ra máu",
+        "có bầu 8 tuần bị đau bụng dữ dội",
+        "mang bầu tháng thứ 8 bị vỡ ối",
+    ])
+    def test_pregnancy_danger_signs_beat_obgyn_priority_rule(self, message):
+        assert ChatbotService.process_message(message).intent == "EMERGENCY", message
+
+    def test_emergency_runs_before_faq_and_out_of_scope(self):
+        # Có từ khóa FAQ ("ở đâu") và ngoài phạm vi ("rượu bia") nhưng vẫn phải là cấp cứu
+        assert ChatbotService.process_message("bệnh viện ở đâu, bố tôi bị đột quỵ").intent == "EMERGENCY"
+        assert ChatbotService.process_message("uống rượu bia xong nôn ra máu").intent == "EMERGENCY"
+
+    @pytest.mark.parametrize("message", [
+        "Tôi bị đau ngực trái và hồi hộp",   # không có dấu hiệu nặng (dữ dội/lan tay/vã mồ hôi/khó thở)
+        "tôi bị đau họng và ngạt mũi",       # "ngạt" không được khớp nhầm thành "ngất"
+        "đau từ từ tăng dần",                # "từ từ" không phải "tự tử"
+        "bé 2 tuổi bị sốt",                  # không phải trẻ < 3 tháng
+        "con tôi bị sốt 2 ngày nay",         # "2 ngày" là thời gian bệnh, không phải tuổi
+        "bé 5 tháng tuổi bị sốt nhẹ",
+    ])
+    def test_non_emergency_messages_are_not_escalated(self, message):
+        assert ChatbotService.process_message(message).intent != "EMERGENCY", message
+
+
+class TestChatbotMatchingFixes:
+    """H1/H2/H8/M1/C2: so khớp nguyên từ, FAQ/ngoài phạm vi không nuốt câu hỏi y tế."""
+
+    @pytest.mark.parametrize("message", [
+        "tôi có cảm giác buồn nôn",          # "giá" nằm trong "cảm giác"
+        "tôi bị đau ở vị trí thượng vị",     # "vị trí"
+        "đau bụng mấy giờ nay rồi",          # "mấy giờ"
+        "đau ở đâu thì nên khám khoa nào",   # "ở đâu"
+    ])
+    def test_symptom_messages_are_not_answered_as_faq(self, message):
+        result = ChatbotService.process_message(message)
+        assert result.intent == "SYMPTOM_CHECK", message
+        assert result.suggested_department is not None
+
+    def test_faq_price_still_answered(self):
+        assert ChatbotService.process_message("giá khám bao nhiêu tiền?").intent == "FAQ"
+        assert ChatbotService.process_message("bệnh viện ở đâu?").intent == "FAQ"
+
+    @pytest.mark.parametrize("message", [
+        "tôi hút thuốc lá và bị ho kéo dài",
+        "uống rượu bia nhiều bị đau dạ dày",
+        "tôi muốn cai thuốc lá",
+    ])
+    def test_out_of_scope_terms_with_medical_context_are_not_blocked(self, message):
+        result = ChatbotService.process_message(message)
+        assert result.intent == "SYMPTOM_CHECK", message
+        assert result.is_out_of_scope is False
+
+    @pytest.mark.parametrize("message", ["tôi có bầu được 3 tháng muốn đi khám", "mang bầu tháng thứ 4 cần khám gì"])
+    def test_colloquial_pregnancy_terms_route_to_obgyn(self, message):
+        result = ChatbotService.process_message(message)
+        assert result.suggested_department is not None
+        assert result.suggested_department.dept_id == 3
+
+    def test_short_keyword_ho_not_matched_inside_other_words(self):
+        from services.chatbot_service import DEPT_ROUTING
+        respiratory = next(d for d in DEPT_ROUTING if "ho" in d["keywords"])
+        assert not ChatbotService._match("cho tôi hỏi khoa nào", respiratory["keywords"])
+        assert ChatbotService._match("tôi bị ho nhiều", respiratory["keywords"])
+
+    @pytest.mark.parametrize("message", ["xyz abc", "asdf qwer", "qwerty 123"])
+    def test_gibberish_falls_back_to_general_department_not_cosmetics(self, message):
+        result = ChatbotService.process_message(message)
+        assert result.suggested_department is not None
+        assert result.suggested_department.dept_id == 1, message
+
+    def test_unaccented_symptom_routes_by_rules(self):
+        result = ChatbotService.process_message("toi bi dau hong va ngat mui")
+        assert result.intent == "SYMPTOM_CHECK"
+        assert result.suggested_department.dept_id == 10
+
+
+class TestMlTriageThreshold:
+    """C2: Mô hình ML chỉ được dùng khi đủ tự tin và bỏ xa nhãn thứ hai."""
+
+    def test_low_confidence_prediction_rejected(self):
+        from services.ml_triage_service import predict_department
+        assert predict_department("xyz abc") is None
+
+    def test_confident_prediction_accepted(self):
+        from services.ml_triage_service import predict_department, ML_MIN_CONFIDENCE
+        result = predict_department("dị ứng, nổi mẩn da")
+        assert result is not None
+        assert result[0] == 14
+        assert result[2] >= ML_MIN_CONFIDENCE

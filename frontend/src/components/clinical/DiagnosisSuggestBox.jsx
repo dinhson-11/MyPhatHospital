@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { AI_DISCLAIMER_TEXT, aiAlertService } from '../../services/aiAlertService';
 
-// Cơ sở tri thức gợi ý chẩn đoán ICD-10 lâm sàng (fallback offline)
+// Gợi ý theo từ khóa (hiển thị tức thì, trước khi dịch vụ AI trả kết quả)
 const ICD10_KNOWLEDGE_BASE = [
   {
     keywords: ['đau ngực', 'tức ngực', 'khó thở', 'huyết áp', 'hoa mắt', 'chóng mặt'],
@@ -37,129 +37,117 @@ const ICD10_KNOWLEDGE_BASE = [
   {
     keywords: ['vai gáy', 'cột sống', 'đau lưng', 'thoái hóa', 'tê bì'],
     suggestions: [
-      { code: 'M54.2', name: 'Đau cổ gáy (Cervicalgia)', confidence: 92, reason: 'Co cứng cơ cạnh cột sống cổ và đau mỏi vai gáy' },
+      { code: 'M54.2', name: 'Đau cổ gáy', confidence: 92, reason: 'Co cứng cơ cạnh cột sống cổ và đau mỏi vai gáy' },
       { code: 'M47.8', name: 'Thoái hóa cột sống khác', confidence: 86, reason: 'Đau âm ỉ cột sống tăng lên khi vận động' },
-      { code: 'M54.5', name: 'Đau thắt lưng (Low back pain)', confidence: 80, reason: 'Hạn chế tầm vận động thắt lưng' }
+      { code: 'M54.5', name: 'Đau thắt lưng', confidence: 80, reason: 'Hạn chế tầm vận động thắt lưng' }
     ]
   }
 ];
 
-export default function DiagnosisSuggestBox({ symptomsText = '', onSelectDiagnosis, visitId }) {
+const DEFAULT_SUGGESTIONS = [
+  { code: 'R69', name: 'Nguyên nhân gây bệnh chưa xác định', confidence: 70, reason: 'Cần chỉ định thêm cận lâm sàng để chẩn đoán phân biệt' },
+  { code: 'Z00.0', name: 'Khám sức khỏe tổng quát định kỳ', confidence: 65, reason: 'Tầm soát đánh giá chức năng các cơ quan' }
+];
+
+/** Độ tin cậy có thể là 0–1 hoặc 0–100 tùy nguồn → luôn hiển thị phần trăm. */
+const toPercent = (c) => {
+  const n = Number(c);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n <= 1 ? n * 100 : n);
+};
+
+const confidenceClass = (pct) => {
+  if (pct >= 90) return 'bg-emerald-100 text-emerald-900';
+  if (pct >= 80) return 'bg-sky-100 text-sky-900';
+  if (pct >= 70) return 'bg-amber-100 text-amber-900';
+  return 'bg-slate-100 text-slate-800';
+};
+
+/**
+ * Gợi ý mã chẩn đoán ICD-10 từ lý do khám. Chỉ mang tính tham khảo – bác sĩ quyết định chẩn đoán.
+ * Props: symptomsText, onSelectDiagnosis(code, name), visitId, disabled.
+ */
+export default function DiagnosisSuggestBox({ symptomsText = '', onSelectDiagnosis, visitId, disabled = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState(null); // null = chưa gọi API, [] = đã gọi nhưng trống
-  const [aiSource, setAiSource] = useState('local'); // 'local' | 'api' | 'fallback'
+  const [aiSuggestions, setAiSuggestions] = useState(null);
+  const [aiSource, setAiSource] = useState('local'); // 'local' | 'server'
   const debounceTimerRef = useRef(null);
+  const panelId = `dx-suggest-${visitId || 'new'}`;
 
-  // Gợi ý từ knowledge base cục bộ (instant, không cần API)
   const localSuggestions = useMemo(() => {
     if (!symptomsText || symptomsText.trim().length < 3) return [];
-
     const lower = symptomsText.toLowerCase();
     for (const group of ICD10_KNOWLEDGE_BASE) {
-      if (group.keywords.some(kw => lower.includes(kw))) {
-        return group.suggestions;
-      }
+      if (group.keywords.some((kw) => lower.includes(kw))) return group.suggestions;
     }
-
-    // Default suggestions nếu chưa khớp từ khóa cụ thể
-    return [
-      { code: 'R69', name: 'Nguyên nhân gây bệnh chưa xác định', confidence: 70, reason: 'Cần chỉ định thêm cận lâm sàng để chẩn đoán phân biệt' },
-      { code: 'Z00.0', name: 'Khám sức khỏe tổng quát định kỳ', confidence: 65, reason: 'Tầm soát đánh giá chức năng các cơ quan' }
-    ];
+    return DEFAULT_SUGGESTIONS;
   }, [symptomsText]);
 
-  // Gợi ý hiển thị: ưu tiên AI API > fallback local
   const suggestions = aiSuggestions && aiSuggestions.length > 0 ? aiSuggestions : localSuggestions;
 
-  // Hàm gọi AI API (debounce 500ms)
   const triggerAIAnalysis = useCallback(async () => {
     if (!symptomsText || symptomsText.trim().length < 3) return;
-
     setIsLoadingAI(true);
     try {
       const result = await aiAlertService.suggestDiagnosis(symptomsText, { visitId });
-      if (result && result.suggestions && result.suggestions.length > 0) {
+      if (result?.source === 'server' && result.suggestions?.length > 0) {
         setAiSuggestions(result.suggestions);
-        setAiSource('api');
+        setAiSource('server');
       } else {
-        setAiSource('fallback');
+        setAiSource('local');
       }
-    } catch (err) {
-      console.warn('Lỗi gọi AI suggest-diagnosis:', err);
-      setAiSource('fallback');
+    } catch {
+      setAiSource('local');
     } finally {
       setIsLoadingAI(false);
     }
   }, [symptomsText, visitId]);
 
-  // Auto-trigger AI khi mở panel và text thay đổi (debounce 500ms)
   useEffect(() => {
-    if (!isOpen || !symptomsText || symptomsText.trim().length < 3) return;
-
-    // Reset AI suggestions khi text thay đổi
+    if (!isOpen || !symptomsText || symptomsText.trim().length < 3) return undefined;
     setAiSuggestions(null);
     setAiSource('local');
-
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
-      triggerAIAnalysis();
-    }, 500);
-
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => { triggerAIAnalysis(); }, 500);
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
-  }, [symptomsText, isOpen]);
+  }, [symptomsText, isOpen, triggerAIAnalysis]);
 
-  if (!symptomsText || suggestions.length === 0) {
-    return null;
-  }
-
-  const getConfidenceColor = (confidence) => {
-    if (confidence >= 90) return 'bg-emerald-100 text-emerald-800';
-    if (confidence >= 80) return 'bg-blue-100 text-blue-800';
-    if (confidence >= 70) return 'bg-amber-100 text-amber-800';
-    return 'bg-gray-100 text-gray-700';
-  };
+  if (!symptomsText || suggestions.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-secondary/30 bg-secondary-container/10 p-3.5 space-y-2.5 animate-fade-in text-xs">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-primary font-bold">
-          <span className="material-symbols-outlined text-[18px]">psychiatry</span>
-          <span>AI Gợi ý Chẩn đoán ICD-10 ({suggestions.length})</span>
+    <div className="rounded-xl border border-secondary/40 bg-secondary-container/40 p-3.5 space-y-2.5 text-[13px]">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-primary font-bold flex-wrap">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">psychiatry</span>
+          <span>Gợi ý chẩn đoán ICD-10 ({suggestions.length})</span>
           {isLoadingAI && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-normal text-on-surface-variant animate-pulse">
-              <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
-              Đang phân tích AI...
+            <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-600" aria-live="polite">
+              <span className="material-symbols-outlined text-[14px] animate-spin" aria-hidden="true">progress_activity</span>
+              Đang phân tích…
             </span>
           )}
-          {aiSource === 'api' && !isLoadingAI && (
-            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold">
-              ✓ AI Service
+          {!isLoadingAI && isOpen && (
+            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${aiSource === 'server' ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-700'}`}>
+              {aiSource === 'server' ? 'Từ dịch vụ AI' : 'Gợi ý theo từ khóa'}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
           {isOpen && (
-            <button
-              type="button"
-              onClick={triggerAIAnalysis}
-              disabled={isLoadingAI}
-              className="text-[10px] px-2 py-1 rounded-lg bg-primary/10 text-primary font-semibold hover:bg-primary/20 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
-              title="Phân tích chẩn đoán bằng AI Service"
-            >
-              <span className="material-symbols-outlined text-[14px]">smart_toy</span>
-              <span>Phân tích AI</span>
+            <button type="button" onClick={triggerAIAnalysis} disabled={isLoadingAI} className="btn btn-soft btn-sm">
+              <span className="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+              Phân tích AI
             </button>
           )}
           <button
             type="button"
-            onClick={() => setIsOpen(prev => !prev)}
-            className="text-xs text-primary hover:underline font-semibold cursor-pointer"
+            onClick={() => setIsOpen((prev) => !prev)}
+            aria-expanded={isOpen}
+            aria-controls={panelId}
+            className="btn btn-ghost btn-sm text-primary"
           >
             {isOpen ? 'Thu gọn' : 'Xem gợi ý'}
           </button>
@@ -167,33 +155,36 @@ export default function DiagnosisSuggestBox({ symptomsText = '', onSelectDiagnos
       </div>
 
       {isOpen && (
-        <div className="space-y-2 pt-1">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {suggestions.map((sug, idx) => (
-              <div
-                key={idx}
-                onClick={() => onSelectDiagnosis && onSelectDiagnosis(sug.code, sug.name)}
-                className="p-3 rounded-lg bg-white border border-outline-variant/40 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer space-y-1 shadow-2xs group"
-                title="Bấm để chọn mã ICD-10 này"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-primary group-hover:underline">
-                    {sug.code}
-                  </span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${getConfidenceColor(sug.confidence)}`}>
-                    {sug.confidence}%
-                  </span>
-                </div>
-                <div className="font-semibold text-on-surface line-clamp-1">{sug.name}</div>
-                <div className="text-[11px] text-on-surface-variant line-clamp-2">{sug.reason}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-[10px] text-on-surface-variant italic pt-1 border-t border-outline-variant/20 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">info</span>
+        <div id={panelId} className="space-y-2 pt-1">
+          <ul className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {suggestions.map((sug, idx) => {
+              const pct = toPercent(sug.confidence);
+              return (
+                <li key={`${sug.code}-${idx}`}>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onSelectDiagnosis?.(sug.code, sug.name)}
+                    aria-label={`Chọn mã ${sug.code} – ${sug.name}`}
+                    className="w-full h-full text-left p-3 rounded-lg bg-white border border-slate-300 hover:border-primary hover:bg-primary-fixed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors space-y-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <span className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-primary">{sug.code}</span>
+                      {pct !== null && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${confidenceClass(pct)}`}>{pct}%</span>
+                      )}
+                    </span>
+                    <span className="block font-semibold text-slate-900">{sug.name}</span>
+                    {sug.reason && <span className="block text-xs text-slate-600">{sug.reason}</span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-xs text-slate-600 italic pt-1 border-t border-slate-200 flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]" aria-hidden="true">info</span>
             <span>{AI_DISCLAIMER_TEXT} Bác sĩ bấm vào thẻ để chọn nhanh chẩn đoán.</span>
-          </div>
+          </p>
         </div>
       )}
     </div>

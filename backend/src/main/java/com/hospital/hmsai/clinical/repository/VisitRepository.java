@@ -5,6 +5,7 @@ import com.hospital.hmsai.clinical.entity.VisitStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,6 +26,30 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
     Page<Visit> findByDoctorIdAndStatus(Long doctorId, VisitStatus status, Pageable pageable);
 
     Optional<Visit> findByAppointmentId(Long appointmentId);
+
+    boolean existsByAppointmentId(Long appointmentId);
+
+    boolean existsByAppointmentIdAndStatus(Long appointmentId, VisitStatus status);
+
+    boolean existsByPatientIdAndStatus(Long patientId, VisitStatus status);
+
+    /** Lượt khám có thuộc về tài khoản bệnh nhân (username) không – dùng cho kiểm tra quyền sở hữu. */
+    boolean existsByIdAndPatient_User_UsernameIgnoreCase(Long id, String username);
+
+    /** Lượt khám có do bác sĩ (username) phụ trách không – dùng cho kiểm tra quyền sửa bệnh án. */
+    boolean existsByIdAndDoctor_User_UsernameIgnoreCase(Long id, String username);
+
+    /**
+     * Cập nhật updated_at nếu lượt khám còn ở trạng thái {@code status}; trả về số dòng bị ảnh hưởng.
+     * Câu UPDATE đọc dữ liệu mới nhất và giữ khóa ghi trên dòng visits tới hết transaction, nên
+     * kê đơn / chỉ định CLS / hoàn tất khám trên cùng lượt khám được tuần tự hóa: không thể thêm
+     * thuốc vào lượt khám vừa được hoàn tất (và đã/đang lập hóa đơn).
+     */
+    @Modifying
+    @Query("UPDATE Visit v SET v.updatedAt = :now WHERE v.id = :id AND v.status = :status")
+    int touchIfStatus(@Param("id") Long id,
+                      @Param("status") VisitStatus status,
+                      @Param("now") LocalDateTime now);
 
     @Query("SELECT v FROM Visit v " +
            "JOIN FETCH v.patient " +

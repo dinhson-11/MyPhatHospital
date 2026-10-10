@@ -1,72 +1,104 @@
 import React, { useState } from 'react';
-import { visitService, STANDARD_LAB_TESTS } from '../../services/visitService';
+import { visitService, STANDARD_LAB_TESTS, LAB_ORDER_STATUS_LABELS, isHttpUrl } from '../../services/visitService';
 import { useToast } from '../../context/ToastContext';
+import { formatDateTime } from '../../utils/format';
+import Modal from '../common/Modal';
 
-export default function LabOrderPanel({ visit, onOrderAdded, onResultUpdated }) {
+const normalizeTest = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Chỉ định & kết quả cận lâm sàng của ca khám.
+ * - Chặn chỉ định trùng một xét nghiệm đang chờ kết quả.
+ * - Đường dẫn tệp kết quả chỉ được dùng làm liên kết khi là http(s).
+ *
+ * Props: visit, readOnly (không cho tạo chỉ định), readOnlyReason, canEnterResults, onOrderAdded, onResultUpdated.
+ */
+export default function LabOrderPanel({
+  visit,
+  readOnly = false,
+  readOnlyReason,
+  canEnterResults = true,
+  onOrderAdded,
+  onResultUpdated
+}) {
   const { showToast } = useToast();
 
-  const [selectedTestType, setSelectedTestType] = useState('');
-  const [customTestType, setCustomTestType] = useState('');
+  const [testType, setTestType] = useState('');
+  const [orderError, setOrderError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modal / Form nhập kết quả
-  const [resultModal, setResultModal] = useState({ open: false, order: null });
+  const [resultOrder, setResultOrder] = useState(null);
   const [resultText, setResultText] = useState('');
   const [resultFileUrl, setResultFileUrl] = useState('');
+  const [resultErrors, setResultErrors] = useState({});
   const [isSubmittingResult, setIsSubmittingResult] = useState(false);
+
+  const orders = visit?.labOrders || [];
+  const pendingTests = new Set(orders.filter((o) => o.status !== 'RESULTED').map((o) => normalizeTest(o.testType)));
 
   const handleCreateOrder = async (e) => {
     e.preventDefault();
-    const finalTestType = customTestType.trim() || selectedTestType;
-
-    if (!finalTestType) {
-      showToast('Vui lòng chọn hoặc nhập tên chỉ định cận lâm sàng', 'warning');
+    if (isSubmitting) return;
+    const finalTest = testType.trim();
+    if (!finalTest) {
+      setOrderError('Vui lòng chọn hoặc nhập tên xét nghiệm / chẩn đoán hình ảnh');
       return;
     }
-
+    if (pendingTests.has(normalizeTest(finalTest))) {
+      setOrderError(`"${finalTest}" đã được chỉ định và đang chờ kết quả – không tạo chỉ định trùng.`);
+      return;
+    }
+    setIsSubmitting(true);
+    setOrderError('');
     try {
-      setIsSubmitting(true);
-      const res = await visitService.createLabOrder(visit.id, { testType: finalTestType });
-      showToast(`Đã chỉ định cận lâm sàng: "${finalTestType}" thành công!`, 'success');
-      setSelectedTestType('');
-      setCustomTestType('');
-      if (onOrderAdded) {
-        onOrderAdded(res);
-      }
+      const created = await visitService.createLabOrder(visit.id, { testType: finalTest });
+      showToast(`Đã chỉ định: ${finalTest}`, 'success');
+      setTestType('');
+      onOrderAdded?.(created);
     } catch (err) {
-      showToast(err.message || 'Không thể tạo chỉ định cận lâm sàng', 'error');
+      setOrderError(err.message);
+      showToast(err.message || 'Không tạo được chỉ định cận lâm sàng', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleOpenResultModal = (order) => {
-    setResultModal({ open: true, order });
-    const existingResult = order.results && order.results.length > 0 ? order.results[0] : null;
-    setResultText(existingResult ? existingResult.resultText : '');
-    setResultFileUrl(existingResult ? existingResult.resultFileUrl : '');
+  const openResult = (order) => {
+    const latest = order.results?.length ? order.results[order.results.length - 1] : null;
+    setResultOrder(order);
+    setResultText(latest?.resultText || '');
+    setResultFileUrl(latest?.resultFileUrl || '');
+    setResultErrors({});
+  };
+
+  const closeResult = () => {
+    if (isSubmittingResult) return;
+    setResultOrder(null);
   };
 
   const handleSaveResult = async (e) => {
     e.preventDefault();
-    if (!resultText.trim()) {
-      showToast('Vui lòng nhập kết luận / kết quả xét nghiệm', 'warning');
-      return;
+    const errors = {};
+    if (!resultText.trim()) errors.resultText = 'Vui lòng nhập kết luận / kết quả';
+    if (resultFileUrl.trim() && !isHttpUrl(resultFileUrl.trim())) {
+      errors.resultFileUrl = 'Đường dẫn phải bắt đầu bằng http:// hoặc https://';
     }
+    setResultErrors(errors);
+    if (Object.keys(errors).length) return;
 
+    setIsSubmittingResult(true);
     try {
-      setIsSubmittingResult(true);
-      const updated = await visitService.updateLabResult(resultModal.order.id, {
+      const saved = await visitService.updateLabResult(resultOrder.id, {
         resultText: resultText.trim(),
         resultFileUrl: resultFileUrl.trim()
       });
-      showToast('Đã cập nhật kết quả cận lâm sàng thành công!', 'success');
-      setResultModal({ open: false, order: null });
-      if (onResultUpdated) {
-        onResultUpdated(updated);
-      }
+      showToast('Đã lưu kết quả cận lâm sàng.', 'success');
+      const orderId = resultOrder.id;
+      setResultOrder(null);
+      onResultUpdated?.(orderId, saved);
     } catch (err) {
-      showToast(err.message || 'Không thể cập nhật kết quả xét nghiệm', 'error');
+      setResultErrors({ form: err.message });
+      showToast(err.message || 'Không lưu được kết quả', 'error');
     } finally {
       setIsSubmittingResult(false);
     }
@@ -74,217 +106,178 @@ export default function LabOrderPanel({ visit, onOrderAdded, onResultUpdated }) 
 
   return (
     <div className="space-y-6">
-      {/* Existing Lab Orders */}
-      <div className="bg-surface-container-low rounded-2xl p-5 border border-outline-variant/30 space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="font-headline text-base font-bold text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[20px]">science</span>
-            <span>Chỉ định cận lâm sàng của ca khám ({visit.labOrders?.length || 0})</span>
-          </h4>
-          <span className="text-xs text-on-surface-variant font-label">
-            Mã ca khám: #{visit.id}
-          </span>
-        </div>
+      <section className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4" aria-labelledby="lab-list-title">
+        <h4 id="lab-list-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">science</span>
+          Chỉ định cận lâm sàng của ca khám ({orders.length})
+        </h4>
 
-        {visit.labOrders && visit.labOrders.length > 0 ? (
-          <div className="space-y-3">
-            {visit.labOrders.map((order, idx) => {
+        {orders.length > 0 ? (
+          <ol className="space-y-3">
+            {orders.map((order, idx) => {
               const isResulted = order.status === 'RESULTED';
+              const latest = order.results?.length ? order.results[order.results.length - 1] : null;
+              const safeUrl = latest?.resultFileUrl && isHttpUrl(latest.resultFileUrl) ? latest.resultFileUrl : null;
               return (
-                <div key={order.id || idx} className="bg-white rounded-xl p-4 border border-outline-variant/20 shadow-xs space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-surface-variant/20 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-on-surface">
-                        {idx + 1}. {order.testType}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                        isResulted
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : 'bg-amber-100 text-amber-800 border border-amber-300'
-                      }`}>
-                        {isResulted ? 'ĐÃ CÓ KẾT QUẢ' : 'CHỜ KẾT QUẢ'}
+                <li key={order.id || idx} className="bg-white rounded-xl p-4 border border-slate-200 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm text-slate-900">{idx + 1}. {order.testType}</span>
+                      <span className={`badge ${isResulted ? 'badge-success' : 'badge-warning'}`}>
+                        {LAB_ORDER_STATUS_LABELS[order.status] || 'Chờ kết quả'}
                       </span>
                     </div>
-
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-on-surface-variant">
-                        {new Date(order.orderedAt || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenResultModal(order)}
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer"
-                      >
-                        {isResulted ? 'Xem / Sửa kết quả' : 'Nhập kết quả Lab'}
-                      </button>
+                      <span className="text-[13px] text-slate-600">{formatDateTime(order.orderedAt)}</span>
+                      {canEnterResults && (
+                        <button type="button" onClick={() => openResult(order)} className="btn btn-soft btn-sm">
+                          {isResulted ? 'Cập nhật kết quả' : 'Nhập kết quả'}
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  {/* Results display */}
-                  {order.results && order.results.length > 0 ? (
-                    <div className="p-3 rounded-lg bg-surface-container-low text-xs space-y-1.5 border border-outline-variant/20">
+                  {latest ? (
+                    <div className="p-3 rounded-lg bg-slate-50 text-[13px] space-y-1.5 border border-slate-200">
                       <div className="font-bold text-primary flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px]">task_alt</span>
-                        <span>Kết luận cận lâm sàng:</span>
+                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">task_alt</span>
+                        Kết quả ({formatDateTime(latest.resultedAt)}):
                       </div>
-                      <p className="text-on-surface whitespace-pre-wrap leading-relaxed">
-                        {order.results[0].resultText}
-                      </p>
-                      {order.results[0].resultFileUrl && (
-                        <div className="pt-1 text-[11px] text-primary">
-                          <a href={order.results[0].resultFileUrl} target="_blank" rel="noreferrer" className="underline hover:text-primary-container">
-                            Xem tài liệu đính kèm (Ảnh X-quang/PDF)
-                          </a>
-                        </div>
+                      <p className="text-slate-900 whitespace-pre-wrap leading-relaxed">{latest.resultText}</p>
+                      {safeUrl && (
+                        <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline text-[13px]">
+                          Xem tệp kết quả đính kèm
+                        </a>
+                      )}
+                      {latest.resultFileUrl && !safeUrl && (
+                        <p className="text-xs text-amber-800">Tệp đính kèm có đường dẫn không hợp lệ nên không mở được.</p>
                       )}
                     </div>
                   ) : (
-                    <div className="text-xs text-on-surface-variant italic">
-                      Chưa có kết quả từ phòng xét nghiệm. Bấm "Nhập kết quả Lab" để cập nhật thủ công.
-                    </div>
+                    <p className="text-[13px] text-slate-600 italic">Chưa có kết quả từ phòng xét nghiệm.</p>
                   )}
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
         ) : (
-          <div className="p-6 text-center text-on-surface-variant text-sm border border-dashed border-outline-variant/40 rounded-xl">
+          <p className="p-6 text-center text-slate-600 text-sm border border-dashed border-slate-300 rounded-xl">
             Chưa có chỉ định cận lâm sàng nào trong lượt khám này.
-          </div>
+          </p>
         )}
-      </div>
+      </section>
 
-      {/* New Lab Order Form */}
-      <form onSubmit={handleCreateOrder} className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-xs space-y-5">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary text-[22px]">biotech</span>
-          <h4 className="font-headline text-base font-bold text-on-surface">Chỉ định cận lâm sàng mới</h4>
-        </div>
+      {readOnly ? (
+        <p className="p-4 rounded-xl border border-dashed border-slate-300 text-sm text-slate-600 bg-white">
+          {readOnlyReason || 'Không thể tạo thêm chỉ định cho ca khám này.'}
+        </p>
+      ) : (
+        <form onSubmit={handleCreateOrder} noValidate className="bg-white rounded-2xl p-6 border border-slate-200 space-y-5" aria-labelledby="lab-form-title">
+          <h4 id="lab-form-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">biotech</span>
+            Chỉ định cận lâm sàng mới
+          </h4>
 
-        {/* Quick select tags */}
-        <div className="space-y-2">
-          <label className="block text-xs font-semibold text-on-surface-variant">
-            Chọn nhanh các xét nghiệm phổ biến:
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {STANDARD_LAB_TESTS.map(t => (
-              <button
-                key={t.code}
-                type="button"
-                onClick={() => {
-                  setSelectedTestType(t.name);
-                  setCustomTestType('');
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                  selectedTestType === t.name
-                    ? 'bg-primary text-white border-primary shadow-xs'
-                    : 'bg-surface-container-low text-on-surface border-outline-variant/40 hover:bg-surface-container'
-                }`}
-              >
-                {t.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Custom Input */}
-        <div className="space-y-2">
-          <label className="block text-xs font-medium text-on-surface-variant">
-            Hoặc nhập tên xét nghiệm / chẩn đoán hình ảnh khác:
-          </label>
-          <input
-            type="text"
-            value={customTestType || selectedTestType}
-            onChange={(e) => {
-              setCustomTestType(e.target.value);
-              setSelectedTestType('');
-            }}
-            placeholder="vd: Nội soi dạ dày gây mê NBI, Chụp MRI sọ não 1.5 Tesla..."
-            className="w-full px-4 py-2.5 text-sm rounded-xl border border-outline-variant/50 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          />
-        </div>
-
-        <div className="flex justify-end pt-3">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-xl bg-primary text-white font-label text-sm font-semibold shadow-xs hover:bg-primary/90 disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[18px]">add_circle</span>
-            <span>{isSubmitting ? 'Đang tạo...' : 'Tạo chỉ định cận lâm sàng'}</span>
-          </button>
-        </div>
-      </form>
-
-      {/* Result Modal */}
-      {resultModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-outline-variant/30 space-y-4">
-            <div className="flex items-center justify-between border-b border-surface-variant/20 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[22px]">assignment</span>
-                <h4 className="font-headline text-base font-bold text-on-surface">
-                  Kết quả CLS: {resultModal.order?.testType}
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setResultModal({ open: false, order: null })}
-                className="w-8 h-8 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant"
-              >
-                ✕
-              </button>
+          <fieldset className="space-y-2">
+            <legend className="form-label mb-2">Chọn nhanh xét nghiệm phổ biến</legend>
+            <div className="flex flex-wrap gap-2">
+              {STANDARD_LAB_TESTS.map((t) => {
+                const selected = testType === t.name;
+                const pending = pendingTests.has(normalizeTest(t.name));
+                return (
+                  <button
+                    key={t.code}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={pending}
+                    title={pending ? 'Đã chỉ định, đang chờ kết quả' : undefined}
+                    onClick={() => { setTestType(t.name); setOrderError(''); }}
+                    className={`px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      selected ? 'bg-primary text-white border-primary' : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t.name}{pending ? ' (đang chờ)' : ''}
+                  </button>
+                );
+              })}
             </div>
+          </fieldset>
 
-            <form onSubmit={handleSaveResult} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-on-surface-variant">
-                  Kết luận & Mô tả chi tiết xét nghiệm *
-                </label>
-                <textarea
-                  rows="4"
-                  value={resultText}
-                  onChange={(e) => setResultText(e.target.value)}
-                  placeholder="Nhập kết quả xét nghiệm, chỉ số sinh hóa, hình ảnh tổn thương..."
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-on-surface-variant">
-                  Đường dẫn file ảnh / PDF kết quả (tùy chọn)
-                </label>
-                <input
-                  type="text"
-                  value={resultFileUrl}
-                  onChange={(e) => setResultFileUrl(e.target.value)}
-                  placeholder="https://hospital-storage.com/results/xray-123.jpg"
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-outline-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-surface-variant/20">
-                <button
-                  type="button"
-                  onClick={() => setResultModal({ open: false, order: null })}
-                  className="px-4 py-2 rounded-xl border border-outline-variant text-on-surface text-sm font-semibold hover:bg-surface-container"
-                >
-                  Đóng
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingResult}
-                  className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-[18px]">check</span>
-                  <span>{isSubmittingResult ? 'Đang lưu...' : 'Lưu kết quả'}</span>
-                </button>
-              </div>
-            </form>
+          <div className="form-field">
+            <label htmlFor={`lab-test-${visit?.id}`} className="form-label">Tên xét nghiệm / chẩn đoán hình ảnh</label>
+            <input
+              id={`lab-test-${visit?.id}`}
+              type="text"
+              value={testType}
+              onChange={(e) => { setTestType(e.target.value); setOrderError(''); }}
+              placeholder="VD: Nội soi dạ dày, Chụp MRI sọ não…"
+              aria-invalid={orderError ? 'true' : undefined}
+              aria-describedby={orderError ? 'lab-order-error' : undefined}
+              className={`input ${orderError ? 'is-error' : ''}`}
+            />
+            {orderError && <p id="lab-order-error" role="alert" className="form-error">{orderError}</p>}
           </div>
-        </div>
+
+          <div className="flex justify-end">
+            <button type="submit" disabled={isSubmitting} className="btn btn-primary">
+              <span className="material-symbols-outlined" aria-hidden="true">add_circle</span>
+              {isSubmitting ? 'Đang tạo…' : 'Tạo chỉ định'}
+            </button>
+          </div>
+        </form>
       )}
+
+      <Modal
+        isOpen={Boolean(resultOrder)}
+        onClose={closeResult}
+        title="Kết quả cận lâm sàng"
+        subtitle={resultOrder?.testType}
+        icon="assignment"
+        size="md"
+        footer={(
+          <>
+            <button type="button" className="btn btn-secondary" onClick={closeResult} disabled={isSubmittingResult}>Đóng</button>
+            <button type="submit" form="lab-result-form" className="btn btn-primary" disabled={isSubmittingResult}>
+              <span className="material-symbols-outlined" aria-hidden="true">check</span>
+              {isSubmittingResult ? 'Đang lưu…' : 'Lưu kết quả'}
+            </button>
+          </>
+        )}
+      >
+        <form id="lab-result-form" onSubmit={handleSaveResult} noValidate className="space-y-4">
+          <div className="form-field">
+            <label htmlFor="lab-result-text" className="form-label">Kết luận & mô tả kết quả <span className="required">*</span></label>
+            <textarea
+              id="lab-result-text"
+              data-autofocus
+              rows={5}
+              value={resultText}
+              onChange={(e) => setResultText(e.target.value)}
+              aria-invalid={resultErrors.resultText ? 'true' : undefined}
+              aria-describedby={resultErrors.resultText ? 'lab-result-text-err' : undefined}
+              className={`textarea ${resultErrors.resultText ? 'is-error' : ''}`}
+            />
+            {resultErrors.resultText && <p id="lab-result-text-err" className="form-error">{resultErrors.resultText}</p>}
+          </div>
+          <div className="form-field">
+            <label htmlFor="lab-result-url" className="form-label">Đường dẫn tệp kết quả (không bắt buộc)</label>
+            <input
+              id="lab-result-url"
+              type="url"
+              value={resultFileUrl}
+              onChange={(e) => setResultFileUrl(e.target.value)}
+              placeholder="https://…"
+              aria-invalid={resultErrors.resultFileUrl ? 'true' : undefined}
+              aria-describedby={resultErrors.resultFileUrl ? 'lab-result-url-err' : undefined}
+              className={`input ${resultErrors.resultFileUrl ? 'is-error' : ''}`}
+            />
+            {resultErrors.resultFileUrl && <p id="lab-result-url-err" className="form-error">{resultErrors.resultFileUrl}</p>}
+          </div>
+          {resultErrors.form && (
+            <p role="alert" className="text-sm p-3 rounded-xl bg-red-50 border border-red-200 text-red-900">{resultErrors.form}</p>
+          )}
+        </form>
+      </Modal>
     </div>
   );
 }
