@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useToast } from '../../context/ToastContext';
 import logoHospital from '../../assets/logo.png';
+import { HOURS_TEXT } from '../../services/hospitalHours';
 
 export const HospitalMapSection = () => {
   const { showToast } = useToast() || {};
@@ -113,10 +114,13 @@ export const HospitalMapSection = () => {
                   <div>
                     <span className="text-slate-500 font-medium">Giờ khám bệnh:</span>
                     <p className="text-slate-800 font-semibold">
-                      07:00 – 17:30 (Thứ 2 – Chủ Nhật)
+                      {HOURS_TEXT.days}
                     </p>
+                    <p className="text-[11px] text-slate-600">{HOURS_TEXT.summer}</p>
+                    <p className="text-[11px] text-slate-600">{HOURS_TEXT.winter}</p>
+                    <p className="text-[11px] text-slate-600">{HOURS_TEXT.bhyt}</p>
                     <p className="text-[11px] text-teal-700 font-medium">
-                      Cấp cứu tiếp nhận 24/24h
+                      {HOURS_TEXT.emergency}
                     </p>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DEPARTMENTS, DOCTORS, TIME_SLOTS } from '../../services/dataService';
+import { DEPARTMENTS, DOCTORS } from '../../services/dataService';
+import { getTimeSlots, parseLocalDate } from '../../services/hospitalHours';
 import { appointmentService } from '../../services/appointmentService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -21,7 +22,7 @@ export default function BookingModal({
   const [patientName, setPatientName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [appointmentDate, setAppointmentDate] = useState('');
-  const [timeSlot, setTimeSlot] = useState(TIME_SLOTS[0]);
+  const [timeSlot, setTimeSlot] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [ticket, setTicket] = useState(null); // When booking succeeds, show ticket view
@@ -74,6 +75,10 @@ export default function BookingModal({
 
   if (!isOpen) return null;
 
+  // Khung giờ khám theo mùa (hè/đông) của ngày được chọn
+  const timeSlots = getTimeSlots(parseLocalDate(appointmentDate));
+  const selectedSlot = timeSlots.includes(timeSlot) ? timeSlot : timeSlots[0];
+
   // Filter available doctors for the selected department (only bookable examining doctors)
   const availableDoctors = DOCTORS.filter(
     (d) => (!departmentId || d.departmentId === Number(departmentId)) && d.canBook !== false
@@ -100,7 +105,7 @@ export default function BookingModal({
         doctorName: selectedDoc ? selectedDoc.name : 'Bác sĩ trực chuyên khoa',
         room: selectedDoc ? selectedDoc.room : (selectedDept ? selectedDept.room : 'Phòng tiếp đón Tầng 1'),
         appointmentDate,
-        timeSlot,
+        timeSlot: selectedSlot,
         notes
       };
 
@@ -392,11 +397,11 @@ export default function BookingModal({
                 </label>
                 <select
                   id="booking-time-slot"
-                  value={timeSlot}
+                  value={selectedSlot}
                   onChange={(e) => setTimeSlot(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
                 >
-                  {TIME_SLOTS.map((slot, idx) => (
+                  {timeSlots.map((slot, idx) => (
                     <option key={idx} value={slot}>
                       {slot}
                     </option>

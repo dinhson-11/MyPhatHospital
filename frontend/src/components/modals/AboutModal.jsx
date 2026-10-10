@@ -3,6 +3,7 @@ import logoHospital from '../../assets/logo.png';
 import bannerImg from '../../assets/myphat_banner.jpg';
 import awardImg from '../../assets/myphat_president_award.jpg';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { HOURS_TEXT } from '../../services/hospitalHours';
 
 export default function AboutModal({ isOpen, onClose }) {
   useEscapeKey(isOpen, onClose);
@@ -134,7 +135,13 @@ export default function AboutModal({ isOpen, onClose }) {
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 text-slate-700">
               <p>📍 <strong>Địa chỉ:</strong> 1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang</p>
               <p>📞 <strong>Hotline Cấp cứu & Tư vấn:</strong> <a href="tel:0789065493" className="font-bold text-rose-600 hover:underline">0789 065 493</a></p>
-              <p>⏰ <strong>Thời gian làm việc:</strong> Thứ Hai – Chủ Nhật: 07:00 – 17:30 (Trực cấp cứu 24/24)</p>
+              <p>⏰ <strong>Thời gian làm việc ({HOURS_TEXT.days}):</strong></p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                <li>{HOURS_TEXT.summer}</li>
+                <li>{HOURS_TEXT.winter}</li>
+                <li>{HOURS_TEXT.bhyt}</li>
+                <li>{HOURS_TEXT.emergency}</li>
+              </ul>
               <p>✉️ <strong>Email hỗ trợ:</strong> lienhe@myphathospital.vn</p>
             </div>
           </div>

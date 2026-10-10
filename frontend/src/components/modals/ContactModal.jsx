@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { HOURS_TEXT } from '../../services/hospitalHours';
 
 export default function ContactModal({ isOpen, onClose }) {
   useEscapeKey(isOpen, onClose);
@@ -107,7 +108,11 @@ export default function ContactModal({ isOpen, onClose }) {
                   <span className="material-symbols-outlined text-slate-600 text-xl">schedule</span>
                   <div>
                     <strong className="text-slate-900 block text-xs">Giờ tiếp nhận khám bệnh:</strong>
-                    <span>Thứ 2 – Chủ Nhật: 07:00 – 17:30 (Cấp cứu trực 24/24)</span>
+                    <span className="block">{HOURS_TEXT.days}</span>
+                    <span className="block">{HOURS_TEXT.summer}</span>
+                    <span className="block">{HOURS_TEXT.winter}</span>
+                    <span className="block">{HOURS_TEXT.bhyt}</span>
+                    <span className="block font-semibold text-teal-700">{HOURS_TEXT.emergency}</span>
                   </div>
                 </div>
 

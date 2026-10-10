@@ -4,6 +4,7 @@ import com.hospital.hmsai.appointment.dto.AppointmentResponse;
 import com.hospital.hmsai.appointment.dto.CreateAppointmentRequest;
 import com.hospital.hmsai.appointment.entity.AppointmentSource;
 import com.hospital.hmsai.appointment.service.AppointmentService;
+import com.hospital.hmsai.common.WorkingHours;
 import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
 import com.hospital.hmsai.patient.entity.Patient;
@@ -84,6 +85,10 @@ public class PublicPortalService {
 
     @Transactional
     public AppointmentResponse book(PublicBookingRequest request) {
+        if (!WorkingHours.isValidSlotStart(request.getScheduledAt())) {
+            throw new BusinessException("Giờ khám không hợp lệ. Khung giờ khám: "
+                    + WorkingHours.describe(request.getScheduledAt().toLocalDate()));
+        }
         departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Chuyên khoa", "id", request.getDepartmentId()));
 

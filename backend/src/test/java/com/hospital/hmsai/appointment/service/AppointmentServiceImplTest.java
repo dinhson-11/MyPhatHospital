@@ -400,8 +400,8 @@ class AppointmentServiceImplTest {
         assertEquals("TS. BS. Nguyễn Văn Hùng", response.getDoctorName());
         assertEquals(checkDate, response.getDate());
 
-        // Tổng cộng có 12 khung giờ tiêu chuẩn
-        assertEquals(11, response.getAvailableSlots().size());
+        // 05/10/2026 là mùa hè: sáng 07:00-11:00 (8 ca) + chiều 13:00-17:30 (9 ca) = 17 khung giờ
+        assertEquals(16, response.getAvailableSlots().size());
         assertEquals(1, response.getBookedSlots().size());
 
         // Khung giờ 08:30 phải nằm trong bookedSlots

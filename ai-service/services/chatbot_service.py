@@ -18,7 +18,10 @@ CHATBOT_DISCLAIMER = (
 )
 
 from services.ml_triage_service import predict_department
-from services.hospital_catalog import department_name, DEFAULT_DEPT_ID
+from services.hospital_catalog import (
+    department_name, DEFAULT_DEPT_ID,
+    HOURS_DAYS, HOURS_SUMMER, HOURS_WINTER, HOURS_BHYT, HOURS_EMERGENCY,
+)
 
 # ============================================================================
 # DEPARTMENT ROUTING KNOWLEDGE BASE (Rule-based Fallback & Knowledge Base)
@@ -130,15 +133,18 @@ FAQ_KB: list[dict] = [
         "keywords": ["bhyt", "bảo hiểm y tế", "bảo hiểm", "thẻ bhyt"],
         "reply": ("🏥 **Thông tin BHYT tại Mỹ Phát Hospital:**\n\n"
                   "• Tiếp nhận BHYT thông tuyến toàn quốc\n"
-                  "• Giờ khám: Thứ 2 – Chủ Nhật (07h00 – 17h30)\n"
+                  f"• {HOURS_BHYT} (trong giờ khám bệnh của bệnh viện)\n"
                   "• Mang CCCD gắn chip hoặc thẻ BHYT trên ứng dụng VssID\n"
                   "• Cấp cứu 24/7 không cần thủ tục trước"),
     },
     {
         "keywords": ["giờ khám", "giờ làm việc", "mấy giờ", "khám buổi", "lịch làm việc"],
         "reply": ("⏰ **Lịch khám bệnh Mỹ Phát Hospital:**\n\n"
-                  "• Thứ 2 – Chủ Nhật: 07h00 – 17h30\n"
-                  "• Cấp cứu & Hồi sức: 24/7 liên tục tất cả các ngày\n"
+                  f"• {HOURS_DAYS}\n"
+                  f"• {HOURS_SUMMER}\n"
+                  f"• {HOURS_WINTER}\n"
+                  f"• {HOURS_BHYT}\n"
+                  f"• {HOURS_EMERGENCY}\n"
                   "• Đăng ký đặt lịch trước để tránh chờ đợi"),
     },
     {
