@@ -19,11 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -51,36 +48,21 @@ public class PublicPortalService {
                 .toList();
     }
 
-    /**
-     * Danh sách bác sĩ + dược sĩ đã khử trùng lặp theo họ tên
-     * (ưu tiên tài khoản dạng bs.* / ds.* thay cho tài khoản mẫu cũ như bacsi, duocsi).
-     */
+    /** Danh sách bác sĩ + dược sĩ của bệnh viện (mỗi người đúng một hồ sơ, xem migration V19). */
     @Transactional(readOnly = true)
     public List<PublicDoctorResponse> getDoctors() {
-        Map<String, StaffProfile> byName = new LinkedHashMap<>();
-        for (StaffProfile p : staffProfileRepository.findAll()) {
-            if (p.getUser() == null || !(hasRole(p, ROLE_DOCTOR) || hasRole(p, ROLE_PHARMACIST))) {
-                continue;
-            }
-            String key = p.getUser().getFullName().trim().toLowerCase();
-            StaffProfile existing = byName.get(key);
-            if (existing == null || (!isCanonical(existing) && isCanonical(p))) {
-                byName.put(key, p);
-            }
-        }
-        List<PublicDoctorResponse> result = new ArrayList<>();
-        for (StaffProfile p : byName.values()) {
-            result.add(PublicDoctorResponse.builder()
-                    .id(p.getId())
-                    .username(p.getUser().getUsername())
-                    .fullName(p.getUser().getFullName())
-                    .departmentId(p.getDepartment() != null ? p.getDepartment().getId() : null)
-                    .specialty(p.getSpecialty())
-                    .canBook(hasRole(p, ROLE_DOCTOR))
-                    .build());
-        }
-        result.sort(Comparator.comparing(PublicDoctorResponse::getId));
-        return result;
+        return staffProfileRepository.findAll().stream()
+                .filter(p -> p.getUser() != null && (hasRole(p, ROLE_DOCTOR) || hasRole(p, ROLE_PHARMACIST)))
+                .sorted(Comparator.comparing(StaffProfile::getId))
+                .map(p -> PublicDoctorResponse.builder()
+                        .id(p.getId())
+                        .username(p.getUser().getUsername())
+                        .fullName(p.getUser().getFullName())
+                        .departmentId(p.getDepartment() != null ? p.getDepartment().getId() : null)
+                        .specialty(p.getSpecialty())
+                        .canBook(hasRole(p, ROLE_DOCTOR))
+                        .build())
+                .toList();
     }
 
     @Transactional
@@ -123,7 +105,7 @@ public class PublicPortalService {
         // Không chọn bác sĩ: tự phân công bác sĩ của khoa
         return staffProfileRepository.findByDepartmentId(request.getDepartmentId()).stream()
                 .filter(p -> p.getUser() != null && hasRole(p, ROLE_DOCTOR))
-                .min(Comparator.comparing((StaffProfile p) -> !isCanonical(p)).thenComparing(StaffProfile::getId))
+                .min(Comparator.comparing(StaffProfile::getId))
                 .orElseThrow(() -> new BusinessException("Chuyên khoa này hiện chưa có bác sĩ nhận lịch."));
     }
 
@@ -153,10 +135,5 @@ public class PublicPortalService {
 
     private boolean hasRole(StaffProfile p, String role) {
         return p.getUser() != null && p.getUser().getRoles().stream().anyMatch(r -> role.equals(r.getCode()));
-    }
-
-    private boolean isCanonical(StaffProfile p) {
-        String u = p.getUser().getUsername();
-        return u.startsWith("bs.") || u.startsWith("ds.");
     }
 }

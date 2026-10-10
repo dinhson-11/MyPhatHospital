@@ -292,9 +292,9 @@ Hệ thống cung cấp sẵn **7 tài khoản mẫu** cho 7 vai trò:
 |:-:|----------|----------|---------|-----------|
 | 1 | `admin` | `Admin@123` | **ADMIN** | Quản trị hệ thống, xếp lịch trực, báo cáo tổng thể |
 | 2 | `letan` | `Receptionist@123` | **RECEPTIONIST** | Tiếp đón, tạo hồ sơ, check-in ca khám |
-| 3 | `bacsi` | `Doctor@123` | **DOCTOR** | Khám bệnh, kê đơn, AI chẩn đoán & cảnh báo thuốc |
+| 3 | `bs.maianh` | `Doctor@123` | **DOCTOR** | Khám bệnh, kê đơn, AI chẩn đoán & cảnh báo thuốc |
 | 4 | `dieuduong` | `Nurse@123` | **NURSE** | Đo sinh hiệu, tính BMI, nhập cận lâm sàng |
-| 5 | `duocsi` | `Pharmacist@123` | **PHARMACIST** | Kho dược, cấp phát, cảnh báo hết hạn |
+| 5 | `ds.quang` | `Pharmacist@123` | **PHARMACIST** | Kho dược, cấp phát, cảnh báo hết hạn |
 | 6 | `ketoan` | `Accountant@123` | **ACCOUNTANT** | Hóa đơn, thu tiền, VietQR, BHYT |
 | 7 | `benhnhan` | `Password@123` | **PATIENT** | Đặt lịch, xem lịch sử khám, AI chatbot |
 
