@@ -11,8 +11,8 @@ const DEFAULT_TODAY_QUEUE = [
     dob: '1988-05-14',
     phone: '0912345678',
     gender: 'MALE',
-    departmentName: 'Khoa Nội tổng quát',
-    doctorName: 'BSCKII. Nguyễn Văn Hùng',
+    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
+    doctorName: 'TS.BS Vi Mai Anh',
     doctorId: 1,
     appointmentTime: '08:30 - 09:00',
     symptoms: 'Ho dai dẳng kèm tức ngực nhẹ khi vận động',
@@ -26,7 +26,7 @@ const DEFAULT_TODAY_QUEUE = [
     dob: '1992-11-20',
     phone: '0987654321',
     gender: 'FEMALE',
-    departmentName: 'Khoa Tim mạch',
+    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
     doctorName: 'ThS. BS. Lê Minh Trí',
     doctorId: 2,
     appointmentTime: '09:00 - 09:30',
@@ -41,7 +41,7 @@ const DEFAULT_TODAY_QUEUE = [
     dob: '1975-02-10',
     phone: '0933221100',
     gender: 'MALE',
-    departmentName: 'Khoa Tiêu hóa',
+    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
     doctorName: 'BSCKI. Vũ Thị Hà',
     doctorId: 3,
     appointmentTime: '09:30 - 10:00',
@@ -82,7 +82,7 @@ export const receptionService = {
             dob: a.patient?.dob || '1990-01-01',
             phone: a.patient?.phone || '0900000000',
             gender: a.patient?.gender || 'MALE',
-            departmentName: a.departmentName || a.department?.name || 'Khoa Nội tổng quát',
+            departmentName: a.departmentName || a.department?.name || 'Khoa Khám bệnh / Cấp cứu ban đầu',
             doctorName: a.doctorName || a.doctor?.user?.fullName || 'BS. Trực lâm sàng',
             doctorId: a.doctorId || a.doctor?.id || 1,
             appointmentTime: a.scheduledAt ? new Date(a.scheduledAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '08:30',
@@ -134,10 +134,10 @@ export const receptionService = {
       // offline fallback
     }
     const updated = queue.map((item) =>
-      item.id === appointment.id ? { ...item, status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám Nội 1 - BS. Hùng' } : item
+      item.id === appointment.id ? { ...item, status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám ban đầu 101 (Tầng 1)' } : item
     );
     saveLocalQueue(updated);
-    return { success: true, visitId: Date.now(), status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám Nội 1 - BS. Hùng' };
+    return { success: true, visitId: Date.now(), status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám ban đầu 101 (Tầng 1)' };
   },
 
   async quickRegisterPatient(patientData) {

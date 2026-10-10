@@ -43,7 +43,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
         visitId: 101,
         patientName: 'Nguyễn Văn A',
         patientCode: 'BN-2026-0001',
-        doctorName: 'BSCKII. Nguyễn Văn Hùng',
+        doctorName: 'TS.BS Vi Mai Anh',
         diagnosisCode: 'I10 - Tăng huyết áp vô căn',
         createdAt: new Date().toISOString(),
         items: [
@@ -70,7 +70,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
         visitId: pId,
         patientName: 'Bệnh nhân đơn #' + pId,
         patientCode: 'BN-2026-00' + (pId % 100),
-        doctorName: 'BSCKII. Nguyễn Văn Hùng',
+        doctorName: 'TS.BS Vi Mai Anh',
         diagnosisCode: 'K29 - Viêm dạ dày tá tràng',
         createdAt: new Date().toISOString(),
         items: [

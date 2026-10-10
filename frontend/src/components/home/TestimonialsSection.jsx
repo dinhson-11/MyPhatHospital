@@ -4,25 +4,25 @@ const TESTIMONIALS = [
   {
     name: 'Bác Nguyễn Văn Thành (62 tuổi)',
     location: 'Chũ, Bắc Ninh',
-    department: 'Khoa Tim mạch',
+    department: 'Khoa Khám bệnh / Cấp cứu ban đầu',
     rating: 5,
     comment:
-      'Tôi bị nhói ngực và huyết áp cao nhiều năm. Được TS.BS Hùng điều trị tận tình bằng phác đồ mới, đặt lịch qua mạng đến nơi là vào phòng khám ngay không phải chen chúc bốc số xếp hàng.',
+      'Tôi bị nhói ngực và huyết áp cao nhiều năm. Được TS.BS Vi Mai Anh điều trị tận tình bằng phác đồ mới, đặt lịch qua mạng đến nơi là vào phòng khám ngay không phải chen chúc bốc số xếp hàng.',
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80'
   },
   {
     name: 'Chị Hoàng Thùy Linh (34 tuổi)',
     location: 'Lục Ngạn, Bắc Ninh',
-    department: 'Khoa Nhi',
+    department: 'Khoa Khám bệnh / Cấp cứu ban đầu',
     rating: 5,
     comment:
-      'Bé nhà mình bị sốt virus nửa đêm, được các bác sĩ Nhi khoa và Cấp cứu tiếp đón ân cần, phòng ốc khang trang sạch sẽ như khách sạn. Có kết quả xét nghiệm gửi ngay lên điện thoại rất tiện lợi.',
+      'Bé nhà mình bị sốt virus nửa đêm, được các bác sĩ Khám bệnh và Cấp cứu tiếp đón ân cần, phòng ốc khang trang sạch sẽ như khách sạn. Có kết quả xét nghiệm gửi ngay lên điện thoại rất tiện lợi.',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80'
   },
   {
     name: 'Anh Đỗ Quang Huy (45 tuổi)',
     location: 'Lục Nam, Bắc Ninh',
-    department: 'Khoa Tiêu hóa',
+    department: 'Khoa Khám bệnh / Cấp cứu ban đầu',
     rating: 5,
     comment:
       'Nội soi dạ dày không đau ở đây thực sự rất nhẹ nhàng, ngủ một giấc 15 phút dậy là xong xuôi, bác sĩ giải thích cặn kẽ từng vết trợt loét và tư vấn chế độ ăn uống khoa học.',

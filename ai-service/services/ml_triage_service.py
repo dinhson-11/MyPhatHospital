@@ -4,9 +4,9 @@ Hệ thống HMS-AI Mỹ Phát Hospital.
 
 Sử dụng mô hình TF-IDF + Logistic Regression đã được huấn luyện để phân loại
 triệu chứng bệnh nhân vào chuyên khoa chính xác, giải quyết triệt để các ca:
-- "dị ứng, nổi mẩn da" / "dị ứng, nổi mần da" -> Khoa Da liễu (dept_id: 8)
-- "bé bị dị ứng, nổi mẩn da" / "con bị nổi mẩn ngứa" -> Khoa Da liễu (dept_id: 8)
-- "bé sốt cao quấy khóc" / "trẻ 2 tuổi biếng ăn" -> Khoa Nhi (dept_id: 4)
+- "dị ứng, nổi mẩn da" / "dị ứng, nổi mần da" -> Dịch vụ Thẩm mỹ / Tạo hình & Da liễu (dept_id: 14)
+- "bé bị dị ứng, nổi mẩn da" / "con bị nổi mẩn ngứa" -> Dịch vụ Thẩm mỹ / Tạo hình & Da liễu (dept_id: 14)
+- "bé sốt cao quấy khóc" / "trẻ 2 tuổi biếng ăn" -> Khoa Khám bệnh / Cấp cứu ban đầu (dept_id: 1)
 """
 
 import os
@@ -16,109 +16,89 @@ import joblib
 
 logger = logging.getLogger(__name__)
 
-# Map mô tả chuyên khoa và bác sĩ phụ trách
-DEPT_METADATA: Dict[int, Dict[str, Any]] = {
+from services.hospital_catalog import ML_LABEL_TO_DEPT, department_name, doctor_name
+
+# Nội dung tư vấn theo NHÃN của mô hình ML (bộ nhãn cũ). Khoa/bác sĩ đề xuất luôn là khoa THỰC TẾ
+# của Mỹ Phát Hospital, quy đổi qua ML_LABEL_TO_DEPT (xem hospital_catalog.py).
+_LABEL_ADVICE: Dict[int, Dict[str, str]] = {
     8: {
-        "dept_id": 8,
-        "dept_name": "Khoa Da liễu",
-        "doctor_name": "ThS. BS. Lê Thị Lan Anh",
-        "reply": (
-            "Dựa trên các triệu chứng về da và dị ứng bạn mô tả, hệ thống gợi ý bạn nên đến "
-            "**Khoa Da liễu** để được bác sĩ chuyên khoa thăm khám trực tiếp, soi da vi điểm "
-            "và kê đơn điều trị phù hợp."
-        ),
+        "focus": "da liễu / dị ứng",
+        "reply_tail": "bác sĩ sẽ soi da, xác định nguyên nhân dị ứng và kê đơn điều trị phù hợp",
         "reason": "Triệu chứng phù hợp với bệnh lý da liễu / dị ứng, mề đay, viêm da",
         "urgency": "MEDIUM",
     },
     4: {
-        "dept_id": 4,
-        "dept_name": "Khoa Nhi",
-        "doctor_name": "BSCKII. Lê Hoàng Nam",
-        "reply": (
-            "Bạn đang hỏi về sức khỏe trẻ em. **Khoa Nhi** của chúng tôi có đội ngũ bác sĩ "
-            "chuyên khoa nhi giàu kinh nghiệm, sẵn sàng thăm khám và tư vấn tận tình cho bé."
-        ),
-        "reason": "Triệu chứng bệnh lý hoặc theo dõi phát triển ở trẻ em (Nhi khoa)",
+        "focus": "sức khỏe trẻ em",
+        "reply_tail": "bác sĩ sẽ thăm khám và tư vấn tận tình cho bé",
+        "reason": "Triệu chứng bệnh lý hoặc theo dõi phát triển ở trẻ em",
         "urgency": "HIGH",
     },
     5: {
-        "dept_id": 5,
-        "dept_name": "Khoa Tim mạch",
-        "doctor_name": "BSCKII. Nguyễn Văn Hùng",
-        "reply": (
-            "Dựa trên triệu chứng bạn mô tả, hệ thống gợi ý bạn nên đến **Khoa Tim mạch** "
-            "để được bác sĩ chuyên khoa thăm khám, đo điện tâm đồ (ECG) và siêu âm tim."
-        ),
+        "focus": "tim mạch",
+        "reply_tail": "bác sĩ sẽ thăm khám, đo điện tâm đồ (ECG) và chỉ định thêm xét nghiệm nếu cần",
         "reason": "Triệu chứng gợi ý bệnh lý hệ tim mạch và tuần hoàn",
         "urgency": "HIGH",
     },
     3: {
-        "dept_id": 3,
-        "dept_name": "Khoa Hô hấp",
-        "doctor_name": "BSCKI. Hoàng Mạnh Cường",
-        "reply": (
-            "Triệu chứng liên quan đến đường hô hấp. Bạn nên đến **Khoa Hô hấp** để bác sĩ "
-            "thăm khám, nghe phổi và chỉ định chụp X-quang nếu cần."
-        ),
+        "focus": "đường hô hấp",
+        "reply_tail": "bác sĩ sẽ thăm khám, nghe phổi và chỉ định chụp X-quang nếu cần",
         "reason": "Dấu hiệu viêm đường hô hấp hoặc bệnh lý phổi",
         "urgency": "HIGH",
     },
     6: {
-        "dept_id": 6,
-        "dept_name": "Khoa Tiêu hóa",
-        "doctor_name": "ThS. BS. Phạm Thu Hương",
-        "reply": (
-            "Triệu chứng của bạn liên quan đến đường tiêu hóa. **Khoa Tiêu hóa** sẽ giúp bạn "
-            "thăm khám và có thể chỉ định nội soi dạ dày/đại tràng để xác định nguyên nhân."
-        ),
+        "focus": "đường tiêu hóa",
+        "reply_tail": "bác sĩ sẽ thăm khám và chỉ định xét nghiệm để xác định nguyên nhân",
         "reason": "Triệu chứng bệnh lý tiêu hóa / dạ dày - ruột",
         "urgency": "MEDIUM",
     },
     7: {
-        "dept_id": 7,
-        "dept_name": "Khoa Thần kinh",
-        "doctor_name": "TS. BS. Nguyễn Minh Đức",
-        "reply": (
-            "Triệu chứng của bạn cần được đánh giá bởi **Khoa Thần kinh**. Bác sĩ sẽ khám "
-            "lâm sàng thần kinh và chỉ định chụp chiếu nếu cần thiết."
-        ),
+        "focus": "thần kinh",
+        "reply_tail": "bác sĩ sẽ khám lâm sàng và chỉ định thêm cận lâm sàng nếu cần thiết",
         "reason": "Triệu chứng thần kinh / tuần hoàn não",
         "urgency": "MEDIUM",
     },
     9: {
-        "dept_id": 9,
-        "dept_name": "Khoa Cơ xương khớp",
-        "doctor_name": "BSCKII. Đặng Văn Long",
-        "reply": (
-            "Triệu chứng cơ xương khớp của bạn nên được thăm khám tại **Khoa Cơ xương khớp** "
-            "để bác sĩ chụp X-quang, MRI và đưa ra phác đồ điều trị."
-        ),
+        "focus": "cơ xương khớp",
+        "reply_tail": "bác sĩ sẽ thăm khám, tư vấn vật lý trị liệu và phục hồi chức năng phù hợp",
         "reason": "Dấu hiệu bệnh lý cơ xương khớp, thoái hóa hoặc viêm khớp",
         "urgency": "MEDIUM",
     },
     10: {
-        "dept_id": 10,
-        "dept_name": "Khoa Tai mũi họng",
-        "doctor_name": "BSCKI. Vũ Đình Trọng",
-        "reply": (
-            "Triệu chứng tai mũi họng của bạn cần được nội soi kiểm tra tại **Khoa Tai mũi họng** "
-            "để xác định mức độ viêm nhiễm và điều trị dứt điểm."
-        ),
+        "focus": "tai mũi họng",
+        "reply_tail": "bác sĩ sẽ nội soi kiểm tra để xác định mức độ viêm nhiễm và điều trị dứt điểm",
         "reason": "Triệu chứng viêm nhiễm hoặc bệnh lý vùng tai mũi họng",
         "urgency": "MEDIUM",
     },
     1: {
-        "dept_id": 1,
-        "dept_name": "Khoa Nội tổng quát",
-        "doctor_name": "PGS. TS. Trần Thị Mai",
-        "reply": (
-            "Với triệu chứng bạn mô tả, **Khoa Nội tổng quát** là lựa chọn phù hợp để bác sĩ "
-            "đánh giá tổng thể ban đầu và chỉ định các xét nghiệm cần thiết."
-        ),
+        "focus": "sức khỏe tổng quát",
+        "reply_tail": "bác sĩ sẽ đánh giá tổng thể ban đầu và chỉ định các xét nghiệm cần thiết",
         "reason": "Khám sức khỏe tổng quát và sàng lọc ban đầu",
         "urgency": "MEDIUM",
     },
 }
+
+
+def _build_metadata() -> Dict[int, Dict[str, Any]]:
+    result: Dict[int, Dict[str, Any]] = {}
+    for label, advice in _LABEL_ADVICE.items():
+        dept_id = ML_LABEL_TO_DEPT[label]
+        dept_name = department_name(dept_id)
+        result[label] = {
+            "dept_id": dept_id,
+            "dept_name": dept_name,
+            "doctor_name": doctor_name(dept_id),
+            "reply": (
+                f"Dựa trên triệu chứng về {advice['focus']} bạn mô tả, hệ thống gợi ý bạn nên đến "
+                f"**{dept_name}** của Mỹ Phát Hospital, {advice['reply_tail']}."
+            ),
+            "reason": advice["reason"],
+            "urgency": advice["urgency"],
+        }
+    return result
+
+
+# Khóa = nhãn mô hình ML; giá trị chứa khoa thật của bệnh viện
+DEPT_METADATA: Dict[int, Dict[str, Any]] = _build_metadata()
 
 # Biến singleton lưu trữ mô hình nạp trong bộ nhớ
 _MODEL_PIPELINE = None
@@ -176,7 +156,7 @@ def predict_department(text: str) -> Optional[Tuple[int, str, float, Dict[str, A
             # Ngưỡng tin cậy tối thiểu của mô hình
             if confidence >= 0.25 and pred_id in DEPT_METADATA:
                 meta = DEPT_METADATA[pred_id]
-                return pred_id, meta["dept_name"], confidence, meta
+                return meta["dept_id"], meta["dept_name"], confidence, meta
         except Exception as e:
             logger.warning(f"Lỗi khi dự đoán bằng mô hình ML: {e}")
 

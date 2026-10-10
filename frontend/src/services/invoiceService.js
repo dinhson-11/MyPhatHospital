@@ -10,7 +10,7 @@ const INITIAL_MOCK_INVOICES = [
     patientCode: 'BN-2026-0001',
     visitId: 1,
     visitTime: '2026-10-02T08:30:00',
-    doctorName: 'BSCKII. Nguyễn Văn Hùng',
+    doctorName: 'TS.BS Vi Mai Anh',
     diagnosisCode: 'I10',
     totalAmount: 320000,
     status: 'PAID',
@@ -19,7 +19,7 @@ const INITIAL_MOCK_INVOICES = [
     paidAt: '2026-10-02T10:15:00',
     createdAt: '2026-10-02T09:45:00',
     items: [
-      { id: 1, itemType: 'SERVICE', refId: 1, description: 'Phí khám bệnh chuyên khoa Tim mạch', amount: 150000 },
+      { id: 1, itemType: 'SERVICE', refId: 1, description: 'Phí khám bệnh tại Khoa Khám bệnh', amount: 150000 },
       { id: 2, itemType: 'DRUG', refId: 1, description: 'Amlodipine 5mg (1 viên/ngày, SL: 30 Viên)', amount: 90000 },
       { id: 3, itemType: 'LAB', refId: 1, description: 'Cận lâm sàng: Điện tim đồ (ECG)', amount: 80000 }
     ]
@@ -130,7 +130,7 @@ export const invoiceService = {
       patientCode: options.patientCode || ('BN-2026-000' + (visitId % 10)),
       visitId: Number(visitId),
       visitTime: new Date().toISOString(),
-      doctorName: options.doctorName || 'BSCKII. Nguyễn Văn Hùng',
+      doctorName: options.doctorName || 'TS.BS Vi Mai Anh',
       diagnosisCode: options.diagnosisCode || 'K29 (Viêm dạ dày)',
       totalAmount,
       status: 'PENDING',

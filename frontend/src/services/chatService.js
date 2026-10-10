@@ -211,7 +211,7 @@ export const chatService = {
       } else {
         textReply =
           'Cảm ơn quý khách đã chia sẻ thông tin. Để được chẩn đoán chính xác nhất, quý khách nên đến trực tiếp Bệnh viện để bác sĩ chuyên khoa thăm khám lâm sàng và chỉ định các xét nghiệm cần thiết.';
-        suggestedDept = { id: 1, name: 'Khoa Nội tổng quát', reason: 'Khám sàng lọc ban đầu' };
+        suggestedDept = { id: 1, name: 'Khoa Khám bệnh / Cấp cứu ban đầu', reason: 'Khám sàng lọc ban đầu' };
         showBooking = true;
       }
     }

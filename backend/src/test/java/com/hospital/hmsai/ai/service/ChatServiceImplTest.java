@@ -198,7 +198,7 @@ class ChatServiceImplTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getSuggestedDepartment()).isNotNull();
-        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Khoa Nhi");
+        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Khoa Khám bệnh / Cấp cứu ban đầu");
     }
 
     @Test
@@ -227,8 +227,8 @@ class ChatServiceImplTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getSuggestedDepartment()).isNotNull();
-        assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(8);
-        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Khoa Da liễu");
+        assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(14);
+        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Dịch vụ Thẩm mỹ / Tạo hình");
     }
 
     @Test
@@ -257,8 +257,8 @@ class ChatServiceImplTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getSuggestedDepartment()).isNotNull();
-        assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(8);
-        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Khoa Da liễu");
+        assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(14);
+        assertThat(response.getSuggestedDepartment().getDeptName()).isEqualTo("Dịch vụ Thẩm mỹ / Tạo hình");
     }
 
     @Test

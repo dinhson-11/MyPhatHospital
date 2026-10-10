@@ -285,44 +285,57 @@ public class ChatServiceImpl implements ChatService {
                 || lower.contains("mẩn ngứa") || lower.contains("mần ngứa") || lower.contains("ngứa")
                 || lower.contains("phát ban") || lower.contains("mề đay") || lower.contains("mày đay")
                 || lower.contains("viêm da") || lower.contains("mụn") || lower.contains("nấm da")) {
-            return buildDeptResponse(sessionId, 8, "Khoa Da liễu",
-                    "Triệu chứng trên da và dị ứng của bạn nên được bác sĩ **Khoa Da liễu** thăm khám trực tiếp để chẩn đoán chính xác và kê đơn điều trị.",
+            return buildDeptResponse(sessionId, 14, "Dịch vụ Thẩm mỹ / Tạo hình",
+                    "Triệu chứng trên da và dị ứng của bạn nên được bác sĩ **Dịch vụ Thẩm mỹ / Tạo hình** (da liễu) thăm khám trực tiếp để chẩn đoán chính xác và kê đơn điều trị.",
                     "Dấu hiệu da liễu / dị ứng, mẩn ngứa", "MEDIUM");
         }
+        if (lower.contains("khám thai") || lower.contains("mang thai") || lower.contains("thai kỳ")
+                || lower.contains("kinh nguyệt") || lower.contains("phụ khoa")) {
+            return buildDeptResponse(sessionId, 3, "Sản - Phụ khoa",
+                    "Vấn đề thai kỳ và sức khỏe phụ nữ của bạn sẽ được bác sĩ **Sản - Phụ khoa** tư vấn và thăm khám chuyên sâu.",
+                    "Triệu chứng liên quan đến thai kỳ / phụ khoa", "MEDIUM");
+        }
+        if (lower.contains("đau họng") || lower.contains("rát họng") || lower.contains("viêm họng")
+                || lower.contains("ngạt mũi") || lower.contains("viêm xoang") || lower.contains("đau tai")
+                || lower.contains("khàn tiếng")) {
+            return buildDeptResponse(sessionId, 10, "Tai Mũi Họng",
+                    "Triệu chứng tai mũi họng của bạn nên được nội soi kiểm tra tại **Tai Mũi Họng** để điều trị dứt điểm.",
+                    "Triệu chứng viêm nhiễm vùng tai mũi họng", "MEDIUM");
+        }
         if (lower.contains("trẻ") || lower.contains("bé") || lower.contains("con tôi") || lower.contains("sơ sinh")) {
-            return buildDeptResponse(sessionId, 4, "Khoa Nhi",
-                    "Bạn đang hỏi về sức khỏe trẻ nhỏ. Bệnh viện có **Khoa Nhi** với các bác sĩ chuyên khoa sẵn sàng thăm khám cho bé.",
+            return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
+                    "Bạn đang hỏi về sức khỏe trẻ nhỏ. Bạn có thể đặt lịch tại **Khoa Khám bệnh / Cấp cứu ban đầu** để bác sĩ thăm khám cho bé.",
                     "Triệu chứng liên quan đến sức khỏe trẻ em", "HIGH");
         }
         if (lower.contains("đau ngực") || lower.contains("tức ngực") || lower.contains("hồi hộp") || lower.contains("tim") || lower.contains("huyết áp")) {
-            return buildDeptResponse(sessionId, 5, "Khoa Tim mạch",
-                    "Triệu chứng ngực và tuần hoàn của bạn cần được kiểm tra tại **Khoa Tim mạch** để đo ECG và siêu âm tim.",
+            return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
+                    "Triệu chứng ngực và tuần hoàn của bạn cần được kiểm tra tại **Khoa Khám bệnh / Cấp cứu ban đầu** để đo ECG và đánh giá ban đầu.",
                     "Triệu chứng gợi ý bệnh lý hệ tim mạch", "HIGH");
         }
-        if (lower.contains("ho") || lower.contains("đờm") || lower.contains("khó thở") || lower.contains("phổi") || lower.contains("rát họng")) {
-            return buildDeptResponse(sessionId, 3, "Khoa Hô hấp",
-                    "Dựa vào dấu hiệu hô hấp, bạn nên đến **Khoa Hô hấp** để bác sĩ thăm khám và nghe phổi, chỉ định X-quang nếu cần.",
+        if (lower.contains("ho") || lower.contains("đờm") || lower.contains("khó thở") || lower.contains("phổi")) {
+            return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
+                    "Dựa vào dấu hiệu hô hấp, bạn nên đến **Khoa Khám bệnh / Cấp cứu ban đầu** để bác sĩ thăm khám và nghe phổi, chỉ định X-quang nếu cần.",
                     "Dấu hiệu viêm đường hô hấp hoặc bệnh lý phổi", "HIGH");
         }
         if (lower.contains("đau bụng") || lower.contains("dạ dày") || lower.contains("ợ chua") || lower.contains("buồn nôn") || lower.contains("tiêu chảy")) {
-            return buildDeptResponse(sessionId, 6, "Khoa Tiêu hóa",
-                    "Triệu chứng vùng bụng liên quan đến đường tiêu hóa. Bạn nên khám tại **Khoa Tiêu hóa**.",
+            return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
+                    "Triệu chứng vùng bụng liên quan đến đường tiêu hóa. Bạn nên khám tại **Khoa Khám bệnh / Cấp cứu ban đầu**.",
                     "Dấu hiệu bệnh lý tiêu hóa / dạ dày", "MEDIUM");
         }
         if (lower.contains("đau đầu") || lower.contains("chóng mặt") || lower.contains("tê bì") || lower.contains("mất ngủ")) {
-            return buildDeptResponse(sessionId, 7, "Khoa Thần kinh",
-                    "Triệu chứng thần kinh của bạn nên được bác sĩ **Khoa Thần kinh** đánh giá lâm sàng chuyên sâu.",
+            return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
+                    "Triệu chứng thần kinh của bạn nên được bác sĩ **Khoa Khám bệnh / Cấp cứu ban đầu** đánh giá lâm sàng chuyên sâu.",
                     "Dấu hiệu thần kinh / tuần hoàn não", "MEDIUM");
         }
         if (lower.contains("đau khớp") || lower.contains("đau lưng") || lower.contains("thoái hóa") || lower.contains("sưng khớp")) {
-            return buildDeptResponse(sessionId, 9, "Khoa Cơ xương khớp",
-                    "Triệu chứng cơ xương khớp nên được thăm khám tại **Khoa Cơ xương khớp** để có hướng điều trị phù hợp.",
+            return buildDeptResponse(sessionId, 13, "Khoa Y học cổ truyền – Phục hồi chức năng",
+                    "Triệu chứng cơ xương khớp nên được thăm khám tại **Khoa Y học cổ truyền – Phục hồi chức năng** để có hướng điều trị phù hợp.",
                     "Dấu hiệu thoái hóa hoặc viêm khớp", "MEDIUM");
         }
 
         // Mặc định
-        return buildDeptResponse(sessionId, 1, "Khoa Nội tổng quát",
-                "Để có đánh giá toàn diện về sức khỏe, bạn nên đến **Khoa Nội tổng quát** để được bác sĩ khám sàng lọc và hướng dẫn xét nghiệm phù hợp.",
+        return buildDeptResponse(sessionId, 1, "Khoa Khám bệnh / Cấp cứu ban đầu",
+                "Để có đánh giá toàn diện về sức khỏe, bạn nên đến **Khoa Khám bệnh / Cấp cứu ban đầu** để được bác sĩ khám sàng lọc và hướng dẫn xét nghiệm phù hợp.",
                 "Khám sức khỏe tổng quát và sàng lọc ban đầu", "NORMAL");
     }
 

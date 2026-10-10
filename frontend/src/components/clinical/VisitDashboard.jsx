@@ -195,9 +195,9 @@ export default function VisitDashboard({ isOpen, onClose }) {
         patientPhone: newPatientPhone.trim(),
         patientGender: 'MALE',
         doctorId: 1,
-        doctorName: user?.fullName || 'TS. BS. Nguyễn Văn Hùng',
-        doctorSpecialty: 'Tim mạch',
-        departmentName: 'Khoa Tim mạch',
+        doctorName: user?.fullName || 'TS.BS Vi Mai Anh',
+        doctorSpecialty: 'Khám bệnh & Nội tổng quát',
+        departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
         chiefComplaint: newPatientComplaint.trim(),
         vitalSigns: {
           pulse: 80,
@@ -270,7 +270,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                 </span>
               </div>
               <p className="text-xs text-on-surface-variant font-label">
-                Bác sĩ phụ trách: <span className="font-bold text-on-surface">{user?.fullName || 'TS. BS. Nguyễn Văn Hùng'}</span> • Chuyên khoa Tim mạch
+                Bác sĩ phụ trách: <span className="font-bold text-on-surface">{user?.fullName || 'TS.BS Vi Mai Anh'}</span> • Khoa Khám bệnh / Cấp cứu ban đầu
               </p>
             </div>
           </div>
@@ -809,7 +809,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                       </div>
                       <div className="text-center">
                         <p className="italic mb-8">Bác sĩ khám bệnh</p>
-                        <p className="font-bold text-sm text-primary">{activeVisit.doctorName || 'TS. BS. Nguyễn Văn Hùng'}</p>
+                        <p className="font-bold text-sm text-primary">{activeVisit.doctorName || 'TS.BS Vi Mai Anh'}</p>
                       </div>
                     </div>
 

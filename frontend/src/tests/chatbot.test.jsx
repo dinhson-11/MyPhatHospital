@@ -79,13 +79,14 @@ describe('Sprint 7 – AI Chatbot Suite (FR-10 & NFR-8)', () => {
       };
       render(<ChatMessage message={msg} onOpenBooking={onBooking} />);
 
-      expect(screen.getByText('Khoa Tim mạch')).toBeInTheDocument();
+      // Khoa AI gợi ý (Tim mạch - bộ khoa cũ) được quy về khoa thật của bệnh viện
+      expect(screen.getByText('Khoa Khám bệnh / Cấp cứu ban đầu')).toBeInTheDocument();
       expect(screen.getByText(/Ưu tiên: HIGH/i)).toBeInTheDocument();
       expect(screen.getByText(new RegExp(AI_DISCLAIMER_TEXT, 'i'))).toBeInTheDocument();
 
       const bookBtn = screen.getByTestId('btn-book-dept-chat');
       fireEvent.click(bookBtn);
-      expect(onBooking).toHaveBeenCalledWith({ departmentId: 5 });
+      expect(onBooking).toHaveBeenCalledWith({ departmentId: 1 });
     });
 
     it('renders emergency message with 115 emergency callout', () => {

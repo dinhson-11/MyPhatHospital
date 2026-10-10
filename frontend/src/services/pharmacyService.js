@@ -106,7 +106,7 @@ export const pharmacyService = {
       visitId: dispenseData.visitId || 101,
       patientName: dispenseData.patientName || 'Bệnh nhân mẫu',
       patientCode: dispenseData.patientCode || 'BN-2026-0001',
-      doctorName: dispenseData.doctorName || 'BS. Nguyễn Văn Hùng',
+      doctorName: dispenseData.doctorName || 'TS.BS Vi Mai Anh',
       dispensedByName: 'DS. Đỗ Thị Mai (Kho Dược)',
       dispensedAt: new Date().toISOString(),
       items: dispenseData.items || [],
