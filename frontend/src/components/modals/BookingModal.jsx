@@ -68,7 +68,7 @@ export default function BookingModal({
     // Default tomorrow's date or today
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateStr = tomorrow.toISOString().split('T')[0];
+    const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
     setAppointmentDate(dateStr);
   }, [isOpen, initialData, user]);
 

@@ -21,6 +21,8 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
 
     Optional<Patient> findByUserId(Long userId);
 
+    Optional<Patient> findFirstByPhoneAndFullNameIgnoreCase(String phone, String fullName);
+
     boolean existsByPatientCode(String patientCode);
 
     boolean existsByNationalId(String nationalId);

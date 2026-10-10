@@ -17,6 +17,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import com.hospital.hmsai.hr.service.ScheduleService;
+import com.hospital.hmsai.publicapi.PublicPortalService;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -54,6 +55,9 @@ class RBACSecurityTest {
 
     @MockBean
     private ScheduleService scheduleService;
+
+    @MockBean
+    private PublicPortalService publicPortalService;
 
     @Test
     @DisplayName("SEC-01: Chưa đăng nhập truy cập API bảo mật bị từ chối truy cập (403 Forbidden)")
@@ -182,5 +186,24 @@ class RBACSecurityTest {
 
         mockMvc.perform(get("/api/v1/schedules"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("SEC-15: Danh mục bác sĩ công khai truy cập được khi chưa đăng nhập")
+    void testPublicDoctors_AnonymousAllowed() throws Exception {
+        when(publicPortalService.getDoctors()).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/v1/public/doctors"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("SEC-16: Đặt lịch công khai không bị chặn 403; dữ liệu thiếu bị từ chối 400 (validation)")
+    void testPublicBooking_AnonymousReachesValidation() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/public/appointments")
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 }

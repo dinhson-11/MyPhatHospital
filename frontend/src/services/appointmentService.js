@@ -11,20 +11,24 @@ const initialAppointments = [
     patientPhone: '0912345678',
     patientEmail: 'minh.tran@gmail.com',
     doctorId: 1,
-    doctorName: 'TS. BS. Nguyễn Văn Hùng',
-    departmentId: 5,
-    departmentName: 'Khoa Tim mạch',
+    doctorName: 'TS.BS Vi Mai Anh',
+    departmentId: 1,
+    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
     appointmentDate: '2026-09-29',
     scheduledDate: '2026-09-29',
     timeSlot: '08:30 - 09:00',
-    notes: 'Khám định kỳ huyết áp và kiểm tra nhịp tim',
-    symptom: 'Khám định kỳ huyết áp và kiểm tra nhịp tim',
-    room: 'Phòng khám 306 (Tầng 3)',
+    notes: 'Khám sức khỏe tổng quát định kỳ',
+    symptom: 'Khám sức khỏe tổng quát định kỳ',
+    room: 'Phòng khám ban đầu 101 (Tầng 1)',
     fee: 350000,
     status: 'CONFIRMED',
     createdAt: new Date().toISOString()
   }
 ];
+
+// Định dạng ngày theo giờ địa phương (toISOString dùng UTC làm lệch ngày)
+const toLocalDateStr = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const getStoredAppointments = () => {
   const raw = localStorage.getItem(APPOINTMENTS_KEY);
@@ -47,7 +51,7 @@ function normalizeBackendAppointment(item) {
   let slot = '08:30 - 09:00';
   if (item.scheduledAt) {
     const d = new Date(item.scheduledAt);
-    date = d.toISOString().split('T')[0];
+    date = toLocalDateStr(d);
     const h = String(d.getHours()).padStart(2, '0');
     const m = String(d.getMinutes()).padStart(2, '0');
     const endM = (d.getMinutes() + 30) % 60;
@@ -68,7 +72,7 @@ function normalizeBackendAppointment(item) {
     doctorId: item.doctorId,
     doctorName: item.doctorName || 'Bác sĩ trực chuyên khoa',
     departmentId: item.departmentId,
-    departmentName: item.departmentName || 'Khoa Nội tổng quát',
+    departmentName: item.departmentName || '',
     appointmentDate: date || item.appointmentDate || item.scheduledDate,
     scheduledDate: date || item.appointmentDate || item.scheduledDate,
     timeSlot: item.timeSlot || slot,
@@ -146,7 +150,7 @@ export const appointmentService = {
       fee
     } = bookingData;
 
-    const dateStr = appointmentDate || scheduledDate || new Date().toISOString().split('T')[0];
+    const dateStr = appointmentDate || scheduledDate || toLocalDateStr(new Date());
     const slotStr = timeSlot || '08:30 - 09:00';
     const startHourMin = slotStr.split('-')[0].trim();
     const scheduledAt = `${dateStr}T${startHourMin.length === 5 ? startHourMin : '08:30'}:00`;
@@ -160,10 +164,10 @@ export const appointmentService = {
       phoneNumber: phoneNumber || patientPhone,
       patientPhone: phoneNumber || patientPhone,
       patientEmail: patientEmail || '',
-      departmentId: departmentId ? Number(departmentId) : 1,
-      departmentName: departmentName || 'Khoa Nội tổng quát',
-      doctorId: doctorId ? Number(doctorId) : 1,
-      doctorName: doctorName || 'TS. BS. Nguyễn Văn Hùng',
+      departmentId: Number(departmentId),
+      departmentName: departmentName || '',
+      doctorId: doctorId ? Number(doctorId) : null,
+      doctorName: doctorName || 'Bác sĩ trực chuyên khoa',
       appointmentDate: dateStr,
       scheduledDate: dateStr,
       timeSlot: slotStr,
@@ -176,29 +180,38 @@ export const appointmentService = {
     };
 
     try {
+      // Đặt lịch công khai: hệ thống tự tạo/tái sử dụng hồ sơ bệnh nhân theo họ tên + SĐT
       const backendPayload = {
-        patientId: bookingData.patientId || 1,
-        doctorId: newAppointment.doctorId,
-        departmentId: newAppointment.departmentId,
+        fullName: (patientName || '').trim(),
+        phone: (phoneNumber || patientPhone || '').trim(),
+        departmentId: Number(departmentId),
+        doctorId: doctorId ? Number(doctorId) : null,
         scheduledAt,
-        symptom: newAppointment.symptom,
-        notes: newAppointment.notes,
-        source: 'PATIENT'
+        symptom: symptom || notes || undefined,
+        notes: notes || undefined
       };
 
-      const res = await apiClient.post('/appointments', backendPayload);
-      if (res && res.data) {
-        const backendData = res.data;
-        if (backendData.id) {
-          newAppointment.id = backendData.id;
-          newAppointment.ticketCode = `HMS-${new Date().getFullYear()}-${String(backendData.id).padStart(4, '0')}`;
-        }
-        if (backendData.status) {
-          newAppointment.status = backendData.status;
-        }
+      const res = await apiClient.post('/public/appointments', backendPayload, { skipAuth: true });
+      const backendData = res?.data;
+      if (backendData?.id) {
+        newAppointment.id = backendData.id;
+        newAppointment.ticketCode = `HMS-${new Date().getFullYear()}-${String(backendData.id).padStart(4, '0')}`;
+        newAppointment.status = backendData.status || newAppointment.status;
+        // Thông tin bác sĩ/khoa lấy từ backend để vé khớp với dữ liệu thật
+        if (backendData.doctorName) newAppointment.doctorName = backendData.doctorName;
+        if (backendData.doctorId) newAppointment.doctorId = backendData.doctorId;
+        if (backendData.departmentName) newAppointment.departmentName = backendData.departmentName;
       }
-    } catch {
-      // Backend offline hoặc lỗi -> Lưu local fallback
+    } catch (err) {
+      // Server đã phản hồi lỗi (validation, trùng lịch, sai bác sĩ...): báo lỗi thật, KHÔNG tạo vé giả
+      if (err?.response) {
+        throw new Error(err.response.data?.message || 'Không thể đặt lịch khám lúc này');
+      }
+      // Không kết nối được máy chủ: chỉ cho phép lưu cục bộ ở môi trường dev/test
+      if (!import.meta.env.DEV) {
+        throw new Error('Không thể kết nối máy chủ. Vui lòng thử lại sau.');
+      }
+      newAppointment.offline = true;
     }
 
     const currentList = getStoredAppointments();
