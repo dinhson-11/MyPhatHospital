@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveHospitalDepartment } from '../../services/dataService';
 
 /**
  * ChatMessage Component (FR-10 – Sprint 7)
@@ -12,6 +13,7 @@ import React from 'react';
 export default function ChatMessage({ message, onOpenBooking }) {
   const isUser = message.sender === 'user';
   const isEmergency = message.intent === 'EMERGENCY';
+  const hospitalDept = message.suggestedDept ? resolveHospitalDepartment(message.suggestedDept) : null;
 
   // Format nội dung tin nhắn với hỗ trợ in đậm và bullet points cơ bản
   const formatText = text => {
@@ -109,7 +111,7 @@ export default function ChatMessage({ message, onOpenBooking }) {
                 <span className="material-symbols-outlined text-[16px] text-emerald-600">
                   local_hospital
                 </span>
-                <span>{message.suggestedDept.name}</span>
+                <span>{hospitalDept.name}</span>
               </div>
               {message.suggestedDept.priority && (
                 <span
@@ -128,7 +130,7 @@ export default function ChatMessage({ message, onOpenBooking }) {
               <button
                 type="button"
                 data-testid="btn-book-dept-chat"
-                onClick={() => onOpenBooking({ departmentId: message.suggestedDept.id })}
+                onClick={() => onOpenBooking({ departmentId: hospitalDept.id })}
                 className="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[14px]">calendar_month</span>

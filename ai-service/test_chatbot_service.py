@@ -18,33 +18,34 @@ class TestChatbotService:
         assert result.disclaimer != ""
 
     def test_cardiovascular_symptom_routing(self):
-        """Triệu chứng tim mạch phải gợi ý Khoa Tim mạch."""
+        """Triệu chứng tim mạch quy về Khoa Khám bệnh / Cấp cứu ban đầu (bệnh viện không có khoa Tim mạch riêng)."""
         result = ChatbotService.process_message("Tôi bị đau ngực trái và hồi hộp")
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
-        assert "Tim mạch" in result.suggested_department.dept_name
+        assert result.suggested_department.dept_id == 1
+        assert "Khám bệnh" in result.suggested_department.dept_name
         assert result.show_booking_button is True
 
     def test_respiratory_symptom_routing(self):
-        """Triệu chứng hô hấp phải gợi ý Khoa Hô hấp."""
+        """Triệu chứng hô hấp quy về Khoa Khám bệnh / Cấp cứu ban đầu."""
         result = ChatbotService.process_message("Tôi ho nhiều và khó thở")
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
-        assert "Hô hấp" in result.suggested_department.dept_name
+        assert result.suggested_department.dept_id == 1
 
     def test_gastrointestinal_symptom_routing(self):
-        """Triệu chứng tiêu hóa phải gợi ý Khoa Tiêu hóa."""
+        """Triệu chứng tiêu hóa quy về Khoa Khám bệnh / Cấp cứu ban đầu."""
         result = ChatbotService.process_message("Đau bụng vùng thượng vị, ợ chua sau ăn")
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
-        assert "Tiêu hóa" in result.suggested_department.dept_name
+        assert result.suggested_department.dept_id == 1
 
     def test_pediatric_symptom_routing(self):
-        """Triệu chứng trẻ em phải gợi ý Khoa Nhi."""
+        """Triệu chứng trẻ em quy về Khoa Khám bệnh / Cấp cứu ban đầu."""
         result = ChatbotService.process_message("Bé nhà tôi bị sốt cao và quấy khóc")
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
-        assert "Nhi" in result.suggested_department.dept_name
+        assert result.suggested_department.dept_id == 1
 
     def test_faq_bhyt(self):
         """Câu hỏi BHYT phải trả về FAQ intent với thông tin đúng."""
@@ -112,21 +113,43 @@ class TestChatbotService:
         result = ChatbotService.process_message("dị ứng, nổi mẩn da")
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
-        assert result.suggested_department.dept_id == 8
-        assert "Da liễu" in result.suggested_department.dept_name
+        assert result.suggested_department.dept_id == 14
+        assert "Thẩm mỹ" in result.suggested_department.dept_name
 
     def test_child_with_skin_allergy_routes_to_dermatology_not_pediatrics(self):
         """Bé bị dị ứng, nổi mẩn da phải vào Khoa Da liễu thay vì Khoa Nhi."""
         result = ChatbotService.process_message("bé bị dị ứng, nổi mẩn da")
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
-        assert result.suggested_department.dept_id == 8
-        assert "Da liễu" in result.suggested_department.dept_name
+        assert result.suggested_department.dept_id == 14
+        assert "Thẩm mỹ" in result.suggested_department.dept_name
 
     def test_dialect_noi_man_da_routes_to_dermatology(self):
         """Biến thể 'nổi mần da' hoặc 'dị ứng, nổi mần da' phải vào Khoa Da liễu."""
         result = ChatbotService.process_message("dị ứng, nổi mần da")
         assert result.intent == "SYMPTOM_CHECK"
         assert result.suggested_department is not None
-        assert result.suggested_department.dept_id == 8
-        assert "Da liễu" in result.suggested_department.dept_name
+        assert result.suggested_department.dept_id == 14
+        assert "Thẩm mỹ" in result.suggested_department.dept_name
+
+    def test_suggested_departments_exist_in_hospital_catalog(self):
+        """Mọi khoa AI gợi ý phải là khoa thật của bệnh viện (khớp bảng departments)."""
+        from services.hospital_catalog import HOSPITAL_DEPARTMENTS
+        messages = [
+            "Tôi bị đau ngực trái và hồi hộp", "Tôi ho nhiều và khó thở", "Đau bụng vùng thượng vị, ợ chua",
+            "Bé nhà tôi bị sốt cao và quấy khóc", "dị ứng, nổi mẩn da", "tôi bị đau họng và ngạt mũi",
+            "đau khớp gối nhiều", "khám thai định kỳ", "Tôi cảm thấy không khỏe lắm hôm nay",
+        ]
+        for msg in messages:
+            dept = ChatbotService.process_message(msg).suggested_department
+            assert dept is not None, msg
+            assert dept.dept_id in HOSPITAL_DEPARTMENTS, f"{msg} -> khoa không tồn tại: {dept.dept_id}"
+            assert dept.dept_name == HOSPITAL_DEPARTMENTS[dept.dept_id][0]
+
+    def test_ent_symptom_routes_to_ent_department(self):
+        result = ChatbotService.process_message("tôi bị đau họng và ngạt mũi")
+        assert result.suggested_department.dept_id == 10
+
+    def test_obstetric_symptom_routes_to_obgyn_department(self):
+        result = ChatbotService.process_message("tôi muốn khám thai định kỳ")
+        assert result.suggested_department.dept_id == 3

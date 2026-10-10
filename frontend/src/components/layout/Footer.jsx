@@ -108,50 +108,50 @@ export const Footer = ({
             <ul className="space-y-2 text-sm">
               <li>
                 <button
-                  onClick={() => onFilterDept('Khoa Nội tổng quát')}
+                  onClick={() => onFilterDept(1)}
                   className="font-body text-surface-variant hover:text-white transition-colors cursor-pointer text-left"
                 >
-                  Nội tổng quát & Nội tiết
+                  Khám bệnh / Cấp cứu ban đầu
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onFilterDept('Khoa Tim mạch')}
+                  onClick={() => onFilterDept(2)}
                   className="font-body text-surface-variant hover:text-white transition-colors cursor-pointer text-left"
                 >
-                  Khoa Tim mạch học
+                  Ngoại khoa & Tiểu phẫu
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onFilterDept('Khoa Nhi')}
+                  onClick={() => onFilterDept(3)}
                   className="font-body text-surface-variant hover:text-white transition-colors cursor-pointer text-left"
                 >
-                  Nhi khoa chất lượng cao
+                  Sản - Phụ khoa
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onFilterDept('Khoa Tiêu hóa')}
+                  onClick={() => onFilterDept(13)}
                   className="font-body text-surface-variant hover:text-white transition-colors cursor-pointer text-left"
                 >
-                  Tiêu hóa & Nội soi NBI
+                  Y học cổ truyền – Phục hồi chức năng
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onFilterDept('Khoa Da liễu')}
+                  onClick={() => onFilterDept(14)}
                   className="font-body text-surface-variant hover:text-white transition-colors cursor-pointer text-left"
                 >
-                  Da liễu thẩm mỹ y khoa
+                  Thẩm mỹ / Tạo hình
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onFilterDept('Khoa Tai mũi họng')}
+                  onClick={() => onFilterDept(10)}
                   className="font-body text-surface-variant hover:text-white transition-colors cursor-pointer text-left"
                 >
-                  Khoa Tai Mũi Họng HD
+                  Tai Mũi Họng
                 </button>
               </li>
             </ul>

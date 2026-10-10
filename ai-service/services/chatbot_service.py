@@ -17,7 +17,8 @@ CHATBOT_DISCLAIMER = (
     "Trợ lý AI chỉ hỗ trợ tư vấn sơ bộ, không thay thế thăm khám và chỉ định của bác sĩ."
 )
 
-from services.ml_triage_service import predict_department, DEPT_METADATA
+from services.ml_triage_service import predict_department
+from services.hospital_catalog import department_name, DEFAULT_DEPT_ID
 
 # ============================================================================
 # DEPARTMENT ROUTING KNOWLEDGE BASE (Rule-based Fallback & Knowledge Base)
@@ -25,7 +26,7 @@ from services.ml_triage_service import predict_department, DEPT_METADATA
 DEPT_ROUTING: list[dict] = [
     # Khoa Da liễu – Ưu tiên cao cho các tổn thương da, dị ứng, nổi mẩn, nổi mần
     {
-        "dept_id": 8, "dept_name": "Khoa Da liễu",
+        "dept_id": 14, "dept_name": department_name(14),
         "keywords": ["dị ứng, nổi mẩn da", "dị ứng, nổi mần da", "nổi mẩn da", "nổi mần da",
                      "nổi mẩn", "nổi mần", "dị ứng", "mẩn ngứa", "mần ngứa", "mẩn đỏ",
                      "ngứa", "phát ban", "mề đay", "mày đay", "dị ứng da", "nấm da",
@@ -36,7 +37,14 @@ DEPT_ROUTING: list[dict] = [
                   "phù hợp."),
     },
     {
-        "dept_id": 5, "dept_name": "Khoa Tim mạch",
+        "dept_id": 10, "dept_name": department_name(10),
+        "keywords": ["đau họng", "rát họng", "viêm họng", "khàn tiếng", "ngạt mũi", "chảy mũi",
+                     "viêm xoang", "đau tai", "ù tai", "viêm amidan", "nghẹt mũi"],
+        "reply": ("Triệu chứng tai mũi họng của bạn nên được nội soi kiểm tra tại **Khoa Tai Mũi Họng** "
+                  "để xác định mức độ viêm nhiễm và điều trị dứt điểm."),
+    },
+    {
+        "dept_id": 1, "dept_name": department_name(1),
         "keywords": ["đau ngực", "tức ngực", "đánh trống ngực", "hồi hộp",
                      "huyết áp", "tim đập nhanh", "loạn nhịp", "phù chân",
                      "mệt khi gắng sức", "khó thở khi nằm"],
@@ -46,15 +54,15 @@ DEPT_ROUTING: list[dict] = [
                   "xét nghiệm cần thiết để có chẩn đoán chính xác."),
     },
     {
-        "dept_id": 3, "dept_name": "Khoa Hô hấp",
+        "dept_id": 1, "dept_name": department_name(1),
         "keywords": ["ho", "đờm", "khó thở", "thở khò khè", "viêm phổi",
-                     "hen suyễn", "suyễn", "ho ra máu", "rát họng", "khàn tiếng"],
+                     "hen suyễn", "suyễn", "ho ra máu"],
         "reply": ("Triệu chứng liên quan đến đường hô hấp. Bạn nên đến "
                   "**Khoa Hô hấp** để bác sĩ thăm khám, nghe phổi và "
                   "chỉ định X-quang phổi hoặc spirometry nếu cần."),
     },
     {
-        "dept_id": 6, "dept_name": "Khoa Tiêu hóa",
+        "dept_id": 1, "dept_name": department_name(1),
         "keywords": ["đau bụng", "đau dạ dày", "ợ chua", "ợ nóng", "buồn nôn",
                      "tiêu chảy", "táo bón", "xuất huyết tiêu hóa", "phân đen",
                      "đau thượng vị", "đầy hơi", "chướng bụng", "viêm dạ dày"],
@@ -63,7 +71,7 @@ DEPT_ROUTING: list[dict] = [
                   "nội soi dạ dày/đại tràng để xác định nguyên nhân chính xác."),
     },
     {
-        "dept_id": 4, "dept_name": "Khoa Nhi",
+        "dept_id": 1, "dept_name": department_name(1),
         "keywords": ["trẻ em", "trẻ nhỏ", "bé sốt", "trẻ sốt", "bé quấy",
                      "trẻ quấy khóc", "quấy khóc trẻ", "sơ sinh", "bỏ bú",
                      "trẻ không chịu ăn", "biếng ăn", "suy dinh dưỡng", "tiêm chủng",
@@ -73,7 +81,7 @@ DEPT_ROUTING: list[dict] = [
                   "thăm khám và tư vấn cho bé."),
     },
     {
-        "dept_id": 1, "dept_name": "Khoa Nội tổng quát",
+        "dept_id": 1, "dept_name": department_name(1),
         "keywords": ["mệt mỏi", "sốt", "đổ mồ hôi đêm", "sụt cân", "chán ăn",
                      "tiểu đường", "đái tháo đường", "khát nước nhiều", "tiểu nhiều",
                      "tăng huyết áp", "mỡ máu", "kiểm tra sức khỏe"],
@@ -82,7 +90,7 @@ DEPT_ROUTING: list[dict] = [
                   "đường huyết và các chỉ số sinh hóa cần thiết."),
     },
     {
-        "dept_id": 7, "dept_name": "Khoa Thần kinh",
+        "dept_id": 1, "dept_name": department_name(1),
         "keywords": ["đau đầu", "nhức đầu", "chóng mặt", "mất thăng bằng",
                      "tê bì tay chân", "run tay", "co giật", "động kinh",
                      "mất ngủ", "đột quỵ", "liệt"],
@@ -91,7 +99,7 @@ DEPT_ROUTING: list[dict] = [
                   "não để loại trừ các nguyên nhân nghiêm trọng."),
     },
     {
-        "dept_id": 9, "dept_name": "Khoa Cơ xương khớp",
+        "dept_id": 13, "dept_name": department_name(13),
         "keywords": ["đau khớp", "sưng khớp", "viêm khớp", "đau lưng", "đau cổ",
                      "thoái hóa", "thoát vị đĩa đệm", "đau vai", "đau gối",
                      "cứng khớp buổi sáng"],
@@ -100,7 +108,8 @@ DEPT_ROUTING: list[dict] = [
                   "đánh giá chức năng vận động để có hướng điều trị tốt nhất."),
     },
     {
-        "dept_id": 10, "dept_name": "Khoa Sản phụ khoa",
+        "dept_id": 3, "dept_name": department_name(3),
+        "priority": True,  # Mô hình ML chưa có nhãn Sản - Phụ khoa nên luật từ khóa được ưu tiên
         "keywords": ["kinh nguyệt", "thai kỳ", "mang thai", "khám phụ khoa",
                      "đau bụng kinh", "rối loạn kinh nguyệt", "vô sinh",
                      "siêu âm thai", "khám thai"],
@@ -108,6 +117,10 @@ DEPT_ROUTING: list[dict] = [
                   "thăm khám chuyên sâu, đảm bảo sức khỏe tối ưu cho bạn."),
     },
 ]
+
+# Đồng bộ tên khoa in đậm trong câu trả lời với tên khoa thực tế của bệnh viện
+for _dept in DEPT_ROUTING:
+    _dept["reply"] = re.sub(r"\*\*Khoa [^*]+\*\*", f"**{_dept['dept_name']}**", _dept["reply"])
 
 # ============================================================================
 # FAQ KNOWLEDGE BASE
@@ -213,7 +226,7 @@ class ChatbotService:
                 reply=(
                     "🚨 **TÌNH TRẠNG KHẨN CẤP – Gọi 115 ngay!**\n\n"
                     "Triệu chứng bạn mô tả có thể là dấu hiệu cấp cứu nghiêm trọng. "
-                    "Vui lòng **gọi ngay số 115** hoặc đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
+                    "Vui lòng **gọi ngay số 115** hoặc đến **Khoa Khám bệnh / Cấp cứu ban đầu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
                     "Mỹ Phát Hospital – Cấp cứu 24/7: 0789 065 493"
                 ),
                 disclaimer=CHATBOT_DISCLAIMER,
@@ -264,6 +277,22 @@ class ChatbotService:
             )
 
         # 5. SYMPTOM_CHECK – Dự đoán chuyên khoa (Mô hình máy học ML Triage & Knowledge Base)
+        # 5a0. Khoa mà mô hình ML chưa có nhãn (Sản - Phụ khoa) -> dùng luật từ khóa trước
+        for dept in DEPT_ROUTING:
+            if dept.get("priority") and cls._match(msg, dept["keywords"]):
+                return ChatMessageResponse(
+                    session_id=sid,
+                    intent="SYMPTOM_CHECK",
+                    reply=dept["reply"],
+                    suggested_department=DepartmentSuggestion(
+                        dept_id=dept["dept_id"],
+                        dept_name=dept["dept_name"],
+                        reason=f"Triệu chứng phù hợp với bệnh lý {dept['dept_name']}",
+                    ),
+                    show_booking_button=True,
+                    disclaimer=CHATBOT_DISCLAIMER,
+                )
+
         # 5a. Ưu tiên mô hình máy học đã huấn luyện
         ml_result = predict_department(msg)
         if ml_result is not None:
@@ -303,13 +332,13 @@ class ChatbotService:
             intent="SYMPTOM_CHECK",
             reply=(
                 "Cảm ơn bạn đã chia sẻ thông tin sức khỏe. Để được tư vấn chính xác nhất, "
-                "bạn nên đến **Khoa Nội tổng quát** để bác sĩ thăm khám lâm sàng trực tiếp "
+                "bạn nên đến **Khoa Khám bệnh / Cấp cứu ban đầu** để bác sĩ thăm khám lâm sàng trực tiếp "
                 "và chỉ định các xét nghiệm cần thiết.\n\n"
                 "Bạn có muốn đặt lịch khám ngay không?"
             ),
             suggested_department=DepartmentSuggestion(
-                dept_id=1,
-                dept_name="Khoa Nội tổng quát",
+                dept_id=DEFAULT_DEPT_ID,
+                dept_name=department_name(DEFAULT_DEPT_ID),
                 reason="Phù hợp cho đánh giá sức khỏe tổng thể ban đầu",
             ),
             show_booking_button=True,
