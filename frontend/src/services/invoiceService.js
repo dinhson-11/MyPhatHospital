@@ -75,8 +75,8 @@ export const invoiceService = {
   async generateInvoice(visitId, options = {}) {
     try {
       const res = await api.post(`/invoices/generate/${visitId}`);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       // Fallback local
@@ -152,8 +152,8 @@ export const invoiceService = {
   async getInvoiceById(id) {
     try {
       const res = await api.get(`/invoices/${id}`);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       // Fallback
@@ -168,8 +168,8 @@ export const invoiceService = {
   async getInvoiceByVisitId(visitId) {
     try {
       const res = await api.get(`/invoices/visit/${visitId}`);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       // Fallback
@@ -184,8 +184,8 @@ export const invoiceService = {
   async getInvoices(params = {}) {
     try {
       const res = await api.get('/invoices', { params });
-      if (res.data?.success && res.data?.data?.content) {
-        return res.data.data.content;
+      if (res?.success && res?.data?.content) {
+        return res.data.content;
       }
     } catch (e) {
       // Fallback
@@ -212,8 +212,8 @@ export const invoiceService = {
   async payInvoice(id, paymentData) {
     try {
       const res = await api.put(`/invoices/${id}/pay`, paymentData);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       if (e.response?.data?.message) {

@@ -263,11 +263,18 @@ export const authService = {
         this.saveSession(user, accessToken);
         return { success: true, user, token: accessToken };
       }
-    } catch {
-      // Fallback khi backend offline hoặc test
+    } catch (err) {
+      // Backend đã phản hồi (vd. 401 sai mật khẩu) -> KHÔNG được fallback offline
+      if (err?.response) {
+        throw new Error(err.response.data?.message || 'Tên đăng nhập hoặc mật khẩu không chính xác!');
+      }
+      // Backend không truy cập được: chỉ cho phép tài khoản mẫu ở môi trường dev/test
+      if (!import.meta.env.DEV) {
+        throw new Error('Không thể kết nối máy chủ. Vui lòng thử lại sau.');
+      }
     }
 
-    // 2. Fallback offline cho môi trường dev & test
+    // 2. Fallback offline cho môi trường dev & test (chỉ khi backend không phản hồi)
     const users = getSeedUsers();
     const matchedUser = users.find(u => {
       if (u.username !== username) return false;

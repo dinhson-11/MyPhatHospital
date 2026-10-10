@@ -24,7 +24,8 @@ export default function StaffScheduleModal({
   initialDeptId = '',
   initialStaffId = ''
 }) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isAuthenticated, isDoctor, isReceptionist, isNurse, isPharmacist, isAccountant } = useAuth();
+  const canView = isAuthenticated && (isAdmin || isDoctor || isReceptionist || isNurse || isPharmacist || isAccountant);
   useEscapeKey(isOpen, () => {
     if (showAddModal) {
       setShowAddModal(false);
@@ -39,6 +40,14 @@ export default function StaffScheduleModal({
   const [selectedStaffId, setSelectedStaffId] = useState(initialStaffId || '');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Đồng bộ bộ lọc khi modal được mở lại với bác sĩ/khoa khác
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedDeptId(initialDeptId || '');
+      setSelectedStaffId(initialStaffId || '');
+    }
+  }, [isOpen, initialDeptId, initialStaffId]);
 
   // Tuần hiện tại
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
@@ -216,7 +225,7 @@ export default function StaffScheduleModal({
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySchedulesCount = schedules.filter(s => s.workDate === todayStr).length;
 
-  if (!isOpen) return null;
+  if (!isOpen || !canView) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">

@@ -48,7 +48,7 @@ public class ScheduleController {
     }
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST', 'RECEPTIONIST', 'ACCOUNTANT')")
     @Operation(summary = "Tra cứu lịch trực", description = "Lấy danh sách lịch trực theo nhân viên, theo khoa phòng hoặc theo khoảng thời gian")
     public ResponseEntity<ApiResponse<List<ScheduleResponse>>> getSchedules(
             @RequestParam(required = false) Long staffId,

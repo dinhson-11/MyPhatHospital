@@ -347,8 +347,8 @@ export const scheduleService = {
   async getStaffList(departmentId) {
     try {
       const res = await api.get('/staff', { params: { departmentId } });
-      if (res.data?.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
-        return res.data.data;
+      if (res?.success && Array.isArray(res?.data) && res.data.length > 0) {
+        return res.data;
       }
     } catch {
       // Fallback cục bộ chuẩn
@@ -366,8 +366,8 @@ export const scheduleService = {
   async getSchedules(params = {}) {
     try {
       const res = await api.get('/schedules', { params });
-      if (res.data?.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
-        return res.data.data;
+      if (res?.success && Array.isArray(res?.data) && res.data.length > 0) {
+        return res.data;
       }
     } catch {
       // Fallback
@@ -409,8 +409,8 @@ export const scheduleService = {
   async createSchedule(data) {
     try {
       const res = await api.post('/schedules', data);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       if (e.response?.data?.message) {
@@ -454,7 +454,7 @@ export const scheduleService = {
   async deleteSchedule(id) {
     try {
       const res = await api.delete(`/schedules/${id}`);
-      if (res.data?.success) {
+      if (res?.success) {
         return true;
       }
     } catch {
