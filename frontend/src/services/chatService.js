@@ -9,6 +9,7 @@
 
 import apiClient from './api';
 import { triageService } from './triageService';
+import { HOURS_TEXT } from './hospitalHours';
 
 export const AI_DISCLAIMER_TEXT =
   'Trợ lý AI chỉ hỗ trợ tư vấn sơ bộ, không thay thế thăm khám và chỉ định của bác sĩ.';
@@ -174,7 +175,7 @@ export const chatService = {
     else if (lower.includes('bhyt') || lower.includes('bảo hiểm') || lower.includes('thủ tục')) {
       intent = 'FAQ';
       textReply =
-        'Mỹ Phát Hospital tiếp nhận khám chữa bệnh BHYT thông tuyến toàn quốc từ Thứ 2 đến Chủ Nhật hàng tuần (7h00 - 17h30). ' +
+        'Mỹ Phát Hospital tiếp nhận khám chữa bệnh BHYT thông tuyến toàn quốc từ Thứ 2 đến Thứ 7 hàng tuần (theo giờ khám bệnh của bệnh viện). ' +
         'Quý khách chỉ cần mang theo CCCD gắn chip hoặc thẻ BHYT trên ứng dụng VssID khi đến làm thủ tục.';
       showBooking = true;
     }
@@ -183,9 +184,11 @@ export const chatService = {
       intent = 'FAQ';
       textReply =
         '⏰ **Lịch khám bệnh tại Mỹ Phát Hospital:**\n\n' +
-        '• Thứ 2 – Chủ Nhật: 07h00 – 11h30 (sáng) | 13h30 – 17h30 (chiều)\n' +
-        '• Khám BHYT và dịch vụ theo yêu cầu hàng ngày\n' +
-        '• Cấp cứu hoạt động 24/24 tất cả các ngày trong tuần (Hotline: 0789 065 493).';
+        `• ${HOURS_TEXT.days}\n` +
+        `• ${HOURS_TEXT.summer}\n` +
+        `• ${HOURS_TEXT.winter}\n` +
+        `• ${HOURS_TEXT.bhyt}\n` +
+        `• ${HOURS_TEXT.emergency} (Hotline: 0789 065 493).`;
       showBooking = true;
     }
     // 5. Đặt lịch

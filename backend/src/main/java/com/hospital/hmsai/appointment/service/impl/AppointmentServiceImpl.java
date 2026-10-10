@@ -6,6 +6,7 @@ import com.hospital.hmsai.appointment.entity.AppointmentSource;
 import com.hospital.hmsai.appointment.entity.AppointmentStatus;
 import com.hospital.hmsai.appointment.repository.AppointmentRepository;
 import com.hospital.hmsai.appointment.service.AppointmentService;
+import com.hospital.hmsai.common.WorkingHours;
 import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
 import com.hospital.hmsai.patient.entity.Patient;
@@ -41,26 +42,6 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final PatientRepository patientRepository;
     private final StaffProfileRepository staffProfileRepository;
     private final DepartmentRepository departmentRepository;
-
-    /**
-     * Khung giờ chuẩn theo lịch làm việc của Mỹ Phát Hospital.
-     * Sáng: 08:00 - 11:00 (6 ca 30 phút)
-     * Chiều: 13:30 - 16:30 (6 ca 30 phút)
-     */
-    private static final List<LocalTime> STANDARD_SLOT_TIMES = List.of(
-            LocalTime.of(8, 0),
-            LocalTime.of(8, 30),
-            LocalTime.of(9, 0),
-            LocalTime.of(9, 30),
-            LocalTime.of(10, 0),
-            LocalTime.of(10, 30),
-            LocalTime.of(13, 30),
-            LocalTime.of(14, 0),
-            LocalTime.of(14, 30),
-            LocalTime.of(15, 0),
-            LocalTime.of(15, 30),
-            LocalTime.of(16, 0)
-    );
 
     @Override
     @Transactional
@@ -265,7 +246,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         List<AvailableSlotsResponse.TimeSlot> availableSlots = new ArrayList<>();
         List<AvailableSlotsResponse.TimeSlot> bookedSlots = new ArrayList<>();
 
-        for (LocalTime startTime : STANDARD_SLOT_TIMES) {
+        for (LocalTime startTime : WorkingHours.slotStarts(date)) {
             LocalTime endTime = startTime.plusMinutes(30);
 
             // Kiểm tra xem có lịch hẹn nào trùng thời gian bắt đầu này không

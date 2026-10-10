@@ -40,3 +40,11 @@ def department_name(dept_id: int) -> str:
 
 def doctor_name(dept_id: int) -> str:
     return HOSPITAL_DEPARTMENTS.get(dept_id, HOSPITAL_DEPARTMENTS[DEFAULT_DEPT_ID])[1]
+
+
+# Giờ làm việc (đồng bộ với backend WorkingHours và frontend hospitalHours.js)
+HOURS_DAYS = "Thứ 2 – Chủ nhật"
+HOURS_SUMMER = "Mùa hè (01/04 – 31/10): sáng 07h00 – 11h00, chiều 13h00 – 17h30"
+HOURS_WINTER = "Mùa đông (01/11 – 31/03, lùi 30 phút): sáng 07h30 – 11h30, chiều 13h30 – 18h00"
+HOURS_BHYT = "Khám BHYT: Thứ 2 – Thứ 7"
+HOURS_EMERGENCY = "Cấp cứu & điều trị: 24/24, kể cả ngày lễ"

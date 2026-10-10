@@ -153,3 +153,12 @@ class TestChatbotService:
     def test_obstetric_symptom_routes_to_obgyn_department(self):
         result = ChatbotService.process_message("tôi muốn khám thai định kỳ")
         assert result.suggested_department.dept_id == 3
+
+    def test_working_hours_faq_covers_both_seasons(self):
+        """Giờ làm việc: T2–CN, mùa hè/mùa đông (lùi 30'), BHYT T2–T7, cấp cứu 24/24 kể cả ngày lễ."""
+        reply = ChatbotService.process_message("giờ làm việc của bệnh viện").reply
+        assert "Thứ 2 – Chủ nhật" in reply
+        assert "07h00 – 11h00" in reply and "13h00 – 17h30" in reply
+        assert "07h30 – 11h30" in reply and "13h30 – 18h00" in reply
+        assert "Thứ 2 – Thứ 7" in reply
+        assert "kể cả ngày lễ" in reply

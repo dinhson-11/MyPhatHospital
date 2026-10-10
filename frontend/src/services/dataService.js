@@ -1,4 +1,5 @@
 import apiClient from './api';
+import { hoursCompact } from './hospitalHours';
 
 /**
  * Data Service – Dữ liệu chuẩn dự án HMS-AI
@@ -157,7 +158,7 @@ export const DOCTORS = [
     fee: 350000,
     room: 'Phòng khám ban đầu 101 (Tầng 1)',
     avatar: 'https://images.unsplash.com/photo-1594824813637-44f0b2f52803?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)',
+    schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
   {
@@ -173,7 +174,7 @@ export const DOCTORS = [
     fee: 350000,
     room: 'Phòng khám Ngoại 402 (Tầng 4)',
     avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2, 4, 6 (07:30 - 17:00)',
+    schedule: `Thứ 2, 4, 6 (${hoursCompact()})`,
     available: true
   },
   {
@@ -189,7 +190,7 @@ export const DOCTORS = [
     fee: 300000,
     room: 'Phòng khám Sản 302 (Tầng 3)',
     avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2 đến Thứ 6 (07:30 - 17:00)',
+    schedule: `Thứ 2 đến Thứ 6 (${hoursCompact()})`,
     available: true
   },
   {
@@ -205,7 +206,7 @@ export const DOCTORS = [
     fee: 280000,
     room: 'Phòng khám TMH 212 (Tầng 2)',
     avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2, 4, 6 (07:30 - 17:00)',
+    schedule: `Thứ 2, 4, 6 (${hoursCompact()})`,
     available: true
   },
   {
@@ -221,7 +222,7 @@ export const DOCTORS = [
     fee: 300000,
     room: 'Phòng Trị liệu PHCN 206 (Tầng 2)',
     avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)',
+    schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
   {
@@ -237,7 +238,7 @@ export const DOCTORS = [
     fee: 350000,
     room: 'Phòng Thẩm mỹ 209 (Tầng 2)',
     avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 3, 5, 7 (07:30 - 17:00)',
+    schedule: `Thứ 3, 5, 7 (${hoursCompact()})`,
     available: true
   },
   {
@@ -253,7 +254,7 @@ export const DOCTORS = [
     fee: 280000,
     room: 'Phòng Siêu âm 104 (Tầng 1)',
     avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)',
+    schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
   {
@@ -269,7 +270,7 @@ export const DOCTORS = [
     fee: 250000,
     room: 'Khu Xét nghiệm 105 (Tầng 1)',
     avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)',
+    schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
   {
@@ -285,19 +286,12 @@ export const DOCTORS = [
     fee: 0,
     room: 'Phòng Dược Tầng 1 (Khu A)',
     avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
-    schedule: 'Thứ 2 đến Thứ 7 (07:00 - 17:30)',
+    schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true,
     canBook: false,
     isDoctor: false,
     roleTitle: 'Trưởng Phòng Dược'
   }
-];
-
-export const TIME_SLOTS = [
-  '07:30 - 08:00', '08:00 - 08:30', '08:30 - 09:00', '09:00 - 09:30',
-  '09:30 - 10:00', '10:00 - 10:30', '10:30 - 11:00', '11:00 - 11:30',
-  '13:30 - 14:00', '14:00 - 14:30', '14:30 - 15:00', '15:00 - 15:30',
-  '15:30 - 16:00', '16:00 - 16:30', '16:30 - 17:00'
 ];
 
 export const TRIAGE_RULES = [

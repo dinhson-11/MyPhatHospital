@@ -243,7 +243,7 @@ public class ChatServiceImpl implements ChatService {
                     .reply("🏥 **Thông tin Bảo hiểm Y tế tại Mỹ Phát Hospital:**\n\n"
                             + "• Tiếp nhận BHYT thông tuyến toàn quốc (tuyến huyện/tỉnh theo quy định).\n"
                             + "• Khi đi khám, bạn cần mang theo: CCCD gắn chip (hoặc thẻ BHYT trên ứng dụng VssID) và giấy hẹn khám lại (nếu có).\n"
-                            + "• Thời gian tiếp nhận khám BHYT: Thứ 2 – Thứ 6 (7h00 – 17h00), Thứ 7 (7h00 – 12h00).\n"
+                            + "• Khám BHYT: Thứ 2 – Thứ 7 (trong giờ khám bệnh của bệnh viện).\n"
                             + "• Cấp cứu 24/7 không cần thủ tục BHYT trước.")
                     .intent("FAQ")
                     .showBookingButton(true)
@@ -256,10 +256,11 @@ public class ChatServiceImpl implements ChatService {
         if (lower.contains("giờ khám") || lower.contains("giờ làm việc") || lower.contains("mấy giờ") || lower.contains("lịch làm việc")) {
             return AiChatbotResponse.builder()
                     .reply("⏰ **Lịch làm việc Mỹ Phát Hospital:**\n\n"
-                            + "• **Thứ 2 – Thứ 6**: Sáng 07h00 – 11h30 | Chiều 13h30 – 17h00\n"
-                            + "• **Thứ 7**: Sáng 07h00 – 12h00 (khám theo yêu cầu và BHYT)\n"
-                            + "• **Chủ nhật**: Khám theo yêu cầu (liên hệ hotline trước)\n"
-                            + "• **Khoa Cấp cứu**: Hoạt động 24/7 liên tục kể cả Lễ, Tết.")
+                            + "• **Thứ 2 – Chủ nhật**\n"
+                            + "• Mùa hè (01/04 – 31/10): sáng 07h00 – 11h00 | chiều 13h00 – 17h30\n"
+                            + "• Mùa đông (01/11 – 31/03, lùi 30 phút): sáng 07h30 – 11h30 | chiều 13h30 – 18h00\n"
+                            + "• **Khám BHYT**: Thứ 2 – Thứ 7\n"
+                            + "• **Cấp cứu và điều trị**: Hoạt động 24/24 liên tục, kể cả ngày lễ.")
                     .intent("FAQ")
                     .showBookingButton(true)
                     .sessionId(sessionId)

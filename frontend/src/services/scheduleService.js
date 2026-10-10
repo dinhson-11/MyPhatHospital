@@ -1,4 +1,5 @@
 import api from './api';
+import { hoursCompact } from './hospitalHours';
 
 const LOCAL_STORAGE_KEY_SCHEDULES = 'hms_mock_schedules_v3';
 const LOCAL_STORAGE_KEY_VERSION = 'hms_schedule_version';
@@ -18,7 +19,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-001289-BYT',
     roomNo: 'Phòng khám ban đầu 101 (Tầng 1)',
     avatar: 'https://images.unsplash.com/photo-1594824813637-44f0b2f52803?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)'
+    schedulePattern: `Thứ 2 đến Thứ 7 (${hoursCompact()})`
   },
   {
     id: 6,
@@ -32,7 +33,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-002341-BYT',
     roomNo: 'Phòng khám Ngoại 402 (Tầng 4)',
     avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2, 4, 6 (07:30 - 17:00)'
+    schedulePattern: `Thứ 2, 4, 6 (${hoursCompact()})`
   },
   {
     id: 7,
@@ -46,7 +47,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-003456-BYT',
     roomNo: 'Phòng khám Sản 302 (Tầng 3)',
     avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 6 (07:30 - 17:00)'
+    schedulePattern: `Thứ 2 đến Thứ 6 (${hoursCompact()})`
   },
   {
     id: 8,
@@ -60,7 +61,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-004567-BYT',
     roomNo: 'Phòng khám TMH 212 (Tầng 2)',
     avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2, 4, 6 (07:30 - 17:00)'
+    schedulePattern: `Thứ 2, 4, 6 (${hoursCompact()})`
   },
   {
     id: 9,
@@ -74,7 +75,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-005678-BYT',
     roomNo: 'Phòng Trị liệu PHCN 206 (Tầng 2)',
     avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)'
+    schedulePattern: `Thứ 2 đến Thứ 7 (${hoursCompact()})`
   },
   {
     id: 10,
@@ -88,7 +89,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-006789-BYT',
     roomNo: 'Phòng Thẩm mỹ 209 (Tầng 2)',
     avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 3, 5, 7 (07:30 - 17:00)'
+    schedulePattern: `Thứ 3, 5, 7 (${hoursCompact()})`
   },
   {
     id: 11,
@@ -102,7 +103,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-007890-BYT',
     roomNo: 'Phòng Siêu âm 104 (Tầng 1)',
     avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)'
+    schedulePattern: `Thứ 2 đến Thứ 7 (${hoursCompact()})`
   },
   {
     id: 12,
@@ -116,7 +117,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-008901-BYT',
     roomNo: 'Khu Xét nghiệm 105 (Tầng 1)',
     avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 7 (07:30 - 17:00)'
+    schedulePattern: `Thứ 2 đến Thứ 7 (${hoursCompact()})`
   },
   {
     id: 2,
@@ -130,7 +131,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-009012-BYT',
     roomNo: 'Phòng Dược Tầng 1 (Khu A)',
     avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 7 (07:00 - 17:30)'
+    schedulePattern: `Thứ 2 đến Thứ 7 (${hoursCompact()})`
   },
   {
     id: 3,
@@ -144,7 +145,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-003312-BYT',
     roomNo: 'Quầy Tiếp đón & Giám định BHYT',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 7 (07:00 - 17:30)'
+    schedulePattern: `Thứ 2 đến Thứ 7 (${hoursCompact()})`
   },
   {
     id: 4,
@@ -158,7 +159,7 @@ export const MOCK_STAFF_MEMBERS = [
     licenseNo: 'CCHN-004423-BYT',
     roomNo: 'Khu Chăm sóc sinh hiệu & Lấy mẫu',
     avatar: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=400&q=80',
-    schedulePattern: 'Thứ 2 đến Thứ 7 (07:00 - 17:30)'
+    schedulePattern: `Thứ 2 đến Thứ 7 (${hoursCompact()})`
   }
 ];
 
