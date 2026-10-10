@@ -1,3 +1,5 @@
+import apiClient from './api';
+
 /**
  * Data Service – Dữ liệu chuẩn dự án HMS-AI
  * Khớp với V10__seed_data.sql và các Entity Department, StaffProfile
@@ -145,6 +147,7 @@ export const DOCTORS = [
   {
     id: 1,
     name: 'TS.BS Vi Mai Anh',
+    username: 'bs.maianh',
     title: 'Trưởng khoa Khám bệnh / Cấp cứu ban đầu',
     departmentId: 1,
     departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
@@ -160,6 +163,7 @@ export const DOCTORS = [
   {
     id: 2,
     name: 'BSCKII. Lê Thị Nga',
+    username: 'bs.nga',
     title: 'Trưởng khoa Ngoại khoa & Phẫu thuật / Tiểu phẫu',
     departmentId: 2,
     departmentName: 'Ngoại khoa & Phẫu thuật / Tiểu phẫu',
@@ -175,6 +179,7 @@ export const DOCTORS = [
   {
     id: 3,
     name: 'BSCKII. Phạm Lan Vy',
+    username: 'bs.vy',
     title: 'Bác sĩ phụ trách Sản - Phụ khoa',
     departmentId: 3,
     departmentName: 'Sản - Phụ khoa',
@@ -190,6 +195,7 @@ export const DOCTORS = [
   {
     id: 4,
     name: 'ThS.BS Hoàng Thị Dung',
+    username: 'bs.dung',
     title: 'Trưởng khoa Tai Mũi Họng',
     departmentId: 10,
     departmentName: 'Tai Mũi Họng',
@@ -205,6 +211,7 @@ export const DOCTORS = [
   {
     id: 5,
     name: 'BS. Nguyễn Văn Sỹ',
+    username: 'bs.sy',
     title: 'Bác sĩ phụ trách Khoa YHCT – Phục hồi chức năng',
     departmentId: 13,
     departmentName: 'Khoa Y học cổ truyền – Phục hồi chức năng',
@@ -220,6 +227,7 @@ export const DOCTORS = [
   {
     id: 6,
     name: 'ThS.BS Lê Tuấn Hiệp',
+    username: 'bs.hiep',
     title: 'Bác sĩ chuyên trách Thẩm mỹ / Tạo hình & Da liễu',
     departmentId: 14,
     departmentName: 'Dịch vụ Thẩm mỹ / Tạo hình',
@@ -235,6 +243,7 @@ export const DOCTORS = [
   {
     id: 7,
     name: 'TS.BS Trần Thị An',
+    username: 'bs.an',
     title: 'Bác sĩ phụ trách Khoa Chẩn đoán hình ảnh',
     departmentId: 15,
     departmentName: 'Khoa Chẩn đoán hình ảnh',
@@ -250,6 +259,7 @@ export const DOCTORS = [
   {
     id: 8,
     name: 'ThS.BS Hoàng Văn Toán',
+    username: 'bs.toan',
     title: 'Bác sĩ phụ trách Khoa Xét nghiệm',
     departmentId: 16,
     departmentName: 'Khoa Xét nghiệm',
@@ -265,6 +275,7 @@ export const DOCTORS = [
   {
     id: 9,
     name: 'ThS.DS Lê Hải Quang',
+    username: 'ds.quang',
     title: 'Trưởng Phòng Dược',
     departmentId: 12,
     departmentName: 'Phòng Dược & Cung ứng thuốc',
@@ -379,3 +390,63 @@ export const TRIAGE_RULES = [
     advice: 'Triệu chứng suy nhược hoặc bệnh lý nội khoa cần được TS.BS Vi Mai Anh thăm khám tổng thể và xét nghiệm sinh hóa cơ bản để đánh giá toàn diện sức khỏe.'
   }
 ];
+
+let catalogSynced = false;
+export const isCatalogSynced = () => catalogSynced;
+
+/**
+ * Đồng bộ mã bác sĩ với backend (nguồn dữ liệu duy nhất là DB).
+ * DOCTORS ở trên chỉ chứa nội dung trình bày (ảnh, kinh nghiệm...); `id` thật của bác sĩ
+ * (staff_profiles.id) lấy từ GET /public/doctors, khớp theo `username`.
+ * Gọi một lần trước khi render ứng dụng.
+ */
+export async function syncCatalogWithBackend() {
+  try {
+    const res = await apiClient.get('/public/doctors', { skipAuth: true, timeout: 3000 });
+    const remote = Array.isArray(res?.data) ? res.data : [];
+    if (remote.length === 0) return false;
+
+    const idMap = new Map();
+    DOCTORS.forEach((doc) => {
+      const real = remote.find((r) => r.username === doc.username);
+      if (!real) {
+        doc.canBook = false; // không có trong DB -> không thể đặt lịch
+        return;
+      }
+      if (doc.staticId === undefined) doc.staticId = doc.id;
+      idMap.set(doc.staticId, real.id);
+      doc.id = real.id;
+      if (real.departmentId) doc.departmentId = real.departmentId;
+      doc.canBook = real.canBook;
+    });
+
+    TRIAGE_RULES.forEach((rule) => {
+      if (rule.staticDoctorId === undefined) rule.staticDoctorId = rule.doctorId;
+      if (idMap.has(rule.staticDoctorId)) rule.doctorId = idMap.get(rule.staticDoctorId);
+    });
+
+    catalogSynced = true;
+    return true;
+  } catch {
+    return false; // backend không sẵn sàng: giữ dữ liệu tĩnh, đặt lịch sẽ báo lỗi kết nối
+  }
+}
+
+// Chuyên khoa AI/chatbot gợi ý (id/tên theo bộ khoa cũ) -> khoa thực tế của Mỹ Phát Hospital.
+// Khớp theo TÊN vì id của AI service và backend chat fallback đang xung đột với DB.
+const SUGGESTION_TO_DEPARTMENT_ID = [
+  [/da liễu|thẩm mỹ/i, 14],
+  [/cơ xương khớp|phục hồi|y học cổ truyền|vật lý trị liệu/i, 13],
+  [/tai mũi họng|tai mũi|hô hấp/i, 10],
+  [/sản|phụ khoa/i, 3],
+  [/ngoại|phẫu thuật/i, 2]
+];
+
+export function resolveHospitalDepartment(suggested) {
+  const fallbackId = 1;
+  const name = suggested?.name || '';
+  const match = SUGGESTION_TO_DEPARTMENT_ID.find(([re]) => re.test(name));
+  const id = match ? match[1] : fallbackId;
+  const dept = DEPARTMENTS.find((d) => d.id === id);
+  return { ...suggested, id, name: dept ? dept.name : name };
+}

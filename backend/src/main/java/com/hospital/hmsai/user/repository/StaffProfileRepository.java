@@ -15,4 +15,6 @@ public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long
     Optional<StaffProfile> findByUserId(Long userId);
 
     boolean existsByUserId(Long userId);
+
+    java.util.List<StaffProfile> findByDepartmentId(Long departmentId);
 }
