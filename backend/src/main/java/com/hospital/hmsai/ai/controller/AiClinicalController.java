@@ -73,10 +73,6 @@ public class AiClinicalController {
         return ResponseEntity.ok(ApiResponse.success(logs, "Lấy lịch sử gợi ý AI thành công"));
     }
 
-    // =========================================================================
-    // DIAGNOSIS SUGGESTION (FR-11.3 – Sprint 6)
-    // =========================================================================
-
     @PostMapping("/suggest-diagnosis")
     @PreAuthorize("hasAnyRole('DOCTOR', 'ADMIN')")
     @Operation(summary = "Gợi ý chẩn đoán ICD-10 từ triệu chứng bệnh nhân (FR-11.3)")
@@ -98,4 +94,3 @@ public class AiClinicalController {
         return ResponseEntity.ok(ApiResponse.success(response, "Đã gợi ý chẩn đoán và lưu audit log AI"));
     }
 }
-
