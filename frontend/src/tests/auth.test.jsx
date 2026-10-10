@@ -1,8 +1,14 @@
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { authService } from '../services/authService';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+
+// Hermetic: không gọi backend thật (mô phỏng mất kết nối -> luồng offline dev/test)
+vi.mock('../services/api', () => {
+  const offline = () => Promise.reject(new Error('Network Error'));
+  return { default: { get: offline, post: offline, put: offline, patch: offline, delete: offline }, BASE_URL: '' };
+});
 
 describe('Authentication & Authorization Suite (Enterprise Grade)', () => {
   beforeEach(() => {

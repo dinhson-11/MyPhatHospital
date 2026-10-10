@@ -78,7 +78,36 @@ describe('Staff & Schedule Module Suite (Sprint 8 - FR-8)', () => {
   });
 
   describe('StaffScheduleModal UI Tests', () => {
+    const loginAs = (roles) => {
+      localStorage.setItem('hms_token', 'jwt_test_token');
+      localStorage.setItem('hms_user', JSON.stringify({ id: 1, username: 'tester', fullName: 'Tester', roles }));
+    };
+
+    it('KHÔNG hiển thị lịch trực cho khách chưa đăng nhập', () => {
+      render(
+        <AuthProvider>
+          <ToastProvider>
+            <StaffScheduleModal isOpen={true} onClose={() => {}} onShowToast={() => {}} />
+          </ToastProvider>
+        </AuthProvider>
+      );
+      expect(screen.queryByText(/Lịch Trực Nhân Viên Y Tế/i)).not.toBeInTheDocument();
+    });
+
+    it('KHÔNG hiển thị lịch trực cho bệnh nhân (PATIENT)', () => {
+      loginAs(['PATIENT']);
+      render(
+        <AuthProvider>
+          <ToastProvider>
+            <StaffScheduleModal isOpen={true} onClose={() => {}} onShowToast={() => {}} />
+          </ToastProvider>
+        </AuthProvider>
+      );
+      expect(screen.queryByText(/Lịch Trực Nhân Viên Y Tế/i)).not.toBeInTheDocument();
+    });
+
     it('render modal hiển thị lịch trực 7 ngày trong tuần và các nút điều hướng', async () => {
+      loginAs(['ADMIN']);
       render(
         <AuthProvider>
           <ToastProvider>
@@ -95,6 +124,7 @@ describe('Staff & Schedule Module Suite (Sprint 8 - FR-8)', () => {
     });
 
     it('mở modal xếp ca trực mới hiển thị form đầy đủ các trường', async () => {
+      loginAs(['ADMIN']);
       render(
         <AuthProvider>
           <ToastProvider>

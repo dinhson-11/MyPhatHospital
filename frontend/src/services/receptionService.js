@@ -71,8 +71,8 @@ export const receptionService = {
   async getTodayQueue() {
     try {
       const res = await apiClient.get('/appointments');
-      if (res && res.data && res.data.data) {
-        const items = res.data.data.content || res.data.data;
+      if (res && res.data) {
+        const items = res.data.content || res.data;
         if (Array.isArray(items) && items.length > 0) {
           return items.map((a) => ({
             id: a.id,
@@ -128,7 +128,7 @@ export const receptionService = {
       };
       const res = await apiClient.post('/visits', payload);
       if (res && res.data) {
-        return { success: true, visitId: res.data.data?.id, status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám đa khoa' };
+        return { success: true, visitId: res.data?.id, status: 'CHECKED_IN', assignedRoom: assignedRoom || 'Phòng khám đa khoa' };
       }
     } catch {
       // offline fallback
@@ -144,7 +144,7 @@ export const receptionService = {
     try {
       const res = await apiClient.post('/patients', patientData);
       if (res && res.data) {
-        return { success: true, patient: res.data.data };
+        return { success: true, patient: res.data };
       }
     } catch {
       // offline fallback

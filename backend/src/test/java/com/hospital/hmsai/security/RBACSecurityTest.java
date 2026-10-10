@@ -16,6 +16,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import com.hospital.hmsai.hr.service.ScheduleService;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,6 +51,9 @@ class RBACSecurityTest {
 
     @MockBean
     private VisitService visitService;
+
+    @MockBean
+    private ScheduleService scheduleService;
 
     @Test
     @DisplayName("SEC-01: Chưa đăng nhập truy cập API bảo mật bị từ chối truy cập (403 Forbidden)")
@@ -151,6 +155,32 @@ class RBACSecurityTest {
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
 
         mockMvc.perform(get("/api/v1/visits"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("SEC-12: Khách chưa đăng nhập không được xem lịch trực nhân viên")
+    void testAnonymousViewSchedules_Blocked() throws Exception {
+        mockMvc.perform(get("/api/v1/schedules"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "benhnhan", roles = {"PATIENT"})
+    @DisplayName("SEC-13: Bệnh nhân không được xem lịch trực nhân viên (403 Forbidden)")
+    void testPatientViewSchedules_Returns403() throws Exception {
+        mockMvc.perform(get("/api/v1/schedules"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "bacsi", roles = {"DOCTOR"})
+    @DisplayName("SEC-14: Bác sĩ (nhân viên bệnh viện) được xem lịch trực")
+    void testDoctorViewSchedules_Allowed() throws Exception {
+        when(scheduleService.getSchedules(any(), any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/v1/schedules"))
                 .andExpect(status().isOk());
     }
 }

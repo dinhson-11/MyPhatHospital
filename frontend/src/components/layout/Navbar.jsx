@@ -139,15 +139,17 @@ export const Navbar = ({
             </button>
           )}
 
-          <button
-            id="headerScheduleBtn"
-            onClick={() => onOpenSchedule && onOpenSchedule()}
-            className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-3.5 rounded-xl border border-teal-200/80 bg-teal-50/70 hover:bg-teal-100/90 text-teal-900 font-label text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 cursor-pointer shadow-2xs whitespace-nowrap"
-            title="Lịch trực Bác sĩ & Nhân viên y tế Mỹ Phát Hospital"
-          >
-            <span className="material-symbols-outlined text-[16px] text-teal-700">calendar_month</span>
-            <span className="whitespace-nowrap">Lịch trực</span>
-          </button>
+          {isStaff && onOpenSchedule && (
+            <button
+              id="headerScheduleBtn"
+              onClick={() => onOpenSchedule && onOpenSchedule()}
+              className="inline-flex items-center gap-1.5 h-9 px-3 sm:px-3.5 rounded-xl border border-teal-200/80 bg-teal-50/70 hover:bg-teal-100/90 text-teal-900 font-label text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 cursor-pointer shadow-2xs whitespace-nowrap"
+              title="Lịch trực Bác sĩ & Nhân viên y tế Mỹ Phát Hospital"
+            >
+              <span className="material-symbols-outlined text-[16px] text-teal-700">calendar_month</span>
+              <span className="whitespace-nowrap">Lịch trực</span>
+            </button>
+          )}
 
           {!isStaff && isAuthenticated && onOpenMyAppointments && (
             <button
@@ -424,16 +426,18 @@ export const Navbar = ({
           >
             Đội ngũ bác sĩ
           </a>
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              if (onOpenSchedule) onOpenSchedule();
-            }}
-            className="block w-full text-left py-2 font-label text-sm text-teal-800 font-semibold hover:text-teal-900 flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px] text-teal-700">calendar_month</span>
-            <span>Lịch trực Bác sĩ</span>
-          </button>
+          {isStaff && onOpenSchedule && (
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (onOpenSchedule) onOpenSchedule();
+              }}
+              className="block w-full text-left py-2 font-label text-sm text-teal-800 font-semibold hover:text-teal-900 flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px] text-teal-700">calendar_month</span>
+              <span>Lịch trực Bác sĩ</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setMobileMenuOpen(false);

@@ -123,7 +123,6 @@ function MainApp() {
             onOpenClinical={() => setClinicalModalOpen(true)}
             onOpenPharmacy={() => setPharmacyModalOpen(true)}
             onOpenInvoice={() => setInvoiceModalOpen(true)}
-            onOpenSchedule={handleOpenSchedule}
             onOpenReception={() => setReceptionModalOpen(true)}
             onOpenNurse={() => setNurseModalOpen(true)}
             onOpenReports={() => setReportsModalOpen(true)}
@@ -153,7 +152,6 @@ function MainApp() {
 
             <DoctorsSection
               onOpenBooking={handleOpenBooking}
-              onOpenSchedule={handleOpenSchedule}
             />
 
             <AITriageSection onOpenBooking={handleOpenBooking} />
@@ -253,7 +251,7 @@ function MainApp() {
       />
 
       <StaffScheduleModal
-        isOpen={scheduleModalState.open}
+        isOpen={scheduleModalState.open && isAuthenticated && isStaff}
         onClose={() => setScheduleModalState({ open: false, departmentId: '', staffId: '' })}
         onShowToast={showToast}
         initialDeptId={scheduleModalState.departmentId}

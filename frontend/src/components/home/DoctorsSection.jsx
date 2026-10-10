@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { DOCTORS } from '../../services/dataService';
 
-export default function DoctorsSection({ onOpenBooking, onOpenSchedule }) {
+export default function DoctorsSection({ onOpenBooking }) {
   const [selectedDeptId, setSelectedDeptId] = useState(0); // 0 = Tất cả
 
   // Get unique departments present in doctors list
@@ -119,14 +119,7 @@ export default function DoctorsSection({ onOpenBooking, onOpenSchedule }) {
                   </p>
 
                   <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => onOpenSchedule && onOpenSchedule({ staffId: doc.id, departmentId: doc.departmentId })}
-                      className="text-[11px] font-bold text-teal-700 hover:text-teal-900 flex items-center gap-1 hover:underline cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[15px]">calendar_month</span>
-                      <span>Lịch trực tuần</span>
-                    </button>
+                    <span />
                     {doc.canBook !== false && (
                       <button
                         type="button"

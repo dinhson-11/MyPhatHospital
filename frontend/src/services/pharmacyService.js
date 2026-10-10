@@ -67,8 +67,8 @@ export const pharmacyService = {
   async getDrugs(keyword = '') {
     try {
       const res = await api.get('/drugs/all', { params: { keyword } });
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       // Fallback local
@@ -85,8 +85,8 @@ export const pharmacyService = {
   async dispensePrescription(prescriptionId, dispenseData = {}) {
     try {
       const res = await api.post(`/prescriptions/${prescriptionId}/dispense`, dispenseData);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       if (e.response?.data?.message) {
@@ -142,8 +142,8 @@ export const pharmacyService = {
   async isDispensed(prescriptionId) {
     try {
       const res = await api.get(`/prescriptions/${prescriptionId}/is-dispensed`);
-      if (res.data?.success) {
-        return res.data.data;
+      if (res?.success) {
+        return res.data;
       }
     } catch (e) {
       // Fallback
@@ -158,8 +158,8 @@ export const pharmacyService = {
   async getDispenseByPrescriptionId(prescriptionId) {
     try {
       const res = await api.get(`/prescriptions/${prescriptionId}/dispense`);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       // Fallback
@@ -174,8 +174,8 @@ export const pharmacyService = {
   async getExpiringSoonDrugs(days = 30) {
     try {
       const res = await api.get('/drugs/expiring-soon', { params: { days } });
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       // Fallback
@@ -198,8 +198,8 @@ export const pharmacyService = {
   async getLowStockDrugs(threshold = 20) {
     try {
       const res = await api.get('/drugs/low-stock', { params: { threshold } });
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       // Fallback
@@ -214,8 +214,8 @@ export const pharmacyService = {
   async updateStock(drugId, updateData) {
     try {
       const res = await api.put(`/drugs/${drugId}/stock`, updateData);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       if (e.response?.data?.message) {
@@ -250,8 +250,8 @@ export const pharmacyService = {
   async createDrug(drugData) {
     try {
       const res = await api.post('/drugs', drugData);
-      if (res.data?.success && res.data?.data) {
-        return res.data.data;
+      if (res?.success && res?.data) {
+        return res.data;
       }
     } catch (e) {
       if (e.response?.data?.message) {

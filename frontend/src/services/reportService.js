@@ -47,8 +47,8 @@ export const reportService = {
   async getKpiSummary() {
     try {
       const res = await apiClient.get('/reports/kpi-summary');
-      if (res && res.data && res.data.data) {
-        return res.data.data;
+      if (res && res.data) {
+        return res.data;
       }
     } catch {
       // offline fallback
@@ -62,8 +62,8 @@ export const reportService = {
       if (from) params.from = from;
       if (to) params.to = to;
       const res = await apiClient.get('/reports/visits-summary', { params });
-      if (res && res.data && res.data.data) {
-        return res.data.data;
+      if (res && res.data) {
+        return res.data;
       }
     } catch {
       // offline fallback
@@ -87,8 +87,8 @@ export const reportService = {
       if (from) params.from = from;
       if (to) params.to = to;
       const res = await apiClient.get('/reports/revenue', { params });
-      if (res && res.data && res.data.data) {
-        return res.data.data;
+      if (res && res.data) {
+        return res.data;
       }
     } catch {
       // offline fallback
@@ -109,8 +109,8 @@ export const reportService = {
   async getTopDiagnoses(limit = 5) {
     try {
       const res = await apiClient.get('/reports/top-diagnoses', { params: { limit } });
-      if (res && res.data && res.data.data) {
-        return res.data.data;
+      if (res && res.data) {
+        return res.data;
       }
     } catch {
       // offline fallback
