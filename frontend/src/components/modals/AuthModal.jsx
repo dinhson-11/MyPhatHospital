@@ -231,21 +231,21 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
                   <button
                     type="button"
                     id="btn-demo-doctor"
-                    onClick={() => fillDemoAccount('bacsi', 'Doctor@123')}
+                    onClick={() => fillDemoAccount('bs.maianh', 'Doctor@123')}
                     className="p-2 text-xs text-left bg-teal-50/80 hover:bg-teal-100 text-teal-900 rounded-xl border border-teal-200 transition-all cursor-pointer shadow-2xs group"
                   >
                     <span className="font-bold block truncate group-hover:text-teal-800">👨‍⚕️ TS.BS Vi Mai Anh</span>
-                    <span className="text-[10px] text-slate-500 block truncate">bacsi • Trưởng khoa</span>
+                    <span className="text-[10px] text-slate-500 block truncate">bs.maianh • Trưởng khoa</span>
                   </button>
 
                   <button
                     type="button"
                     id="btn-demo-pharmacist"
-                    onClick={() => fillDemoAccount('duocsi', 'Pharmacist@123')}
+                    onClick={() => fillDemoAccount('ds.quang', 'Pharmacist@123')}
                     className="p-2 text-xs text-left bg-emerald-50/70 hover:bg-emerald-100 text-emerald-900 rounded-xl border border-emerald-200 transition-all cursor-pointer shadow-2xs group"
                   >
                     <span className="font-bold block truncate group-hover:text-emerald-800">💊 DS. Lê Hải Quang</span>
-                    <span className="text-[10px] text-slate-500 block truncate">duocsi • Dược GPP</span>
+                    <span className="text-[10px] text-slate-500 block truncate">ds.quang • Dược GPP</span>
                   </button>
 
                   <button
@@ -304,7 +304,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
                       type="button"
                       onClick={() => fillDemoAccount('bs.maianh', 'Doctor@123')}
                       className={`p-1.5 text-left rounded-lg text-[11px] transition-all cursor-pointer flex flex-col ${
-                        loginForm.username === 'bs.maianh' || loginForm.username === 'bacsi'
+                        loginForm.username === 'bs.maianh'
                           ? 'bg-teal-700 text-white font-bold'
                           : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-200/70'
                       }`}

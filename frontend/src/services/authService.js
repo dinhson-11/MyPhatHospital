@@ -30,20 +30,6 @@ const DEFAULT_SEEDS = [
 
   // --- BÁC SĨ CHUYÊN KHOA ĐỒNG BỘ 100% VỚI DANH SÁCH BỆNH VIỆN ---
   {
-    id: 3,
-    username: 'bacsi',
-    password: 'Doctor@123',
-    fullName: 'TS.BS Vi Mai Anh',
-    title: 'Trưởng khoa Khám bệnh / Cấp cứu ban đầu',
-    departmentId: 1,
-    departmentName: 'Khoa Khám bệnh / Cấp cứu ban đầu',
-    specialty: 'Khám chữa bệnh & Nội tổng quát',
-    room: 'Phòng khám ban đầu 101 (Tầng 1)',
-    email: 'bs.maianh@myphathospital.com',
-    phone: '0912111222',
-    roles: ['DOCTOR']
-  },
-  {
     id: 11,
     username: 'bs.maianh',
     password: 'Doctor@123',
@@ -183,20 +169,6 @@ const DEFAULT_SEEDS = [
   },
 
   // --- TRƯỞNG PHÒNG DƯỢC ---
-  {
-    id: 6,
-    username: 'duocsi',
-    password: 'Pharmacist@123',
-    fullName: 'ThS.DS Lê Hải Quang',
-    title: 'Trưởng Phòng Dược Mỹ Phát Hospital',
-    departmentId: 12,
-    departmentName: 'Phòng Dược & Cung ứng thuốc',
-    specialty: 'Quản lý kho thuốc GPP & Dược lâm sàng',
-    room: 'Phòng Dược Tầng 1 (Khu A)',
-    email: 'ds.quang@myphathospital.com',
-    phone: '0978666555',
-    roles: ['PHARMACIST']
-  },
   {
     id: 19,
     username: 'ds.quang',
