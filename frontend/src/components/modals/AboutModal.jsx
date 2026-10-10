@@ -74,7 +74,7 @@ export default function AboutModal({ isOpen, onClose }) {
             <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden shrink-0 shadow-md border-2 border-amber-300 bg-slate-950 flex items-center justify-center p-0.5">
               <img
                 src={awardImg}
-                alt="Ban lãnh đạo Mỹ Phát Hospital vinh dự đón nhận biểu trưng y đức từ nguyên Chủ tịch nước"
+                alt="Ban lãnh đạo Mỹ Phát Hospital vinh dự được Nguyên Chủ tịch nước Trương Tấn Sang trao bằng khen"
                 className="w-full h-full object-contain rounded-lg"
                 onError={(e) => {
                   e.currentTarget.src = '/myphat_president_award.jpg';
@@ -84,13 +84,13 @@ export default function AboutModal({ isOpen, onClose }) {
             <div className="space-y-1.5 text-center sm:text-left">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold">
                 <span className="material-symbols-outlined text-[15px] text-amber-700">military_tech</span>
-                Vinh Danh Y Đức Tiêu Biểu
+                Nguyên Chủ tịch nước trao bằng khen
               </div>
               <h5 className="font-bold text-slate-900 text-sm sm:text-base">
-                Kỷ Niệm Chương & Biểu Trưng Y Đức Vì Sức Khỏe Nhân Dân
+                Bằng Khen Vì Sức Khỏe Nhân Dân
               </h5>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Ban lãnh đạo Mỹ Phát Hospital vinh dự đón nhận biểu trưng danh dự từ nguyên Chủ tịch nước Trương Tấn Sang – dấu mốc khẳng định tinh thần phụng sự và chất lượng khám chữa bệnh uy tín qua nhiều năm hoạt động.
+                Ban lãnh đạo Mỹ Phát Hospital vinh dự được Nguyên Chủ tịch nước Trương Tấn Sang trao bằng khen – dấu mốc khẳng định tinh thần phụng sự và chất lượng khám chữa bệnh uy tín qua nhiều năm hoạt động.
               </p>
             </div>
           </div>

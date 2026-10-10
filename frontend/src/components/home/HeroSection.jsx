@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import presidentAwardImg from '../../assets/myphat_president_award.jpg';
 import bannerImg from '../../assets/myphat_banner.jpg';
-import heroImg from '../../assets/hero_doctor_ai.jpg';
 
 export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments }) => {
-  const [activeVisual, setActiveVisual] = useState('president'); // 'president' | 'banner' | 'ai'
+  const [activeVisual, setActiveVisual] = useState('president'); // 'president' | 'banner'
 
   return (
     <section className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 overflow-hidden">
@@ -141,7 +140,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
           </div>
         </div>
 
-        {/* Right Column: Visual Showcase với chuyển đổi giữa Banner Mỹ Phát và Hình ảnh AI */}
+        {/* Right Column: Visual Showcase với chuyển đổi giữa Ảnh Chủ tịch nước và Banner Mỹ Phát */}
         <div className="lg:col-span-5 relative mt-6 lg:mt-0 flex flex-col items-center">
           {/* Visual Selector Tabs */}
           <div className="flex flex-wrap items-center justify-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200 mb-3 shadow-xs">
@@ -155,7 +154,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
               }`}
             >
               <span className="material-symbols-outlined text-[16px]">military_tech</span>
-              <span>Ảnh cùng Chủ tịch nước</span>
+              <span>Nguyên Chủ tịch nước trao bằng khen</span>
             </button>
             <button
               type="button"
@@ -169,18 +168,6 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
               <span className="material-symbols-outlined text-[16px] text-teal-600">apartment</span>
               <span>Cơ sở Bệnh viện</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveVisual('ai')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeVisual === 'ai'
-                  ? 'bg-white text-teal-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px] text-sky-600">medical_services</span>
-              <span>Bác Sĩ & AI</span>
-            </button>
           </div>
 
           <div className="relative w-full max-w-md rounded-3xl overflow-hidden bg-white p-2 sm:p-2.5 shadow-[0_15px_45px_-12px_rgba(15,118,110,0.18)] border border-teal-100/80">
@@ -188,7 +175,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
               {activeVisual === 'president' ? (
                 <div className="relative w-full h-full flex items-center justify-center bg-slate-950 p-1">
                   <img
-                    alt="Ban Lãnh Đạo Mỹ Phát Hospital chụp ảnh cùng Nguyên Chủ tịch nước Trương Tấn Sang"
+                    alt="Ban Lãnh Đạo Mỹ Phát Hospital vinh dự được Nguyên Chủ tịch nước Trương Tấn Sang trao bằng khen"
                     className="w-full h-full object-contain rounded-xl"
                     src={presidentAwardImg}
                     onError={(e) => {
@@ -198,11 +185,11 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none rounded-xl" />
                   <div className="absolute bottom-2 left-2.5 right-2.5 text-white pointer-events-none text-center">
                     <p className="font-label text-[11px] sm:text-xs font-bold text-amber-200 drop-shadow-md">
-                      Vinh dự & Tự hào: Ban lãnh đạo Mỹ Phát Hospital chụp ảnh cùng Nguyên Chủ tịch nước
+                      Vinh dự & Tự hào: Ban lãnh đạo Mỹ Phát Hospital được Nguyên Chủ tịch nước trao bằng khen
                     </p>
                   </div>
                 </div>
-              ) : activeVisual === 'banner' ? (
+              ) : (
                 <div className="relative w-full h-full flex items-center justify-center bg-slate-950 p-1">
                   <img
                     alt="Mỹ Phát Hospital"
@@ -219,30 +206,17 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
                     </p>
                   </div>
                 </div>
-              ) : (
-                <div className="relative w-full h-full flex items-center justify-center bg-slate-950">
-                  <img
-                    alt="Bác sĩ Mỹ Phát Hospital sử dụng máy tính bảng giải thích kết quả X-quang tích hợp AI cho bệnh nhân"
-                    className="w-full h-full object-cover object-center"
-                    src={heroImg}
-                    onError={(e) => {
-                      e.currentTarget.src = "/hero_doctor_ai.jpg";
-                    }}
-                  />
-                </div>
               )}
 
               {/* Top-left glass badge */}
               <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-semibold flex items-center gap-1.5 border border-white/20 shadow-sm pointer-events-none">
                 <span className={`material-symbols-outlined text-[13px] ${activeVisual === 'president' ? 'text-amber-400' : 'text-teal-300'}`}>
-                  {activeVisual === 'president' ? 'military_tech' : activeVisual === 'banner' ? 'verified' : 'medical_services'}
+                  {activeVisual === 'president' ? 'military_tech' : 'verified'}
                 </span>
                 <span>
                   {activeVisual === 'president'
-                    ? 'Diện kiến Nguyên Chủ tịch nước'
-                    : activeVisual === 'banner'
-                    ? 'Cơ sở 1170 Quang Trung, Chũ'
-                    : 'Hội chẩn số AI & Bác sĩ'}
+                    ? 'Nguyên Chủ tịch nước trao bằng khen'
+                    : 'Cơ sở 1170 Quang Trung, Chũ'}
                 </span>
               </div>
             </div>
