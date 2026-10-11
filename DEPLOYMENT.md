@@ -1,191 +1,229 @@
-# 🚀 Hướng dẫn Deploy – Mỹ Phát Hospital
+# Hướng dẫn deploy – Mỹ Phát Hospital
 
-## ⚠️ Trước khi push lên GitHub
+Hệ thống gồm 4 phần: **frontend** (React/Vite + Nginx), **backend** (Spring Boot 17, cổng 8080), **ai-service** (FastAPI, cổng 8000) và **MySQL 8** (schema do Flyway tự tạo khi backend khởi động).
 
-1. **Tạo JWT_SECRET mạnh** (bắt buộc):
-   ```powershell
-   # Windows PowerShell
-   [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }))
-   ```
-   ```bash
-   # Linux / Mac
-   openssl rand -base64 32
-   ```
+> Thông tin gói miễn phí của các nhà cung cấp thay đổi thường xuyên. Trước khi đăng ký, hãy mở trang giá của họ để xác nhận hạn mức hiện tại.
 
-2. **Cấu hình file `.env`** (từ `.env.example`):
-   ```bash
-   cp .env.example .env
-   # Mở .env và điền JWT_SECRET, MYSQL_PASSWORD thật
-   ```
-   Chọn nguồn cơ sở dữ liệu trong `.env`: giữ `COMPOSE_PROFILES=local-db` để chạy MySQL đóng gói trong Docker, hoặc bỏ dòng đó và đặt `MYSQL_HOST/MYSQL_PORT/MYSQL_DB` để dùng **MySQL thật** (xem phần "Cơ sở dữ liệu thật" bên dưới).
+## 1. Chọn phương án
 
-3. **Kiểm tra không có secret bị commit**:
-   ```bash
-   git status              # .env KHÔNG được xuất hiện trong danh sách
-   git diff --staged       # Không có password/secret trong staged files
-   ```
+| | **Phương án A – 1 máy ảo (khuyến nghị)** | **Phương án B – tách dịch vụ** |
+|---|---|---|
+| Nền tảng | Oracle Cloud *Always Free* VM | Cloudflare Pages/Vercel + Render + Aiven MySQL |
+| Chi phí | 0đ, không giới hạn thời gian | 0đ |
+| Chạy 24/7 | Có | Không: Render *free* ngủ sau ~15 phút không có truy cập, lần gọi đầu mất ~30–60 giây |
+| Độ khó | Trung bình (dùng SSH + Docker) | Dễ (chỉ thao tác trên web) |
+| Điểm yếu | Cần thẻ quốc tế để xác minh; đôi khi hết máy ở khu vực bạn chọn | Backend Java chỉ có 512 MB RAM, AI service bị chậm lần đầu |
+
+**Chọn A** nếu muốn hệ thống chạy ổn định để demo/bảo vệ. **Chọn B** nếu không có thẻ quốc tế hoặc chỉ cần bản thử.
+
+Các nền tảng khác đáng cân nhắc: **Google Cloud e2-micro** (VM miễn phí vĩnh viễn nhưng chỉ 1 GB RAM, chạy được nhưng sát giới hạn), **Hugging Face Spaces** (chạy Docker miễn phí, hợp với riêng ai-service), **TiDB Cloud Serverless** (MySQL tương thích, miễn phí; cần thử Flyway trước).
+Không còn gói miễn phí thật sự ở Railway (chỉ có credit dùng thử) và Heroku.
 
 ---
 
-## 🌐 Các lựa chọn Deploy miễn phí
+## 2. Việc cần làm trước mọi phương án
 
-### Option 1: Railway.app (⭐ Khuyến nghị nhất)
+### 2.1. Tạo `JWT_SECRET` và mật khẩu mạnh
 
-**Railway** hỗ trợ Docker Compose, MySQL, có free tier 5$/tháng credit.
-
-```bash
-# 1. Đăng ký tại https://railway.app
-# 2. Kết nối GitHub repo
-# 3. New Project → Deploy from GitHub repo
-# 4. Add MySQL service từ Railway marketplace
-# 5. Cấu hình Environment Variables trong Railway dashboard:
-#    JWT_SECRET = <generated>
-#    MYSQL_HOST / MYSQL_PORT / MYSQL_DB = <từ Railway MySQL>   (KHÔNG đặt COMPOSE_PROFILES)
-#    MYSQL_USER = <từ Railway MySQL>
-#    MYSQL_PASSWORD = <từ Railway MySQL>
-#    MYSQL_SSL_MODE = REQUIRED
-#    VITE_API_BASE_URL = https://<your-backend>.railway.app/api/v1
+```powershell
+# Windows PowerShell
+[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Max 256 }))
 ```
-
-**Lưu ý Railway**:
-- Mỗi service (backend, frontend, ai-service) deploy riêng
-- Dùng `RAILWAY_STATIC_URL` cho frontend
-- MySQL connection string lấy từ Railway dashboard
-
----
-
-### Option 2: Render.com
-
-**Render** hỗ trợ Docker, có free tier (spin down sau 15 phút idle).
-
 ```bash
-# 1. Đăng ký tại https://render.com
-# 2. New → Web Service → Connect GitHub
-# 3. Chọn từng service (backend / frontend)
-# 4. Set Environment Variables trong Render dashboard
-# 5. Free MySQL: dùng PlanetScale (free) hoặc Render PostgreSQL (convert sang PostgreSQL)
+# Linux / macOS
+openssl rand -base64 48
 ```
+Chạy 2 lần: một lần cho `JWT_SECRET`, một lần cho `MYSQL_PASSWORD`. Lưu vào trình quản lý mật khẩu, **không** commit.
 
-**Blueprint file** (`render.yaml`) nếu muốn deploy tự động — tạo sau khi có repo.
+### 2.2. Biến môi trường quan trọng
+
+| Biến | Ý nghĩa | Giá trị khi chạy thật |
+|---|---|---|
+| `JWT_SECRET` | Khóa ký token (bắt buộc) | Chuỗi ngẫu nhiên ≥ 48 ký tự |
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DB` | Địa chỉ DB | Tùy phương án |
+| `MYSQL_USER` / `MYSQL_PASSWORD` | Tài khoản DB (không dùng root) | Mật khẩu mạnh |
+| `MYSQL_SSL_MODE` | Mã hóa kết nối DB | `REQUIRED` với DB trên cloud |
+| `CORS_ALLOWED_ORIGINS` | Domain frontend được gọi API | `https://ten-mien-cua-ban` |
+| `SWAGGER_ENABLED` | Tài liệu API công khai | `false` |
+| `VITE_API_BASE_URL` | URL API mà **trình duyệt** gọi, nhúng lúc build | Xem từng phương án |
+| `VITE_SHOW_DEMO_ACCOUNTS` | Hiện tài khoản demo ở form đăng nhập | `false` |
+| `VIETQR_*`, `VIETQR_DEMO` | Tài khoản nhận tiền VietQR | Tài khoản thật, `VIETQR_DEMO=false` |
+| `LLM_API_KEY` | Khóa LLM cho chatbot (tùy chọn) | Để trống thì chatbot dùng luật từ khóa |
+
+### 2.3. Khóa tài khoản demo (bắt buộc)
+
+Các migration Flyway tạo sẵn tài khoản mẫu với **mật khẩu công khai** trong README (`admin / Admin@123`, …). Sau lần khởi động backend đầu tiên:
+
+1. Đăng nhập `admin` → *Bảng điều khiển quản trị* → *Tài khoản* → tạo tài khoản quản trị thật, hoặc đổi mật khẩu `admin` bằng hash BCrypt (hướng dẫn trong [scripts/db/02_lock_demo_accounts.sql](scripts/db/02_lock_demo_accounts.sql)).
+2. Đăng nhập thử bằng tài khoản thật.
+3. Chạy `scripts/db/02_lock_demo_accounts.sql` trên DB để khóa các tài khoản mẫu còn lại.
+
+Không làm bước này thì **bất kỳ ai cũng đăng nhập được với quyền quản trị**.
 
 ---
 
-### Option 3: Fly.io
+## 3. Phương án A – Oracle Cloud Always Free + Docker Compose
 
-**Fly.io** hỗ trợ Docker tốt, free tier 3 shared VMs.
+Toàn bộ 4 thành phần chạy trên một máy, frontend (Nginx) tự chuyển tiếp `/api/v1/` đến backend nên **không cần CORS** và chỉ cần mở cổng 80/443.
 
+### Bước 1. Tạo máy ảo
+1. Đăng ký tại <https://www.oracle.com/cloud/free/> (cần thẻ để xác minh, không bị trừ tiền nếu chỉ dùng tài nguyên *Always Free*).
+2. *Compute → Instances → Create instance*:
+   - Image: **Ubuntu 22.04**
+   - Shape: **VM.Standard.A1.Flex** (Ampere ARM), 2 OCPU / 12 GB RAM là đủ (hạn mức miễn phí tối đa 4 OCPU / 24 GB).
+   - Tải về **SSH private key** khi được hỏi và giữ cẩn thận.
+3. Nếu báo *Out of capacity*: thử lại vào giờ khác hoặc chọn Availability Domain khác.
+4. Mở cổng: *Networking → VCN → Security List → Add Ingress Rules*, thêm TCP **80** và **443** từ `0.0.0.0/0`.
+
+### Bước 2. Cài Docker trên máy ảo
 ```bash
-# Cài flyctl
-curl -L https://fly.io/install.sh | sh
+ssh -i <file-key> ubuntu@<IP-công-khai>
 
-# Login
-fly auth login
+# Ubuntu của Oracle có tường lửa iptables chặn sẵn: mở 80/443
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
 
-# Deploy backend
-cd backend
-fly launch --name myphat-backend --dockerfile Dockerfile
-
-# Deploy frontend
-cd ../frontend
-fly launch --name myphat-frontend --dockerfile Dockerfile
-
-# Set secrets
-fly secrets set JWT_SECRET=<your-secret> --app myphat-backend
-fly secrets set MYSQL_PASSWORD=<your-password> --app myphat-backend
-fly secrets set MYSQL_HOST=<host> MYSQL_PORT=3306 MYSQL_DB=hmsai_db MYSQL_USER=<user> MYSQL_SSL_MODE=REQUIRED --app myphat-backend
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER && newgrp docker
 ```
+Các image trong repo (`mysql:8.0`, `eclipse-temurin`, `python`, `nginx`, `node`) đều có bản ARM64 nên chạy được trên Ampere.
 
----
-
-### Option 4: VPS + Docker (Ổn định nhất cho production)
-
-Dùng free VPS: **Oracle Cloud Free Tier** (2 VMs vĩnh viễn miễn phí) hoặc **Google Cloud Free Tier**.
-
+### Bước 3. Lấy mã nguồn và cấu hình
 ```bash
-# Trên VPS sau khi clone repo:
+git clone https://github.com/dinhson-11/MyPhatHospital.git
+cd MyPhatHospital
 cp .env.example .env
-nano .env                          # Điền secrets thật
+nano .env
+```
+Sửa trong `.env` (giữ `COMPOSE_PROFILES=local-db` để dùng MySQL đóng gói):
+```dotenv
+COMPOSE_PROFILES=local-db
+MYSQL_ROOT_PASSWORD=<mật khẩu mạnh 1>
+MYSQL_PASSWORD=<mật khẩu mạnh 2>
+JWT_SECRET=<chuỗi ngẫu nhiên>
 
-# Generate JWT_SECRET
-openssl rand -base64 32
+FRONTEND_PORT=3000
+BACKEND_PORT=127.0.0.1:8080     # chỉ cho máy chủ gọi, không lộ ra internet
+MYSQL_HOST_PORT=127.0.0.1:3308  # DB không lộ ra internet
 
-# Chạy toàn bộ hệ thống
-docker compose up -d --build
-
-# Kiểm tra
-docker compose ps
-docker compose logs -f backend
+VITE_API_BASE_URL=/api/v1       # đường dẫn tương đối, Nginx của frontend chuyển tiếp tới backend
+VITE_SHOW_DEMO_ACCOUNTS=false
+SWAGGER_ENABLED=false
+CORS_ALLOWED_ORIGINS=https://<tên-miền-của-bạn>
+VIETQR_DEMO=false
 ```
 
-**Cấu hình Nginx reverse proxy** (nếu muốn HTTPS):
-```nginx
-server {
-    listen 443 ssl;
-    server_name myphathospital.com;
-    
-    location /api/ {
-        proxy_pass http://localhost:8080;
-    }
-    
-    location / {
-        proxy_pass http://localhost:3000;
-    }
-}
-```
-
----
-
-## 🗄️ Cơ sở dữ liệu thật
-
-Backend (profile `prod` trong Docker) đọc kết nối từ biến môi trường, không đặt cứng trong mã:
-
-| Biến | Ý nghĩa | Mặc định |
-|------|---------|----------|
-| `MYSQL_HOST` | Máy chủ MySQL | `mysql` (container đóng gói) |
-| `MYSQL_PORT` | Cổng | `3306` |
-| `MYSQL_DB` | Tên database | `hmsai_db` |
-| `MYSQL_USER` / `MYSQL_PASSWORD` | Tài khoản ứng dụng | `hmsai_user` / (đặt trong `.env`) |
-| `MYSQL_SSL_MODE` | `DISABLED`, `PREFERRED`, `REQUIRED`, `VERIFY_CA`, `VERIFY_IDENTITY` | `PREFERRED` |
-
-Các bước dùng DB thật:
-
-1. Trên MySQL 8 thật, chạy [`scripts/db/01_create_database.sql`](scripts/db/01_create_database.sql) bằng tài khoản root (sau khi thay mật khẩu) để tạo `hmsai_db` và tài khoản `hmsai_user` (host `%` và `localhost`).
-2. Trong `.env`: xóa/chú thích `COMPOSE_PROFILES=local-db`, đặt `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DB`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_SSL_MODE`.
-   - MySQL cài trên **chính máy chạy Docker**: `MYSQL_HOST=host.docker.internal`. Không dùng `localhost` vì trong container đó là chính container backend.
-   - MySQL trên máy khác hoặc dịch vụ cloud: dùng tên miền/IP, mở cổng 3306 cho máy chủ ứng dụng và dùng `MYSQL_SSL_MODE=REQUIRED`.
-3. `docker compose up -d --build`. Flyway tự tạo schema (V1 → V23) ở lần chạy đầu và chỉ chạy phần còn thiếu ở các lần sau.
-4. Chạy [`scripts/db/02_lock_demo_accounts.sql`](scripts/db/02_lock_demo_accounts.sql) để đổi mật khẩu `admin` và khóa các tài khoản mẫu (mật khẩu của chúng công khai trong README).
-5. **Sao lưu định kỳ** bằng `mysqldump --single-transaction hmsai_db > backup.sql`, và luôn sao lưu trước khi nâng cấp phiên bản vì các migration có thể sửa dữ liệu.
-
-> Flyway chỉ nên trỏ vào database trống hoặc database đã do Flyway quản lý. Nếu DB đã chạy bản V20 cũ và báo `checksum mismatch`, chạy `flyway repair` rồi khởi động lại.
-
----
-
-## 📋 Checklist trước khi push GitHub
-
-- [ ] `.env` KHÔNG có trong `git status`
-- [ ] `JWT_SECRET` trong `.env.example` là placeholder, không phải secret thật
-- [ ] `application-prod.yml` không có secret hardcoded
-- [ ] `docker-compose.yml` không có secret hardcoded
-- [ ] Trước khi dùng DB thật: đã chạy `scripts/db/02_lock_demo_accounts.sql` (khóa tài khoản mẫu)
-- [ ] `CORS_ALLOWED_ORIGINS` chỉ gồm địa chỉ thật của giao diện web (mặc định chỉ có localhost); không dùng `*`
-- [ ] Cân nhắc `SWAGGER_ENABLED=false` để không công khai tài liệu API
-- [ ] Trước khi dùng DB thật: `VITE_SHOW_DEMO_ACCOUNTS=false` trong `.env` rồi build lại frontend (`docker compose up -d --build frontend`) để form đăng nhập không hiển thị tài khoản demo
-- [ ] `node_modules/` và `target/` không được tracked
-- [ ] `*.joblib` (ML model) không được tracked
-
+### Bước 4. Chạy
 ```bash
-# Chạy lệnh này để kiểm tra lần cuối trước khi push:
-git status
-git ls-files | Select-String -Pattern "\.env$|password|secret" -CaseSensitive:$false
+docker compose up -d --build
+docker compose ps                 # 4 container, backend phải "healthy"
+docker compose logs -f backend    # chờ thấy "Started HmsAiApplication"
+curl http://localhost:8080/actuator/health   # {"status":"UP"}
 ```
+Lần đầu build mất 5–10 phút (Maven tải thư viện, huấn luyện mô hình AI).
+
+### Bước 5. Có HTTPS và tên miền miễn phí
+1. Đăng ký tên miền miễn phí tại <https://www.duckdns.org> (ví dụ `myphat.duckdns.org`), trỏ về IP công khai của máy ảo.
+2. Cài Caddy (tự xin và gia hạn chứng chỉ HTTPS):
+   ```bash
+   sudo apt install -y caddy
+   echo 'myphat.duckdns.org { reverse_proxy localhost:3000 }' | sudo tee /etc/caddy/Caddyfile
+   sudo systemctl restart caddy
+   ```
+3. Mở `https://myphat.duckdns.org`. Nhớ đặt `CORS_ALLOWED_ORIGINS` đúng tên miền này rồi `docker compose up -d`.
+
+### Cập nhật phiên bản mới
+```bash
+cd ~/MyPhatHospital && git pull
+docker compose up -d --build
+```
+
+### Sao lưu DB (nên cron hằng ngày)
+```bash
+docker exec hmsai-mysql sh -c 'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" hmsai_db' > backup_$(date +%F).sql
+```
+Máy ảo free có thể bị thu hồi nếu bỏ không, hãy tải bản sao lưu về máy bạn định kỳ.
 
 ---
 
-## 🔗 Tài nguyên
+## 4. Phương án B – tách dịch vụ (không cần thẻ quốc tế cho một số bước)
 
-- [Railway Docs](https://docs.railway.app)
-- [Render Docs](https://render.com/docs)
-- [Fly.io Docs](https://fly.io/docs)
-- [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/)
-- [PlanetScale (Free MySQL)](https://planetscale.com)
+Thứ tự: **DB → AI service → Backend → Frontend**, vì mỗi bước cần địa chỉ của bước trước.
+
+### Bước 1. Database: Aiven for MySQL (gói Free)
+1. Đăng ký <https://aiven.io>, tạo dịch vụ **MySQL** chọn plan *Free*.
+2. Lấy `Host`, `Port`, `User`, `Password` ở tab *Overview*. Database mặc định là `defaultdb`; tạo DB `hmsai_db` ở tab *Databases* hoặc dùng luôn `defaultdb`.
+3. Cần đặt `MYSQL_SSL_MODE=REQUIRED`. Aiven cho gói free tự tắt dịch vụ nếu không dùng lâu, hãy bật lại khi cần.
+
+### Bước 2. AI service: Render (Web Service, Docker)
+1. Đẩy code lên GitHub (đã xong), đăng ký <https://render.com> bằng GitHub.
+2. *New → Web Service* → chọn repo `MyPhatHospital`.
+   - **Root Directory**: `ai-service`
+   - **Runtime**: Docker, **Instance Type**: Free
+   - Env: `LLM_API_KEY` (tùy chọn)
+3. Ghi lại URL, ví dụ `https://myphat-ai.onrender.com`. Kiểm tra `…/health`.
+
+> Backend gọi AI với timeout 3 giây. Khi service đang "ngủ", lần gọi đầu sẽ hết thời gian chờ; các lần sau bình thường.
+
+### Bước 3. Backend: Render (Web Service, Docker)
+1. *New → Web Service* → cùng repo.
+   - **Root Directory**: `backend`
+   - **Runtime**: Docker, **Instance Type**: Free (512 MB)
+2. Thêm Environment Variables:
+
+   | Key | Value |
+   |---|---|
+   | `PORT` | `8080` |
+   | `JAVA_TOOL_OPTIONS` | `-Xmx320m -Xss512k -Duser.timezone=Asia/Ho_Chi_Minh` |
+   | `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DB`, `MYSQL_USER`, `MYSQL_PASSWORD` | từ Aiven |
+   | `MYSQL_SSL_MODE` | `REQUIRED` |
+   | `JWT_SECRET` | chuỗi ngẫu nhiên |
+   | `AI_SERVICE_URL` | URL ở bước 2 |
+   | `CORS_ALLOWED_ORIGINS` | điền sau ở bước 4 (tạm để `https://localhost`) |
+   | `SWAGGER_ENABLED` | `false` |
+   | `VIETQR_*` | tài khoản thật (hoặc để trống để tắt) |
+
+3. Deploy và chờ log có `Started HmsAiApplication`. Kiểm tra `https://<backend>.onrender.com/actuator/health`.
+4. Nếu bị *Out of memory*: giảm `-Xmx` xuống `256m` hoặc nâng lên gói trả phí.
+
+### Bước 4. Frontend: Cloudflare Pages (hoặc Vercel)
+**Cloudflare Pages**
+1. <https://dash.cloudflare.com> → *Workers & Pages → Create → Pages → Connect to Git* → chọn repo.
+2. Cấu hình build:
+   - Root directory: `frontend`
+   - Build command: `npm ci && npm run build`
+   - Output directory: `dist`
+   - Environment variables: `NODE_VERSION=22`, `VITE_API_BASE_URL=https://<backend>.onrender.com/api/v1`, `VITE_SHOW_DEMO_ACCOUNTS=false`
+3. Deploy, lấy URL `https://<tên>.pages.dev`.
+
+**Vercel**: *Add New → Project*, Root Directory `frontend`, Framework *Vite*, thêm 2 biến môi trường như trên. File [frontend/vercel.json](frontend/vercel.json) đã có sẵn quy tắc rewrite cho SPA.
+
+### Bước 5. Chốt CORS
+Quay lại Render → backend → sửa `CORS_ALLOWED_ORIGINS=https://<tên>.pages.dev` (không có dấu `/` ở cuối) → *Save* (tự deploy lại).
+
+---
+
+## 5. Kiểm tra sau deploy
+
+- [ ] `https://<domain>` mở được trang chủ, không lỗi đỏ trong tab *Console* của trình duyệt.
+- [ ] `GET /actuator/health` trả `UP`.
+- [ ] Đăng nhập bằng tài khoản **thật**; thử đăng nhập `admin / Admin@123` phải **thất bại** (sau khi chạy 2.3).
+- [ ] Form đăng nhập **không** hiện khối tài khoản demo.
+- [ ] Swagger (`/swagger-ui.html`) trả 404 hoặc bị chặn.
+- [ ] Đặt lịch khám, khám bệnh, lập hóa đơn và hiện mã VietQR hoạt động.
+- [ ] Ngày giờ hiển thị đúng giờ Việt Nam.
+
+## 6. Lỗi thường gặp
+
+| Triệu chứng | Nguyên nhân / cách xử lý |
+|---|---|
+| Frontend báo `Network Error`, Console có `CORS` | `CORS_ALLOWED_ORIGINS` sai domain, thừa dấu `/` hoặc thiếu `https://` |
+| Frontend vẫn gọi `localhost:8080` | `VITE_API_BASE_URL` được nhúng lúc **build**: đặt lại rồi build lại frontend |
+| Backend `JWT_SECRET must be set` | Thiếu biến `JWT_SECRET` |
+| Backend `Communications link failure` / SSL | Sai `MYSQL_HOST/PORT`, hoặc cần `MYSQL_SSL_MODE=REQUIRED` |
+| Flyway `checksum mismatch` ở V20 | Chạy `flyway repair` (hoặc cập nhật `checksum` của version 20 trong `flyway_schema_history`) |
+| Flyway lỗi vì DB không trống | Chỉ trỏ vào DB trống hoặc DB do Flyway quản lý |
+| Backend bị kill / `OutOfMemoryError` trên Render free | Giảm `-Xmx`, hoặc chuyển sang phương án A |
+| Lần mở đầu tiên rất chậm (phương án B) | Render free đang "ngủ"; dùng <https://uptimerobot.com> ping `/actuator/health` mỗi 10 phút để giữ thức (vẫn có giới hạn giờ chạy miễn phí mỗi tháng) |
+| Chatbot trả lời theo luật từ khóa | AI service chưa nạp mô hình: kiểm tra `…/health` có `mlModelLoaded=true` |
