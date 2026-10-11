@@ -144,10 +144,15 @@ public class ChatServiceImpl implements ChatService {
         return toSessionResponseDto(savedSession);
     }
 
+    private static org.springframework.data.domain.Pageable sessionPage(int limit) {
+        return org.springframework.data.domain.PageRequest.of(0, Math.min(Math.max(limit, 1), MAX_SESSIONS));
+    }
+
     @Override
     @Transactional(readOnly = true)
-    public List<ChatSessionResponseDto> getAllSessions() {
-        return sessionRepository.findAllByOrderByCreatedAtDesc()
+    public List<ChatSessionResponseDto> getAllSessions(int limit) {
+        return sessionRepository.findAllByOrderByCreatedAtDesc(sessionPage(limit))
+                .getContent()
                 .stream()
                 .map(this::toSessionResponseDto)
                 .collect(Collectors.toList());
@@ -155,8 +160,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ChatSessionResponseDto> getSessionsByPatient(Long patientId) {
-        return sessionRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
+    public List<ChatSessionResponseDto> getSessionsByPatient(Long patientId, int limit) {
+        return sessionRepository.findByPatientIdOrderByCreatedAtDesc(patientId, sessionPage(limit))
+                .getContent()
                 .stream()
                 .map(this::toSessionResponseDto)
                 .collect(Collectors.toList());

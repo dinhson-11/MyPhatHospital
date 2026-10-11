@@ -2,6 +2,7 @@ package com.hospital.hmsai.ai.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.hospital.hmsai.clinical.dto.VitalSignsDto;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -41,4 +42,9 @@ public class DiagnosisSuggestionRequest {
     @JsonProperty("medical_history")
     @JsonAlias("medicalHistory")
     private List<String> medicalHistory;
+
+    /** Sinh hiệu đo được (nếu có): AI ưu tiên hơn giá trị đọc từ văn bản triệu chứng. */
+    @JsonProperty("vital_signs")
+    @JsonAlias("vitalSigns")
+    private VitalSignsDto vitalSigns;
 }

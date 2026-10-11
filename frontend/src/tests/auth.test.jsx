@@ -6,15 +6,47 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 import AuthModal from '../components/modals/AuthModal';
 
-// Hermetic: không gọi backend thật (mô phỏng mất kết nối -> luồng offline dev/test)
+// Backend giả lập có kiểm soát (không gọi mạng thật). `backend.online = false` mô phỏng mất kết nối.
+const backend = vi.hoisted(() => ({ online: true, users: {} }));
+
 vi.mock('../services/api', () => {
-  const offline = () => Promise.reject(new Error('Network Error'));
-  return { default: { get: offline, post: offline, put: offline, patch: offline, delete: offline }, BASE_URL: '' };
+  const respondError = (status, message) => Promise.reject(
+    Object.assign(new Error(`Request failed with status code ${status}`), { response: { status, data: { message } } })
+  );
+  const authResponse = (user) => ({
+    success: true,
+    data: { accessToken: `access_${user.username}`, refreshToken: `refresh_${user.username}`, tokenType: 'Bearer', user }
+  });
+  const post = vi.fn((url, body) => {
+    if (!backend.online) return Promise.reject(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
+    if (url === '/auth/login') {
+      const u = backend.users[body.username];
+      if (!u || u.password !== body.password) return respondError(401, 'Tên đăng nhập hoặc mật khẩu không chính xác!');
+      return Promise.resolve(authResponse(u.profile));
+    }
+    if (url === '/auth/register') {
+      if (backend.users[body.username]) return respondError(409, 'Tên đăng nhập đã tồn tại trên hệ thống!');
+      const profile = { id: 99, username: body.username, fullName: body.fullName, phone: body.phone, roles: ['PATIENT'] };
+      backend.users[body.username] = { password: body.password, profile };
+      return Promise.resolve(authResponse(profile));
+    }
+    return Promise.reject(new Error(`unexpected ${url}`));
+  });
+  return { default: { get: vi.fn(), post, put: vi.fn(), patch: vi.fn(), delete: vi.fn() }, BASE_URL: '' };
 });
+
+const seedBackend = () => {
+  backend.online = true;
+  backend.users = {
+    admin: { password: 'Admin@123', profile: { id: 1, username: 'admin', fullName: 'Ban Giám Đốc', roles: ['ADMIN'] } },
+    benhnhan: { password: 'Password@123', profile: { id: 2, username: 'benhnhan', fullName: 'Trần Đức Minh', roles: ['PATIENT'] } }
+  };
+};
 
 describe('Authentication & Authorization Suite (Enterprise Grade)', () => {
   beforeEach(() => {
     localStorage.clear();
+    seedBackend();
   });
 
   it('should authenticate Admin user successfully with correct credentials', async () => {
@@ -23,9 +55,10 @@ describe('Authentication & Authorization Suite (Enterprise Grade)', () => {
     expect(res.success).toBe(true);
     expect(res.user.username).toBe('admin');
     expect(res.user.roles).toContain('ADMIN');
-    expect(res.token).toBeDefined();
+    expect(res.token).toBe('access_admin');
 
     expect(authService.getToken()).toBe(res.token);
+    expect(authService.getRefreshToken()).toBe('refresh_admin');
     expect(authService.getCurrentUser().username).toBe('admin');
   });
 
@@ -33,7 +66,6 @@ describe('Authentication & Authorization Suite (Enterprise Grade)', () => {
     const res = await authService.login('benhnhan', 'Password@123');
 
     expect(res.success).toBe(true);
-    expect(res.user.username).toBe('benhnhan');
     expect(res.user.roles).toContain('PATIENT');
   });
 
@@ -41,9 +73,25 @@ describe('Authentication & Authorization Suite (Enterprise Grade)', () => {
     await expect(authService.login('admin', 'WrongPass@999')).rejects.toThrow(
       'Tên đăng nhập hoặc mật khẩu không chính xác!'
     );
+    expect(authService.getToken()).toBeNull();
   });
 
-  it('should register a new patient account and persist in storage', async () => {
+  it('should NOT log in offline (no fake token) when the backend is unreachable', async () => {
+    backend.online = false;
+    await expect(authService.login('admin', 'Admin@123')).rejects.toThrow();
+    expect(authService.getToken()).toBeNull();
+    expect(authService.getCurrentUser()).toBeNull();
+  });
+
+  it('should NOT register offline when the backend is unreachable', async () => {
+    backend.online = false;
+    await expect(authService.register({
+      fullName: 'Bệnh Nhân', username: 'offline_user', phone: '0988776655', password: 'Password@123'
+    })).rejects.toThrow();
+    expect(authService.getToken()).toBeNull();
+  });
+
+  it('should register a new patient account and reject a duplicate username', async () => {
     const uniqueUsername = `testpatient_${Date.now()}`;
     const newUserData = {
       fullName: 'Bệnh Nhân Kiểm Thử',
@@ -57,9 +105,11 @@ describe('Authentication & Authorization Suite (Enterprise Grade)', () => {
     expect(res.success).toBe(true);
     expect(res.user.username).toBe(uniqueUsername);
     expect(res.user.roles).toContain('PATIENT');
+    expect(authService.getRefreshToken()).toBe(`refresh_${uniqueUsername}`);
+    // Mật khẩu không bao giờ được lưu vào trình duyệt
+    expect(JSON.stringify({ ...localStorage })).not.toContain('Password@123');
 
-    // Trying to register again with same username should be rejected
-    await expect(authService.register(newUserData)).rejects.toThrow();
+    await expect(authService.register(newUserData)).rejects.toThrow('Tên đăng nhập đã tồn tại');
   });
 
   it('should clear stored session and state upon logout', async () => {
@@ -113,6 +163,7 @@ describe('AuthModal UI', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    seedBackend();
   });
 
   afterEach(() => {
@@ -142,8 +193,36 @@ describe('AuthModal UI', () => {
     expect(screen.getByLabelText(/Mật khẩu/)).toHaveValue('Admin@123');
   });
 
+  it('shows usernames and passwords of the 6 demo accounts on the login form', () => {
+    renderAuthModal();
+
+    const expected = [
+      ['admin', 'Admin@123'], ['bs.maianh', 'Doctor@123'], ['ds.quang', 'Pharmacist@123'],
+      ['letan', 'Receptionist@123'], ['dieuduong', 'Nurse@123'], ['benhnhan', 'Password@123']
+    ];
+    expected.forEach(([user, pass]) => {
+      expect(screen.getAllByText(user).length).toBeGreaterThan(0);
+      expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === `${user} / ${pass}`)).toBeInTheDocument();
+    });
+    // Vai trò Kế toán đã gộp vào Lễ tân - Kế toán: không còn tài khoản demo riêng
+    expect(screen.queryByText(/ketoan|Accountant@123/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Lễ tân – Kế toán/)).toBeInTheDocument();
+  });
+
+  it('shows demo accounts in a production build when VITE_SHOW_DEMO_ACCOUNTS=true', () => {
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('VITE_SHOW_DEMO_ACCOUNTS', 'true');
+    renderAuthModal();
+
+    expect(screen.getByText('Tài khoản thử nghiệm')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Lễ tân – Kế toán/ }));
+    expect(screen.getByLabelText(/Tên đăng nhập/)).toHaveValue('letan');
+    expect(screen.getByLabelText(/Mật khẩu/)).toHaveValue('Receptionist@123');
+  });
+
   it('hides demo accounts and credentials when not in development (production build)', () => {
     vi.stubEnv('DEV', false);
+    vi.stubEnv('VITE_SHOW_DEMO_ACCOUNTS', 'false');
     expect(import.meta.env.DEV).toBe(false);
     renderAuthModal();
 

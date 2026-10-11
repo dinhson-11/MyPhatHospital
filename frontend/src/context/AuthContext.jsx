@@ -68,12 +68,12 @@ export const AuthProvider = ({ children }) => {
 
     const isAdmin = hasRole('ADMIN');
     const isDoctor = hasRole('DOCTOR') || isAdmin;
+    // RECEPTIONIST = "Lễ tân - Kế toán": tiếp đón, thu viện phí và xem báo cáo doanh thu
     const isReceptionist = hasRole('RECEPTIONIST') || isAdmin;
     const isNurse = hasRole('NURSE') || isAdmin;
     const isPharmacist = hasRole('PHARMACIST') || isAdmin;
-    const isAccountant = hasRole('ACCOUNTANT') || isAdmin;
     const isPatient = hasRole('PATIENT');
-    const isStaff = isAuthenticated && (isAdmin || isDoctor || isReceptionist || isNurse || isPharmacist || isAccountant);
+    const isStaff = isAuthenticated && (isAdmin || isDoctor || isReceptionist || isNurse || isPharmacist);
 
     return {
       user,
@@ -84,7 +84,6 @@ export const AuthProvider = ({ children }) => {
       isReceptionist,
       isNurse,
       isPharmacist,
-      isAccountant,
       isPatient,
       isStaff,
       hasRole,

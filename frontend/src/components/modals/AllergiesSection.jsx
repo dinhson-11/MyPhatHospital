@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../common/ConfirmDialog';
 import { patientService } from '../../services/patientService';
 
@@ -7,7 +8,8 @@ import { patientService } from '../../services/patientService';
  * AllergiesSection – danh sách dị ứng của bệnh nhân (thuốc, thức ăn, môi trường).
  * Dữ liệu này được bác sĩ dùng để cảnh báo khi kê đơn nên:
  *  - không tải được → hiển thị lỗi + Thử lại (không hiển thị "chưa ghi nhận dị ứng");
- *  - xóa dị ứng phải xác nhận.
+ *  - xóa dị ứng phải xác nhận;
+ *  - chỉ Bác sĩ/Điều dưỡng được xóa (backend trả 403 cho bệnh nhân) nên bệnh nhân không thấy nút xóa.
  */
 const SEVERITY_CONFIG = {
   SEVERE: { label: 'Nghiêm trọng', color: 'bg-red-50 text-red-900 border-red-300', dot: 'bg-red-600' },
@@ -15,8 +17,11 @@ const SEVERITY_CONFIG = {
   MILD: { label: 'Nhẹ', color: 'bg-sky-50 text-sky-900 border-sky-200', dot: 'bg-sky-500' }
 };
 
-export default function AllergiesSection({ patientId }) {
+export default function AllergiesSection({ patientId, canDelete }) {
   const { showToast } = useToast();
+  const { hasAnyRole } = useAuth();
+  // Mặc định theo vai trò đăng nhập; có thể ép bằng prop canDelete (dùng trong kiểm thử)
+  const deletable = canDelete ?? (typeof hasAnyRole === 'function' && hasAnyRole('DOCTOR', 'NURSE'));
   const confirm = useConfirm();
   const [state, setState] = useState({ status: 'idle', items: [], error: '' });
   const [showAddForm, setShowAddForm] = useState(false);
@@ -181,16 +186,18 @@ export default function AllergiesSection({ patientId }) {
                   </p>
                   {allergy.note && <p className="text-xs mt-0.5">{allergy.note}</p>}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(allergy)}
-                  disabled={Boolean(deletingId)}
-                  className="btn btn-ghost btn-sm btn-icon"
-                  aria-label={`Xóa dị ứng ${allergy.allergen}`}
-                  title="Xóa dị ứng"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">delete</span>
-                </button>
+                {deletable && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(allergy)}
+                    disabled={Boolean(deletingId)}
+                    className="btn btn-ghost btn-sm btn-icon"
+                    aria-label={`Xóa dị ứng ${allergy.allergen}`}
+                    title="Xóa dị ứng"
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete</span>
+                  </button>
+                )}
               </li>
             );
           })}

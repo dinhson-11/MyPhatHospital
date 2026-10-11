@@ -21,6 +21,9 @@ public class ChatSessionResponseDto {
 
     private Long patientId;
 
+    /** Mã truy cập phiên chat, chỉ có khi vừa tạo phiên; client gửi lại ở header X-Chat-Token. */
+    private String sessionToken;
+
     private String patientName;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

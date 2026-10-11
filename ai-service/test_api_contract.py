@@ -66,3 +66,11 @@ def test_prescription_safety_fields():
             "interactions", "allergy_alerts", "confidence_score", "disclaimer"} <= body.keys()
     assert body["has_critical"] is True
     assert body["allergy_alerts"][0]["reaction_type"] == "CROSS_REACTIVITY"
+
+
+def test_health_reports_status_and_ml_model():
+    """Health check báo UP và cho biết mô hình ML đã nạp chưa; lifespan (không còn on_event) khởi động được."""
+    with TestClient(app) as client:  # vào/ra lifespan
+        body = client.get("/health").json()
+    assert body["status"] == "UP"
+    assert isinstance(body["mlModelLoaded"], bool)

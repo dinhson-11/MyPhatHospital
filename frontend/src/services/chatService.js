@@ -27,6 +27,41 @@ export const HOSPITAL_HOTLINE_DISPLAY = '0789 065 493';
 const CHAT_TIMEOUT_MS = 8000;
 
 /**
+ * Mã truy cập phiên chat (backend cấp khi tạo phiên, gửi lại ở header X-Chat-Token).
+ * Khách chưa đăng nhập chỉ đọc/ghi được phiên của chính mình nhờ mã này; id phiên là số tăng dần nên không đủ để truy cập.
+ * Lưu trong sessionStorage (mất khi đóng tab) – không dùng localStorage để mã không tồn tại lâu trên máy dùng chung.
+ */
+const CHAT_TOKEN_HEADER = 'X-Chat-Token';
+const CHAT_TOKEN_STORAGE_KEY = 'hms_chat_tokens';
+
+function loadChatTokens() {
+  try {
+    return JSON.parse(sessionStorage.getItem(CHAT_TOKEN_STORAGE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+const chatTokens = loadChatTokens();
+
+/** Ghi nhớ mã truy cập của một phiên chat (nếu backend có trả về). */
+export function rememberChatToken(sessionId, token) {
+  if (!sessionId || !token) return;
+  chatTokens[sessionId] = token;
+  try {
+    sessionStorage.setItem(CHAT_TOKEN_STORAGE_KEY, JSON.stringify(chatTokens));
+  } catch {
+    // sessionStorage không dùng được (chế độ riêng tư...) – vẫn giữ mã trong bộ nhớ trang
+  }
+}
+
+/** Header kèm mã truy cập cho phiên chat (rỗng nếu chưa có mã). */
+export function chatTokenHeaders(sessionId) {
+  const token = sessionId ? chatTokens[sessionId] : null;
+  return token ? { [CHAT_TOKEN_HEADER]: token } : {};
+}
+
+/**
  * Cụm từ cờ đỏ cho bộ luật cục bộ (đồng bộ một phần với AI Service).
  * Chỉ gồm các cụm tự thân đã là dấu hiệu nguy hiểm – không dùng "đau ngực"/"khó thở" đơn lẻ.
  */
@@ -113,12 +148,13 @@ export const chatService = {
           sessionId: sessionId ? Number(sessionId) : null,
           patientId: patientId ? Number(patientId) : null,
         },
-        { timeout: CHAT_TIMEOUT_MS }
+        { timeout: CHAT_TIMEOUT_MS, headers: chatTokenHeaders(sessionId) }
       );
 
       // apiClient trả về body ApiResponse { success, message, data } – nội dung chat nằm trong data
       const data = res?.data && typeof res.data === 'object' ? res.data : res;
       if (data && (data.message || data.reply)) {
+        rememberChatToken(data.sessionId, data.sessionToken);
         return { ...mapServerMessage(data, sessionId), sender: 'ai', source: 'api' };
       }
     } catch {
@@ -135,7 +171,9 @@ export const chatService = {
     try {
       const url = patientId ? `/chat/sessions?patientId=${patientId}` : '/chat/sessions';
       const res = await apiClient.post(url, {}, { timeout: CHAT_TIMEOUT_MS });
-      return res.data || res;
+      const session = res.data || res;
+      rememberChatToken(session?.id, session?.sessionToken);
+      return session;
     } catch {
       // Fallback
     }
@@ -152,7 +190,10 @@ export const chatService = {
    */
   async getSessionMessages(sessionId) {
     try {
-      const res = await apiClient.get(`/chat/sessions/${sessionId}/messages`, { timeout: CHAT_TIMEOUT_MS });
+      const res = await apiClient.get(`/chat/sessions/${sessionId}/messages`, {
+        timeout: CHAT_TIMEOUT_MS,
+        headers: chatTokenHeaders(sessionId),
+      });
       const list = Array.isArray(res?.data) ? res.data : res;
       return (Array.isArray(list) ? list : []).map(item => mapServerMessage(item, sessionId));
     } catch {

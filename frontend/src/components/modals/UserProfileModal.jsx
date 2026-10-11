@@ -8,8 +8,7 @@ const ROLE_LABELS = {
   DOCTOR: 'Bác sĩ',
   NURSE: 'Điều dưỡng',
   PHARMACIST: 'Dược sĩ',
-  RECEPTIONIST: 'Lễ tân',
-  ACCOUNTANT: 'Kế toán',
+  RECEPTIONIST: 'Lễ tân - Kế toán',
   PATIENT: 'Bệnh nhân'
 };
 
@@ -27,8 +26,8 @@ function InfoRow({ label, children }) {
   );
 }
 
-export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, onOpenPatientProfile }) {
-  const { user, logout } = useAuth();
+export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, onOpenPatientProfile, onOpenMyInvoices }) {
+  const { user, logout, isStaff } = useAuth();
   const { showToast } = useToast();
 
   const handleLogout = () => {
@@ -108,6 +107,20 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, 
               <span className="material-symbols-outlined" aria-hidden="true">event_note</span>
               Xem lịch khám của tôi
             </button>
+
+            {!isStaff && onOpenMyInvoices && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenMyInvoices();
+                }}
+                className="btn btn-secondary btn-block"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                Hóa đơn của tôi
+              </button>
+            )}
 
             <button
               type="button"

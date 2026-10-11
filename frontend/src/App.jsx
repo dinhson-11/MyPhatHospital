@@ -18,6 +18,7 @@ import HospitalMapSection from './components/home/HospitalMapSection';
 import AuthModal from './components/modals/AuthModal';
 import BookingModal from './components/modals/BookingModal';
 import MyAppointmentsModal from './components/modals/MyAppointmentsModal';
+import MyInvoicesModal from './components/billing/MyInvoicesModal';
 import AllDepartmentsModal from './components/modals/AllDepartmentsModal';
 import AboutModal from './components/modals/AboutModal';
 import ContactModal from './components/modals/ContactModal';
@@ -39,7 +40,7 @@ import { getCatalogStatus, getCatalogVersion, subscribeCatalog } from './service
 /** Phân hệ nghiệp vụ của nhân viên – chứa dữ liệu bệnh nhân/tài chính, chỉ mở khi đăng nhập đúng vai trò. */
 const STAFF_MODULES = ['reception', 'nurse', 'clinical', 'pharmacy', 'invoice', 'reports', 'schedule', 'admin'];
 /** Cửa sổ chỉ dành cho người đã đăng nhập – đóng toàn bộ khi đăng xuất / hết phiên / đổi tài khoản. */
-const AUTH_ONLY_MODALS = new Set([...STAFF_MODULES, 'profile', 'patientProfile']);
+const AUTH_ONLY_MODALS = new Set([...STAFF_MODULES, 'profile', 'patientProfile', 'myInvoices']);
 
 let modalSeq = 0;
 
@@ -87,7 +88,6 @@ function MainApp() {
     isReceptionist,
     isNurse,
     isPharmacist,
-    isAccountant,
     isAdmin
   } = useAuth();
 
@@ -106,12 +106,13 @@ function MainApp() {
     nurse: isAuthenticated && isNurse,
     clinical: isAuthenticated && isDoctor,
     pharmacy: isAuthenticated && isPharmacist,
-    invoice: isAuthenticated && isAccountant,
-    reports: isAuthenticated && (isAccountant || isAdmin),
+    invoice: isAuthenticated && isReceptionist,
+    reports: isAuthenticated && isReceptionist,
     schedule: isStaff,
     admin: isAuthenticated && isAdmin,
     profile: isAuthenticated,
-    patientProfile: isAuthenticated
+    patientProfile: isAuthenticated,
+    myInvoices: isAuthenticated
   };
   const isOpen = (name) => Boolean(modals[name]) && (access[name] ?? true);
 
@@ -159,7 +160,8 @@ function MainApp() {
     onOpenSchedule: handleOpenSchedule,
     onOpenAdmin: () => openModal('admin'),
     onOpenProfile: () => openModal('profile'),
-    onOpenPatientProfile: () => openModal('patientProfile')
+    onOpenPatientProfile: () => openModal('patientProfile'),
+    onOpenMyInvoices: () => openModal('myInvoices')
   };
 
   // Phân hệ đang mở trên cùng → làm nổi mục tương ứng ở thanh bên của workspace
@@ -295,12 +297,15 @@ function MainApp() {
         onClose={() => closeModal('profile')}
         onOpenAppointments={() => openModal('appointments')}
         onOpenPatientProfile={() => openModal('patientProfile')}
+        onOpenMyInvoices={() => openModal('myInvoices')}
       />
 
       <PatientProfileModal
         isOpen={isOpen('patientProfile')}
         onClose={() => closeModal('patientProfile')}
       />
+
+      <MyInvoicesModal isOpen={isOpen('myInvoices')} onClose={() => closeModal('myInvoices')} />
 
       {/* ===== Phân hệ nhân viên – chỉ render khi đúng vai trò ===== */}
       {access.admin && (

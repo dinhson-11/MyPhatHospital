@@ -18,4 +18,7 @@ public interface DispenseRepository extends JpaRepository<Dispense, Long> {
     boolean existsByPrescriptionId(Long prescriptionId);
 
     List<Dispense> findAllByOrderByDispensedAtDesc();
+
+    /** Các lượt cấp phát gần nhất (giới hạn bằng Pageable). */
+    org.springframework.data.domain.Page<Dispense> findAllByOrderByDispensedAtDesc(org.springframework.data.domain.Pageable pageable);
 }

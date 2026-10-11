@@ -33,7 +33,7 @@ public class SecurityService {
 
     private static final String ROLE_PREFIX = "ROLE_";
     private static final Set<String> STAFF_AUTHORITIES = Set.of(
-            "ROLE_ADMIN", "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_RECEPTIONIST", "ROLE_PHARMACIST", "ROLE_ACCOUNTANT");
+            "ROLE_ADMIN", "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_RECEPTIONIST", "ROLE_PHARMACIST");
 
     private final PatientRepository patientRepository;
     private final AppointmentRepository appointmentRepository;

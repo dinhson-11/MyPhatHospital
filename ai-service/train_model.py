@@ -121,6 +121,38 @@ TRAINING_DATA = [
 ]
 
 
+def build_pipeline():
+    """Pipeline TF-IDF n-gram + Naive Bayes dùng chung cho đánh giá và huấn luyện chính thức."""
+    return Pipeline([
+        ('tfidf', TfidfVectorizer(ngram_range=(1, 2), lowercase=True, sublinear_tf=True, min_df=1)),
+        ('clf', MultinomialNB(alpha=0.1))
+    ])
+
+
+def cross_validated_accuracy(data=None, max_splits=5):
+    """
+    Độ chính xác ĐÁNH GIÁ ĐỘC LẬP: k-fold phân tầng, mỗi mẫu chỉ được dự đoán bởi mô hình chưa từng thấy nó.
+    (Độ chính xác đo trên chính tập huấn luyện luôn gần 100% và không phản ánh chất lượng thật.)
+    Trả về {"accuracy": float, "folds": int, "per_class": {nhãn: recall}}.
+    """
+    from collections import Counter
+    from sklearn.model_selection import StratifiedKFold, cross_val_predict
+
+    data = data or TRAINING_DATA
+    texts = [item[0] for item in data]
+    labels = [item[1] for item in data]
+    folds = min(max_splits, min(Counter(labels).values()))
+    if folds < 2:
+        raise ValueError("Mỗi nhãn cần ít nhất 2 mẫu để đánh giá chéo.")
+    preds = cross_val_predict(build_pipeline(), texts, labels,
+                              cv=StratifiedKFold(n_splits=folds, shuffle=True, random_state=42))
+    per_class = {}
+    for label in sorted(set(labels)):
+        idx = [i for i, y in enumerate(labels) if y == label]
+        per_class[label] = sum(1 for i in idx if preds[i] == label) / len(idx)
+    return {"accuracy": float(accuracy_score(labels, preds)), "folds": folds, "per_class": per_class}
+
+
 def train_and_save_model(output_path: str = None):
     """Huấn luyện mô hình phân loại điều hướng chuyên khoa và lưu lại."""
     if output_path is None:
@@ -135,21 +167,17 @@ def train_and_save_model(output_path: str = None):
     print(f"📊 Bắt đầu huấn luyện mô hình với {len(TRAINING_DATA)} ca lâm sàng...")
 
     # Pipeline TF-IDF n-gram + Logistic Regression đa lớp
-    pipeline = Pipeline([
-        ('tfidf', TfidfVectorizer(
-            ngram_range=(1, 2),
-            lowercase=True,
-            sublinear_tf=True,
-            min_df=1
-        )),
-        ('clf', MultinomialNB(alpha=0.1))
-    ])
+    pipeline = build_pipeline()
 
     pipeline.fit(texts, labels)
     preds = pipeline.predict(texts)
     acc = accuracy_score(labels, preds)
+    cv = cross_validated_accuracy()
 
-    print(f"✅ Độ chính xác trên tập dữ liệu lâm sàng: {acc * 100:.2f}%")
+    print(f"ℹ️  Độ chính xác trên chính tập huấn luyện (không phản ánh chất lượng thật): {acc * 100:.2f}%")
+    print(f"✅ Độ chính xác đánh giá chéo {cv['folds']}-fold (độc lập): {cv['accuracy'] * 100:.2f}%")
+    for label, recall in cv["per_class"].items():
+        print(f"   - nhãn {label}: {recall * 100:.0f}%")
 
     # Lưu metadata tên chuyên khoa
     id_to_name = {item[1]: item[2] for item in TRAINING_DATA}
@@ -157,7 +185,9 @@ def train_and_save_model(output_path: str = None):
         "pipeline": pipeline,
         "id_to_name": id_to_name,
         "version": "2.0.0-sprint8-triage",
-        "accuracy": acc
+        "accuracy": acc,
+        "train_accuracy": acc,
+        "cv_accuracy": cv["accuracy"]
     }
 
     joblib.dump(model_artifact, output_path)

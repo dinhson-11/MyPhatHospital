@@ -41,9 +41,25 @@ UPDATE invoices
    SET invoice_code = CONCAT('HD', DATE_FORMAT(COALESCE(created_at, NOW()), '%y%m%d'), LPAD(id, 6, '0'))
  WHERE invoice_code IS NULL;
 
--- Hủy các hóa đơn PENDING trùng ca khám (giữ hóa đơn mới nhất) trước khi thêm ràng buộc
+-- Mỗi ca khám chỉ giữ MỘT hóa đơn còn hiệu lực trước khi thêm ràng buộc:
+--   * ưu tiên hóa đơn ĐÃ THU (PAID, id nhỏ nhất); nếu chưa có hóa đơn nào đã thu thì giữ PENDING mới nhất.
+--   * hóa đơn PAID thừa (thu trùng) KHÔNG bị xóa: chuyển CANCELLED kèm lý do để kế toán đối soát/hoàn tiền thủ công.
 UPDATE invoices i
-  JOIN (SELECT visit_id, MAX(id) AS keep_id
+  JOIN (SELECT visit_id,
+               COALESCE(MIN(CASE WHEN status = 'PAID' THEN id END), MAX(id)) AS keep_id
+          FROM invoices
+         WHERE status IN ('PENDING', 'PAID')
+         GROUP BY visit_id
+        HAVING COUNT(*) > 1) d ON d.visit_id = i.visit_id
+   SET i.void_reason = 'Thu trùng ca khám - cần đối soát, hoàn tiền thủ công (tự động hủy khi nâng cấp V20)',
+       i.voided_at = NOW(),
+       i.voided_by = 'SYSTEM',
+       i.status = 'CANCELLED'
+ WHERE i.status = 'PAID' AND i.id <> d.keep_id;
+
+UPDATE invoices i
+  JOIN (SELECT visit_id,
+               COALESCE(MIN(CASE WHEN status = 'PAID' THEN id END), MAX(id)) AS keep_id
           FROM invoices
          WHERE status IN ('PENDING', 'PAID')
          GROUP BY visit_id

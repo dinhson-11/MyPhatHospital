@@ -7,6 +7,8 @@ import com.hospital.hmsai.auth.dto.RegisterRequest;
 import com.hospital.hmsai.auth.service.impl.AuthServiceImpl;
 import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.DuplicateResourceException;
+import com.hospital.hmsai.patient.entity.Patient;
+import com.hospital.hmsai.patient.repository.PatientRepository;
 import com.hospital.hmsai.security.JwtService;
 import com.hospital.hmsai.user.entity.Role;
 import com.hospital.hmsai.user.entity.User;
@@ -58,6 +60,9 @@ class AuthServiceTest {
 
     @Mock
     private AuthenticationManager authenticationManager;
+
+    @Mock
+    private PatientRepository patientRepository;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -115,6 +120,40 @@ class AuthServiceTest {
 
             verify(userRepository).save(any(User.class));
             verify(passwordEncoder).encode("Password1");
+        }
+
+        @Test
+        @DisplayName("Đăng ký tự tạo hồ sơ bệnh nhân liên kết với tài khoản mới")
+        void register_CreatesLinkedPatientProfile() {
+            RegisterRequest request = RegisterRequest.builder()
+                    .username("lethib")
+                    .password("Password1")
+                    .fullName("Lê Thị B")
+                    .phone("0912345678")
+                    .build();
+
+            when(userRepository.existsByUsername("lethib")).thenReturn(false);
+            when(roleRepository.findByCode("PATIENT")).thenReturn(Optional.of(patientRole));
+            when(passwordEncoder.encode("Password1")).thenReturn("hash");
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                u.setId(5L);
+                return u;
+            });
+            when(patientRepository.existsByPatientCode(anyString())).thenReturn(false);
+            when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(jwtService.generateToken(any())).thenReturn("a");
+            when(jwtService.generateRefreshToken(any())).thenReturn("r");
+
+            authService.register(request);
+
+            org.mockito.ArgumentCaptor<Patient> captor = org.mockito.ArgumentCaptor.forClass(Patient.class);
+            verify(patientRepository).save(captor.capture());
+            Patient created = captor.getValue();
+            assertEquals(5L, created.getUser().getId());
+            assertEquals("Lê Thị B", created.getFullName());
+            assertEquals("0912345678", created.getPhone());
+            assertTrue(created.getPatientCode().startsWith("BN-"));
         }
 
         @Test

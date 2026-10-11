@@ -59,9 +59,9 @@ class BillingSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "ketoan", roles = {"ACCOUNTANT"})
-    @DisplayName("BILL-SEC-03: Kế toán không được hoàn tiền (chỉ Quản trị viên)")
-    void accountantCannotRefund() throws Exception {
+    @WithMockUser(username = "letan", roles = {"RECEPTIONIST"})
+    @DisplayName("BILL-SEC-03: Lễ tân - Kế toán không được hoàn tiền (chỉ Quản trị viên)")
+    void receptionistCannotRefund() throws Exception {
         mockMvc.perform(patch("/api/v1/invoices/1/refund")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"Thu trùng hai lần\"}"))
@@ -83,7 +83,7 @@ class BillingSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "ketoan", roles = {"ACCOUNTANT"})
+    @WithMockUser(username = "letan", roles = {"RECEPTIONIST"})
     @DisplayName("BILL-SEC-05: Hủy hóa đơn bắt buộc có lý do")
     void cancelRequiresReason() throws Exception {
         mockMvc.perform(patch("/api/v1/invoices/1/cancel")
@@ -94,7 +94,7 @@ class BillingSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "ketoan", roles = {"ACCOUNTANT"})
+    @WithMockUser(username = "letan", roles = {"RECEPTIONIST"})
     @DisplayName("BILL-SEC-06: Phương thức thanh toán không hợp lệ trả 400 thay vì 500")
     void invalidPaymentMethodReturns400() throws Exception {
         mockMvc.perform(put("/api/v1/invoices/1/pay")
@@ -105,7 +105,7 @@ class BillingSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "ketoan", roles = {"ACCOUNTANT"})
+    @WithMockUser(username = "letan", roles = {"RECEPTIONIST"})
     @DisplayName("BILL-SEC-07: Mã giao dịch chứa ký tự lạ bị từ chối")
     void invalidTransactionCodeRejected() throws Exception {
         mockMvc.perform(put("/api/v1/invoices/1/pay")
@@ -115,9 +115,9 @@ class BillingSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "ketoan", roles = {"ACCOUNTANT"})
-    @DisplayName("BILL-SEC-08: Kế toán xem được tổng hợp đối soát ca")
-    void accountantCanViewShiftSummary() throws Exception {
+    @WithMockUser(username = "letan", roles = {"RECEPTIONIST"})
+    @DisplayName("BILL-SEC-08: Lễ tân - Kế toán xem được tổng hợp đối soát ca")
+    void receptionistCanViewShiftSummary() throws Exception {
         when(invoiceService.getShiftSummary(any())).thenReturn(BillingShiftSummaryResponse.builder().paidCount(3).build());
 
         mockMvc.perform(get("/api/v1/invoices/summary").param("date", "2026-10-10"))

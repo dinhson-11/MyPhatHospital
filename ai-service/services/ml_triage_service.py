@@ -85,6 +85,7 @@ def _build_metadata() -> Dict[int, Dict[str, Any]]:
         dept_id = ML_LABEL_TO_DEPT[label]
         dept_name = department_name(dept_id)
         result[label] = {
+            "label": label,
             "dept_id": dept_id,
             "dept_name": dept_name,
             "doctor_name": doctor_name(dept_id),

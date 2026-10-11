@@ -17,6 +17,7 @@
    cp .env.example .env
    # Mở .env và điền JWT_SECRET, MYSQL_PASSWORD thật
    ```
+   Chọn nguồn cơ sở dữ liệu trong `.env`: giữ `COMPOSE_PROFILES=local-db` để chạy MySQL đóng gói trong Docker, hoặc bỏ dòng đó và đặt `MYSQL_HOST/MYSQL_PORT/MYSQL_DB` để dùng **MySQL thật** (xem phần "Cơ sở dữ liệu thật" bên dưới).
 
 3. **Kiểm tra không có secret bị commit**:
    ```bash
@@ -39,8 +40,10 @@
 # 4. Add MySQL service từ Railway marketplace
 # 5. Cấu hình Environment Variables trong Railway dashboard:
 #    JWT_SECRET = <generated>
+#    MYSQL_HOST / MYSQL_PORT / MYSQL_DB = <từ Railway MySQL>   (KHÔNG đặt COMPOSE_PROFILES)
 #    MYSQL_USER = <từ Railway MySQL>
 #    MYSQL_PASSWORD = <từ Railway MySQL>
+#    MYSQL_SSL_MODE = REQUIRED
 #    VITE_API_BASE_URL = https://<your-backend>.railway.app/api/v1
 ```
 
@@ -89,6 +92,7 @@ fly launch --name myphat-frontend --dockerfile Dockerfile
 # Set secrets
 fly secrets set JWT_SECRET=<your-secret> --app myphat-backend
 fly secrets set MYSQL_PASSWORD=<your-password> --app myphat-backend
+fly secrets set MYSQL_HOST=<host> MYSQL_PORT=3306 MYSQL_DB=hmsai_db MYSQL_USER=<user> MYSQL_SSL_MODE=REQUIRED --app myphat-backend
 ```
 
 ---
@@ -106,11 +110,11 @@ nano .env                          # Điền secrets thật
 openssl rand -base64 32
 
 # Chạy toàn bộ hệ thống
-docker-compose up -d --build
+docker compose up -d --build
 
 # Kiểm tra
-docker-compose ps
-docker-compose logs -f backend
+docker compose ps
+docker compose logs -f backend
 ```
 
 **Cấu hình Nginx reverse proxy** (nếu muốn HTTPS):
@@ -131,12 +135,42 @@ server {
 
 ---
 
+## 🗄️ Cơ sở dữ liệu thật
+
+Backend (profile `prod` trong Docker) đọc kết nối từ biến môi trường, không đặt cứng trong mã:
+
+| Biến | Ý nghĩa | Mặc định |
+|------|---------|----------|
+| `MYSQL_HOST` | Máy chủ MySQL | `mysql` (container đóng gói) |
+| `MYSQL_PORT` | Cổng | `3306` |
+| `MYSQL_DB` | Tên database | `hmsai_db` |
+| `MYSQL_USER` / `MYSQL_PASSWORD` | Tài khoản ứng dụng | `hmsai_user` / (đặt trong `.env`) |
+| `MYSQL_SSL_MODE` | `DISABLED`, `PREFERRED`, `REQUIRED`, `VERIFY_CA`, `VERIFY_IDENTITY` | `PREFERRED` |
+
+Các bước dùng DB thật:
+
+1. Trên MySQL 8 thật, chạy [`scripts/db/01_create_database.sql`](scripts/db/01_create_database.sql) bằng tài khoản root (sau khi thay mật khẩu) để tạo `hmsai_db` và tài khoản `hmsai_user` (host `%` và `localhost`).
+2. Trong `.env`: xóa/chú thích `COMPOSE_PROFILES=local-db`, đặt `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DB`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_SSL_MODE`.
+   - MySQL cài trên **chính máy chạy Docker**: `MYSQL_HOST=host.docker.internal`. Không dùng `localhost` vì trong container đó là chính container backend.
+   - MySQL trên máy khác hoặc dịch vụ cloud: dùng tên miền/IP, mở cổng 3306 cho máy chủ ứng dụng và dùng `MYSQL_SSL_MODE=REQUIRED`.
+3. `docker compose up -d --build`. Flyway tự tạo schema (V1 → V23) ở lần chạy đầu và chỉ chạy phần còn thiếu ở các lần sau.
+4. Chạy [`scripts/db/02_lock_demo_accounts.sql`](scripts/db/02_lock_demo_accounts.sql) để đổi mật khẩu `admin` và khóa các tài khoản mẫu (mật khẩu của chúng công khai trong README).
+5. **Sao lưu định kỳ** bằng `mysqldump --single-transaction hmsai_db > backup.sql`, và luôn sao lưu trước khi nâng cấp phiên bản vì các migration có thể sửa dữ liệu.
+
+> Flyway chỉ nên trỏ vào database trống hoặc database đã do Flyway quản lý. Nếu DB đã chạy bản V20 cũ và báo `checksum mismatch`, chạy `flyway repair` rồi khởi động lại.
+
+---
+
 ## 📋 Checklist trước khi push GitHub
 
 - [ ] `.env` KHÔNG có trong `git status`
 - [ ] `JWT_SECRET` trong `.env.example` là placeholder, không phải secret thật
 - [ ] `application-prod.yml` không có secret hardcoded
 - [ ] `docker-compose.yml` không có secret hardcoded
+- [ ] Trước khi dùng DB thật: đã chạy `scripts/db/02_lock_demo_accounts.sql` (khóa tài khoản mẫu)
+- [ ] `CORS_ALLOWED_ORIGINS` chỉ gồm địa chỉ thật của giao diện web (mặc định chỉ có localhost); không dùng `*`
+- [ ] Cân nhắc `SWAGGER_ENABLED=false` để không công khai tài liệu API
+- [ ] Trước khi dùng DB thật: `VITE_SHOW_DEMO_ACCOUNTS=false` trong `.env` rồi build lại frontend (`docker compose up -d --build frontend`) để form đăng nhập không hiển thị tài khoản demo
 - [ ] `node_modules/` và `target/` không được tracked
 - [ ] `*.joblib` (ML model) không được tracked
 

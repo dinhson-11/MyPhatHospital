@@ -98,8 +98,8 @@ export default function StaffScheduleModal({
   initialDeptId = '',
   initialStaffId = ''
 }) {
-  const { isAdmin, isAuthenticated, isDoctor, isReceptionist, isNurse, isPharmacist, isAccountant } = useAuth();
-  const canView = isAuthenticated && (isAdmin || isDoctor || isReceptionist || isNurse || isPharmacist || isAccountant);
+  const { isAdmin, isAuthenticated, isDoctor, isReceptionist, isNurse, isPharmacist } = useAuth();
+  const canView = isAuthenticated && (isAdmin || isDoctor || isReceptionist || isNurse || isPharmacist);
   const active = Boolean(isOpen && canView);
   const confirm = useConfirm();
 

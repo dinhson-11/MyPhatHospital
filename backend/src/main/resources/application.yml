@@ -51,16 +51,34 @@ billing:
     account-no: ${VIETQR_ACCOUNT_NO:}
     account-name: ${VIETQR_ACCOUNT_NAME:}
     template: compact2
-    demo: false
+    # true = hiển thị cảnh báo "tài khoản DEMO, không chuyển tiền thật" (chỉ dùng với tài khoản giả)
+    demo: ${VIETQR_DEMO:false}
 
-# Swagger / OpenAPI
+# Nguồn (origin) giao diện web được phép gọi API từ trình duyệt (CORS), phân tách bằng dấu phẩy
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}
+
+# Swagger / OpenAPI (SWAGGER_ENABLED=false để tắt hẳn tài liệu API công khai trên môi trường thật)
 springdoc:
   api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
     path: /v3/api-docs
   swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
     path: /swagger-ui.html
     tags-sorter: alpha
     operations-sorter: alpha
+
+# Actuator: chỉ mở /actuator/health (trạng thái UP/DOWN, không lộ chi tiết) cho healthcheck của Docker
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 # Server
 server:

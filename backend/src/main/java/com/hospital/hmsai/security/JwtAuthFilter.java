@@ -53,8 +53,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                // 4. Validate token
-                if (jwtService.isTokenValid(jwt, userDetails)) {
+                // 4. Validate token. Tài khoản đã bị khóa thì token đã cấp cũng mất hiệu lực ngay
+                //    (không phải chờ hết hạn, tối đa 30 phút).
+                if (userDetails.isEnabled() && userDetails.isAccountNonLocked()
+                        && jwtService.isTokenValid(jwt, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
                             userDetails,

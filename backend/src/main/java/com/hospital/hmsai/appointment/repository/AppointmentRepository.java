@@ -110,4 +110,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
      * Đếm lịch hẹn theo trạng thái (thống kê).
      */
     long countByStatus(AppointmentStatus status);
+
+    /** Đếm lịch hẹn có giờ hẹn trong khoảng [from, to] và trạng thái khác {@code excluded} (KPI "lịch hẹn hôm nay"). */
+    long countByScheduledAtBetweenAndStatusNot(LocalDateTime from, LocalDateTime to, AppointmentStatus excluded);
 }

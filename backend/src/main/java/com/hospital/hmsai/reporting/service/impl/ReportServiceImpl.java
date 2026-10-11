@@ -20,6 +20,7 @@ import com.hospital.hmsai.reporting.service.ReportService;
 import com.hospital.hmsai.user.repository.StaffProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -156,22 +157,18 @@ public class ReportServiceImpl implements ReportService {
         int max = limit > 0 ? limit : 5;
         log.info("Lấy top {} bệnh lý chẩn đoán phổ biến", max);
 
-        List<Visit> visits = visitRepository.findAllWithDiagnosis();
-        if (visits.isEmpty()) {
+        long totalWithDiagnosis = visitRepository.countWithDiagnosis();
+        if (totalWithDiagnosis == 0) {
             return Collections.emptyList();
         }
 
-        long totalWithDiagnosis = visits.size();
-
-        Map<String, List<Visit>> groupedByCode = visits.stream()
-                .collect(Collectors.groupingBy(Visit::getDiagnosisCode));
-
-        return groupedByCode.entrySet().stream()
-                .map(entry -> {
-                    String code = entry.getKey();
-                    List<Visit> list = entry.getValue();
-                    String diseaseName = list.get(0).getDiagnosisNote() != null ? list.get(0).getDiagnosisNote() : code;
-                    long count = list.size();
+        // GROUP BY + LIMIT trong DB: không nạp toàn bộ ca khám có chẩn đoán vào bộ nhớ
+        return visitRepository.findTopDiagnosisCounts(PageRequest.of(0, max)).stream()
+                .map(row -> {
+                    String code = row.getCode();
+                    List<String> notes = visitRepository.findLatestNotesByDiagnosisCode(code, PageRequest.of(0, 1));
+                    String diseaseName = notes.isEmpty() || notes.get(0).isBlank() ? code : notes.get(0);
+                    long count = row.getCnt();
                     double percentage = Math.round((count * 100.0 / totalWithDiagnosis) * 10.0) / 10.0;
 
                     return TopDiagnosisResponse.builder()
@@ -181,8 +178,6 @@ public class ReportServiceImpl implements ReportService {
                             .percentage(percentage)
                             .build();
                 })
-                .sorted(Comparator.comparingLong(TopDiagnosisResponse::getCount).reversed())
-                .limit(max)
                 .collect(Collectors.toList());
     }
 
@@ -199,12 +194,11 @@ public class ReportServiceImpl implements ReportService {
 
         List<Invoice> todayPaidInvoices = invoiceRepository.findByStatusAndPaidAtBetween(
                 InvoiceStatus.PAID, todayStart, todayEnd);
-        BigDecimal todayRevenue = todayPaidInvoices.stream()
-                .map(Invoice::getTotalAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Doanh thu hôm nay = tiền thực thu từ người bệnh (không gồm phần BHYT), khớp "thực thu" của báo cáo doanh thu
+        BigDecimal todayRevenue = sum(todayPaidInvoices, Invoice::getPatientAmount);
 
-        long todayAppointments = appointmentRepository.count();
+        long todayAppointments = appointmentRepository.countByScheduledAtBetweenAndStatusNot(
+                todayStart, todayEnd, AppointmentStatus.CANCELLED);
         long activeStaffCount = staffProfileRepository.count();
         long lowStockDrugsCount = drugRepository.findByStockQuantityLessThanEqualOrderByStockQuantityAsc(20).size();
         long aiAlertsCount = aiClinicalSuggestionRepository.count();

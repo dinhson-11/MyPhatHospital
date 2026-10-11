@@ -16,5 +16,6 @@ public interface DispenseService {
 
     boolean isDispensed(Long prescriptionId);
 
-    List<DispenseResponse> getAllDispenses();
+    /** Lịch sử cấp phát gần nhất, tối đa {@code limit} dòng (giới hạn trần ở tầng dịch vụ). */
+    List<DispenseResponse> getAllDispenses(int limit);
 }

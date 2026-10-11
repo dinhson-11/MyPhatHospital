@@ -3,7 +3,8 @@
 # =============================================
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/hmsai_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh}
+    # Mặc định nối MySQL trên máy (localhost:3306). Đổi bằng MYSQL_HOST/MYSQL_PORT/MYSQL_DB hoặc đặt cả SPRING_DATASOURCE_URL.
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:hmsai_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh}
     username: ${MYSQL_USER:hmsai_user}
     password: ${MYSQL_PASSWORD:hmsai_password}
     driver-class-name: com.mysql.cj.jdbc.Driver

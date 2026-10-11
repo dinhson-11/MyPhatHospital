@@ -268,4 +268,21 @@ class DispenseServiceImplTest {
         assertTrue(dispenseService.isDispensed(50L));
         assertFalse(dispenseService.isDispensed(51L));
     }
+
+    @Test
+    @DisplayName("Lịch sử cấp phát chỉ lấy tối đa 200 dòng gần nhất (tối thiểu 1), không trả toàn bộ bảng")
+    void testGetAllDispenses_limitIsClamped() {
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(dispenseRepository.findAllByOrderByDispensedAtDesc(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+        assertTrue(dispenseService.getAllDispenses(50_000).isEmpty());
+        verify(dispenseRepository).findAllByOrderByDispensedAtDesc(page.capture());
+        assertEquals(200, page.getValue().getPageSize());
+
+        dispenseService.getAllDispenses(-3);
+        verify(dispenseRepository, times(2)).findAllByOrderByDispensedAtDesc(page.capture());
+        assertEquals(1, page.getValue().getPageSize());
+    }
 }

@@ -6,6 +6,7 @@ import com.hospital.hmsai.ai.entity.AiClinicalSuggestion;
 import com.hospital.hmsai.ai.entity.AiSuggestionType;
 import com.hospital.hmsai.ai.repository.AiClinicalSuggestionRepository;
 import com.hospital.hmsai.ai.service.AiClinicalService;
+import com.hospital.hmsai.clinical.dto.VitalSignsDto;
 import com.hospital.hmsai.clinical.entity.Visit;
 import com.hospital.hmsai.clinical.repository.VisitRepository;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
@@ -29,6 +30,7 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.normalize;
+import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.containsAny;
 import static com.hospital.hmsai.ai.util.VietnameseTextMatcher.stripDiacritics;
 
 @Service
@@ -553,6 +555,7 @@ public class AiClinicalServiceImpl implements AiClinicalService {
             if (request.getPatientAge() != null) payload.put("patient_age", request.getPatientAge());
             if (request.getPatientGender() != null) payload.put("patient_gender", request.getPatientGender());
             if (request.getMedicalHistory() != null) payload.put("medical_history", request.getMedicalHistory());
+            if (request.getVitalSigns() != null) payload.put("vital_signs", request.getVitalSigns());
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
             DiagnosisSuggestionResponse response = restTemplate.postForObject(url, entity, DiagnosisSuggestionResponse.class);
@@ -564,7 +567,7 @@ public class AiClinicalServiceImpl implements AiClinicalService {
         }
 
         // Fallback local
-        return fallbackSuggestDiagnosis(request.getSymptoms());
+        return fallbackSuggestDiagnosis(request.getSymptoms(), request.getVitalSigns());
     }
 
     /** Cùng lý do với checkAndAuditPrescriptionSafety: không tham gia (và không làm hỏng) transaction của caller. */
@@ -574,6 +577,9 @@ public class AiClinicalServiceImpl implements AiClinicalService {
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lượt khám", "id", visitId));
 
+        if (request != null && request.getVitalSigns() == null) {
+            request.setVitalSigns(readVisitVitals(visit));
+        }
         DiagnosisSuggestionResponse response = suggestDiagnosis(request);
 
         // NFR-8: Ghi audit log DIAGNOSIS_SUGGESTION
@@ -605,14 +611,15 @@ public class AiClinicalServiceImpl implements AiClinicalService {
      * Fallback gợi ý chẩn đoán cục bộ khi AI Service không khả dụng.
      * Dùng rule-based keyword matching đơn giản.
      */
-    private DiagnosisSuggestionResponse fallbackSuggestDiagnosis(String symptoms) {
-        String lower = symptoms.toLowerCase();
+    private DiagnosisSuggestionResponse fallbackSuggestDiagnosis(String symptoms, VitalSignsDto vitals) {
+        // Khớp NGUYÊN TỪ (không dấu cũng nhận): "ho" không khớp "cho"; trước đây dùng contains() nên sai
+        String lower = normalize(symptoms);
 
         // Cơ sở tri thức rút gọn cho fallback
         Map<String[], List<DiagnosisSuggestionItem>> knowledgeBase = new LinkedHashMap<>();
 
         knowledgeBase.put(
-                new String[]{"đau ngực", "tức ngực", "huyết áp", "hoa mắt", "chóng mặt", "khó thở"},
+                new String[]{"đau ngực", "tức ngực", "hoa mắt", "chóng mặt", "khó thở", "tăng huyết áp", "huyết áp cao"},
                 List.of(
                         DiagnosisSuggestionItem.builder().code("I10").name("Tăng huyết áp vô căn (nguyên phát)").confidence(94.0).reason("Triệu chứng đau tức ngực, chóng mặt phù hợp với biến thiên huyết áp cao").build(),
                         DiagnosisSuggestionItem.builder().code("I20.9").name("Cơn đau thắt ngực, không đặc hiệu").confidence(85.0).reason("Cần theo dõi điện tim và men tim Troponin").build(),
@@ -657,17 +664,19 @@ public class AiClinicalServiceImpl implements AiClinicalService {
 
         // Match
         for (Map.Entry<String[], List<DiagnosisSuggestionItem>> entry : knowledgeBase.entrySet()) {
-            for (String keyword : entry.getKey()) {
-                if (lower.contains(keyword)) {
-                    List<DiagnosisSuggestionItem> suggestions = entry.getValue();
-                    return DiagnosisSuggestionResponse.builder()
-                            .suggestions(suggestions.size() > 3 ? suggestions.subList(0, 3) : suggestions)
-                            .totalSuggestions(Math.min(suggestions.size(), 3))
-                            .confidenceScore(new BigDecimal("0.90"))
-                            .disclaimer(DiagnosisSuggestionResponse.DEFAULT_DISCLAIMER)
-                            .build();
-                }
+            if (!containsAny(lower, entry.getKey())) {
+                continue;
             }
+            List<DiagnosisSuggestionItem> suggestions = withoutUnsupportedHypertension(entry.getValue(), lower, vitals);
+            if (suggestions.isEmpty()) {
+                continue;
+            }
+            return DiagnosisSuggestionResponse.builder()
+                    .suggestions(suggestions.size() > 3 ? suggestions.subList(0, 3) : suggestions)
+                    .totalSuggestions(Math.min(suggestions.size(), 3))
+                    .confidenceScore(new BigDecimal("0.90"))
+                    .disclaimer(DiagnosisSuggestionResponse.DEFAULT_DISCLAIMER)
+                    .build();
         }
 
         // Default: không khớp
@@ -684,5 +693,38 @@ public class AiClinicalServiceImpl implements AiClinicalService {
                 .confidenceScore(new BigDecimal("0.70"))
                 .disclaimer(DiagnosisSuggestionResponse.DEFAULT_DISCLAIMER)
                 .build();
+    }
+
+    /**
+     * I10 (tăng huyết áp) chỉ được gợi ý khi có bằng chứng: huyết áp đo được ≥ 140/90, hoặc người dùng nêu rõ
+     * "tăng huyết áp"/"huyết áp cao" mà không có số đo phủ định. Huyết áp đo được không cao (vd 90/60) thì loại.
+     */
+    private static List<DiagnosisSuggestionItem> withoutUnsupportedHypertension(
+            List<DiagnosisSuggestionItem> items, String normalizedSymptoms, VitalSignsDto vitals) {
+        boolean measured = vitals != null && vitals.getBloodPressureSystolic() != null;
+        boolean bpHigh = measured && (vitals.getBloodPressureSystolic() >= 140
+                || (vitals.getBloodPressureDiastolic() != null && vitals.getBloodPressureDiastolic() >= 90));
+        boolean statedHigh = containsAny(normalizedSymptoms, "tăng huyết áp", "huyết áp cao");
+        boolean supported = bpHigh || (statedHigh && !measured);
+        List<DiagnosisSuggestionItem> kept = new ArrayList<>();
+        for (DiagnosisSuggestionItem item : items) {
+            if ("I10".equals(item.getCode()) && !supported) {
+                continue;
+            }
+            kept.add(item);
+        }
+        return kept;
+    }
+
+    private VitalSignsDto readVisitVitals(Visit visit) {
+        if (visit.getVitalSigns() == null || visit.getVitalSigns().isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(visit.getVitalSigns(), VitalSignsDto.class);
+        } catch (Exception e) {
+            log.warn("Không đọc được sinh hiệu của ca khám {}: {}", visit.getId(), e.getMessage());
+            return null;
+        }
     }
 }

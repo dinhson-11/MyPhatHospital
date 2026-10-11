@@ -26,13 +26,13 @@
 
 ## 1. Tổng quan kiến trúc
 
-Bốn thành phần chạy bằng Docker Compose (`mysql`, `backend`, `ai-service`, `frontend`):
+Ba thành phần ứng dụng chạy bằng Docker Compose (`backend`, `ai-service`, `frontend`). Cơ sở dữ liệu MySQL là **tùy chọn đóng gói** (`mysql`, profile `local-db`) hoặc **MySQL thật** ở máy chủ khác, cấu hình bằng các biến `MYSQL_*` trong `.env` (xem README, mục "Dùng cơ sở dữ liệu thật"):
 
 ```mermaid
 flowchart LR
     U["Trình duyệt<br/>Khách / Bệnh nhân / Nhân viên"] -->|HTTP| FE["Frontend<br/>React + Vite (Nginx)<br/>cổng 3000"]
     FE -->|"REST /api/v1 + JWT"| BE["Backend<br/>Spring Boot 3.3<br/>cổng 8080"]
-    BE -->|JDBC| DB[("MySQL 8.0<br/>Flyway V1–V19")]
+    BE -->|JDBC| DB[("MySQL 8.0<br/>Flyway V1–V23")]
     BE -->|"REST /api/v1/ai/*"| AI["AI Service<br/>FastAPI<br/>cổng 8000"]
     AI -. "mô hình ML + luật từ khóa" .-> AI
 ```
@@ -71,9 +71,9 @@ sequenceDiagram
     participant F as Frontend
     participant Br as Trình duyệt
 
-    D->>M: Khởi động, chờ healthcheck
-    D->>B: Khởi động khi MySQL healthy
-    B->>M: Flyway chạy migration V1..V19 (chỉ phần chưa chạy)
+    D->>M: Khởi động MySQL đóng gói (nếu COMPOSE_PROFILES=local-db), chờ healthcheck
+    D->>B: Khởi động (khi MySQL đóng gói healthy, hoặc ngay khi dùng DB thật)
+    B->>M: Nối theo MYSQL_HOST / MYSQL_PORT / MYSQL_DB; Flyway chạy migration V1..V23 (chỉ phần chưa chạy)
     B->>M: Hibernate validate lược đồ
     D->>A: Khởi động AI Service, nạp mô hình ML
     D->>F: Khởi động Nginx phục vụ frontend
@@ -106,7 +106,7 @@ flowchart TD
     H --> I["Bác sĩ kê đơn<br/>(kiểm tra tương tác thuốc/dị ứng)"]
     I --> J["Hoàn tất ca khám (COMPLETED)"]
     J --> K["Dược sĩ cấp phát thuốc<br/>(trừ tồn kho)"]
-    K --> L["Kế toán lập hóa đơn<br/>(PENDING) và thu tiền (PAID)"]
+    K --> L["Lễ tân - Kế toán lập hóa đơn<br/>(PENDING) và thu tiền (PAID)"]
     L --> M["Dữ liệu vào báo cáo<br/>KPI, doanh thu, chẩn đoán"]
     M --> Z([Kết thúc])
 ```
@@ -114,10 +114,10 @@ flowchart TD
 | Bước | Vai trò thực hiện | Mục |
 |---|---|---|
 | Đặt lịch | Khách / Bệnh nhân | [5](#5-luồng-đặt-lịch-khám-trực-tuyến) |
-| Xác nhận lịch, check-in | Lễ tân | [7](#7-luồng-tiếp-đón-và-check-in) |
+| Xác nhận lịch, check-in | Lễ tân - Kế toán | [7](#7-luồng-tiếp-đón-và-check-in) |
 | Sinh hiệu, khám, kê đơn, xét nghiệm | Điều dưỡng, Bác sĩ | [8](#8-luồng-khám-bệnh-kê-đơn-xét-nghiệm) |
 | Cấp phát thuốc | Dược sĩ | [9](#9-luồng-cấp-phát-thuốc) |
-| Thanh toán | Kế toán | [10](#10-luồng-hóa-đơn-và-thanh-toán) |
+| Thanh toán | Lễ tân - Kế toán | [10](#10-luồng-hóa-đơn-và-thanh-toán) |
 
 ---
 
@@ -151,11 +151,11 @@ sequenceDiagram
         F->>B: POST /auth/refresh-token
         B-->>F: Cặp token mới (nếu refresh token còn hạn và tài khoản không bị khóa)
     end
-    U->>F: Đăng xuất / không hoạt động 30 phút
+    U->>F: Đăng xuất / không thao tác 15 phút (cảnh báo trước 60 giây)
     F->>F: Xóa phiên, về cổng thông tin
 ```
 
-- **Đăng ký** (`POST /auth/register`): tạo tài khoản vai trò `PATIENT`, mật khẩu ≥ 8 ký tự có chữ hoa, chữ thường, chữ số; tên đăng nhập 3–50 ký tự, không trùng; email không trùng.
+- **Đăng ký** (`POST /auth/register`): tạo tài khoản vai trò `PATIENT`, mật khẩu ≥ 8 ký tự có chữ hoa, chữ thường, chữ số; tên đăng nhập 3–50 ký tự, không trùng; email không trùng; đồng thời tạo hồ sơ bệnh nhân (mã `BN-yyMMdd-NNN`) liên kết với tài khoản.
 - Nhân viên **không tự đăng ký**; tài khoản do Quản trị viên cấp.
 - Chế độ đăng nhập offline chỉ dùng được khi **máy chủ không phản hồi** và chạy ở môi trường dev; khi máy chủ trả 401 thì **không** có ngoại lệ.
 
@@ -206,7 +206,8 @@ sequenceDiagram
     participant DB as MySQL
 
     U->>F: Nhập triệu chứng / câu hỏi
-    F->>B: POST /chat/message
+    F->>B: POST /chat/message (kèm header X-Chat-Token nếu đã có phiên)
+    B->>B: Phiên đã tồn tại → kiểm tra mã phiên / chủ phiên / Quản trị viên (sai → 403)
     B->>DB: Tạo hoặc dùng phiên chat, lưu tin nhắn người dùng
     B->>A: POST /api/v1/ai/chat/message
     alt AI Service trả lời
@@ -217,7 +218,8 @@ sequenceDiagram
         B->>B: Dùng bộ luật dự phòng nội bộ (cùng danh mục khoa thật)
     end
     B->>DB: Lưu tin nhắn AI
-    B-->>F: Câu trả lời
+    B-->>F: Câu trả lời + sessionToken của phiên
+    F->>F: Ghi nhớ sessionToken (sessionStorage) để gửi lại ở các lần sau
     F-->>U: Hiển thị + thẻ khoa gợi ý
     U->>F: Bấm "Đặt khám khoa này"
     F->>F: Mở BookingModal với khoa đã chọn
@@ -225,6 +227,7 @@ sequenceDiagram
 
 - Khoa gợi ý luôn là **khoa thật** của bệnh viện (Khám bệnh/Cấp cứu ban đầu, Ngoại khoa, Sản - Phụ khoa, Tai Mũi Họng, Y học cổ truyền – PHCN, Thẩm mỹ/Tạo hình & Da liễu). Các ca tim mạch, nhi, tiêu hóa, hô hấp, thần kinh quy về **Khoa Khám bệnh / Cấp cứu ban đầu**.
 - Kết quả chatbot chỉ mang tính tham khảo, luôn kèm lời miễn trừ trách nhiệm.
+- **Quyền truy cập phiên chat.** Chatbot dùng được khi chưa đăng nhập, nhưng hội thoại là riêng tư. Id phiên là số tăng dần nên không đủ để truy cập: backend cấp `sessionToken` (HMAC-SHA256 của id phiên, ký bằng khóa JWT) khi tạo phiên; client gửi lại ở header `X-Chat-Token`. Đọc, gửi tin hoặc đóng một phiên đã có chỉ được khi có mã đúng, hoặc là bệnh nhân chủ phiên, hoặc là Quản trị viên (còn lại: 403). Danh sách phiên (`GET /chat/sessions`) chỉ dành cho Quản trị viên (tất cả) và bệnh nhân (của chính mình). `patientId` do client gửi lên bị bỏ qua: phiên của bệnh nhân đăng nhập luôn gắn với hồ sơ của chính họ.
 
 ---
 
@@ -244,7 +247,7 @@ flowchart TD
     H --> I["Ca khám IN_PROGRESS<br/>vào hàng chờ điều dưỡng + bác sĩ"]
 ```
 
-Lễ tân còn xử lý: hủy lịch, đánh dấu `NO_SHOW`, xem khung giờ trống của bác sĩ (`GET /appointments/available-slots`).
+Lễ tân còn xử lý: hủy lịch (nút **Hủy lịch**, bắt buộc nhập lý do, `PATCH /appointments/{id}/cancel`), đánh dấu bệnh nhân vắng mặt (nút **Vắng mặt**, `PATCH /appointments/{id}/status` với `NO_SHOW`) trên hàng đợi tiếp đón, và xem khung giờ trống của bác sĩ (`GET /appointments/available-slots`).
 
 ---
 
@@ -310,12 +313,12 @@ API: `POST /prescriptions/{id}/dispense`. Quản lý kho: `GET /drugs`, `POST /d
 
 ## 10. Luồng hóa đơn và thanh toán
 
-> Chi tiết thay đổi và lý do: xem [NANG_CAP_HE_THONG.md](NANG_CAP_HE_THONG.md).
+> Phần còn lại của phân hệ thanh toán (xác nhận VietQR tự động, BHYT nâng cao, thanh toán nhiều lần): xem [KE_HOACH_PHAT_TRIEN.md](KE_HOACH_PHAT_TRIEN.md).
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor KT as Kế toán / Thu ngân
+    actor KT as Lễ tân - Kế toán (thu ngân)
     participant B as Backend
     participant DB as MySQL
     actor BN as Bệnh nhân
@@ -331,7 +334,8 @@ sequenceDiagram
         KT->>B: PUT /invoices/{id}/pay {CASH, amountReceived}
         B->>B: amountReceived ≥ số phải thu, máy chủ tính tiền thừa
     else VietQR / chuyển khoản / thẻ POS
-        KT->>B: GET /invoices/{id}/payment-qr (số tiền + nội dung "MPH <mã HĐ>" do máy chủ sinh)
+        KT->>B: GET /invoices/{id}/payment-qr (số tiền + nội dung "MPH <mã HĐ>" + chuỗi VietQR `qrPayload` do máy chủ sinh)
+        B-->>KT: Giao diện vẽ `qrPayload` thành mã QR ngay trên trình duyệt (không cần Internet)
         BN-->>KT: Chuyển khoản / quẹt thẻ
         KT->>B: PUT /invoices/{id}/pay {method, transactionCode bắt buộc}
         B->>DB: Mã giao dịch không được trùng hóa đơn khác
@@ -368,7 +372,7 @@ flowchart TD
         B -- Không --> C["Lưu ca trực"]
         C --> H["Hủy ca: DELETE /schedules/{id}"]
     end
-    subgraph NV["Nhân viên (6 vai trò)"]
+    subgraph NV["Nhân viên (5 vai trò)"]
         D["Mở Workspace → Lịch trực"] --> E["GET /schedules<br/>lọc theo nhân viên / khoa / tuần"]
     end
     C --> E
@@ -381,14 +385,14 @@ Ca trực: `MORNING`, `AFTERNOON`, `NIGHT`, `FULL_DAY`. Chỉ **Quản trị vi�
 
 ## 12. Luồng quản trị người dùng và báo cáo
 
-**Quản trị người dùng** (`/users`, chỉ ADMIN):
+**Quản trị người dùng** (`/users`, chỉ ADMIN). Giao diện: **Bảng điều khiển quản trị → tab "Tài khoản"** (tìm theo họ tên, phân trang, thêm, sửa, khóa/mở khóa). Quản trị viên không tự khóa mình và không tự gỡ vai trò ADMIN của mình (400):
 
 ```mermaid
 flowchart LR
     A["Danh sách người dùng<br/>GET /users"] --> B["Thêm: POST /users"]
     A --> C["Sửa / gán vai trò: PUT /users/{id}"]
     A --> D["Khóa: PATCH /users/{id}/lock"]
-    D --> E["Tài khoản bị khóa:<br/>không đăng nhập, không refresh token"]
+    D --> E["Tài khoản bị khóa:<br/>không đăng nhập, không refresh token,<br/>token đã cấp mất hiệu lực ngay"]
     A --> F["Mở khóa: PATCH /users/{id}/unlock"]
 ```
 
@@ -398,7 +402,7 @@ flowchart LR
 |---|---|---|
 | `GET /reports/kpi-summary` | ADMIN | KPI tổng hợp |
 | `GET /reports/visits-summary` | ADMIN | Tổng hợp lượt khám |
-| `GET /reports/revenue` | ADMIN, ACCOUNTANT | Doanh thu theo khoảng thời gian |
+| `GET /reports/revenue` | ADMIN, RECEPTIONIST (Lễ tân - Kế toán) | Doanh thu theo khoảng thời gian |
 | `GET /reports/top-diagnoses` | ADMIN, DOCTOR | Chẩn đoán phổ biến |
 
 ---
@@ -465,22 +469,24 @@ flowchart LR
 
 ## 15. Phân quyền: ai làm được gì
 
-| Chức năng | Khách | Bệnh nhân | Lễ tân | Điều dưỡng | Bác sĩ | Dược sĩ | Kế toán | Admin |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| Thông tin công khai, đặt lịch, chatbot | ✔ | ✔ | | | | | | |
-| Lịch hẹn của tôi, hồ sơ cá nhân | | ✔ | | | | | | |
-| Hồ sơ bệnh nhân | | | ✔ | | tra cứu | | | ✔ |
-| Quản lý lịch hẹn | | | ✔ | | ✔ | | | ✔ |
-| Check-in, ca khám, sinh hiệu | | | ✔ | ✔ | ✔ | | | ✔ |
-| Chẩn đoán, kê đơn, chỉ định xét nghiệm | | | | | ✔ | | | ✔ |
-| Nhập kết quả xét nghiệm | | | | ✔ | ✔ | | | ✔ |
-| AI hỗ trợ lâm sàng | | | | | ✔ | ✔ | | ✔ |
-| Cấp phát thuốc, kho dược | | | | | tra cứu | ✔ | | ✔ |
-| Lập hóa đơn, thu tiền | | | | | lập HĐ | | ✔ | ✔ |
-| **Lịch trực, danh bạ nhân sự** | | | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Xếp / hủy lịch trực | | | | | | | | ✔ |
-| Quản lý người dùng | | | | | | | | ✔ |
-| Báo cáo | | | | | chẩn đoán | | doanh thu | ✔ |
+| Chức năng | Khách | Bệnh nhân | Lễ tân - Kế toán | Điều dưỡng | Bác sĩ | Dược sĩ | Admin |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| Thông tin công khai, đặt lịch, chatbot | ✔ | ✔ | | | | | |
+| Lịch hẹn của tôi, hồ sơ cá nhân | | ✔ | | | | | |
+| Hồ sơ bệnh nhân | | | ✔ | | tra cứu | | ✔ |
+| Quản lý lịch hẹn | | | ✔ | | ✔ | | ✔ |
+| Check-in, ca khám, sinh hiệu | | | ✔ | ✔ | ✔ | | ✔ |
+| Chẩn đoán, kê đơn, chỉ định xét nghiệm | | | | | ✔ | | ✔ |
+| Nhập kết quả xét nghiệm | | | | ✔ | ✔ | | ✔ |
+| AI hỗ trợ lâm sàng | | | | | ✔ | ✔ | ✔ |
+| Cấp phát thuốc, kho dược | | | | | tra cứu | ✔ | ✔ |
+| Lập hóa đơn, thu tiền, đối soát ca | | | ✔ | | lập HĐ | | ✔ |
+| **Lịch trực, danh bạ nhân sự** | | | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Xếp / hủy lịch trực | | | | | | | ✔ |
+| Quản lý người dùng | | | | | | | ✔ |
+| Báo cáo | | | doanh thu | | chẩn đoán | | ✔ |
+
+Vai trò **Lễ tân - Kế toán** (mã `RECEPTIONIST`) là kết quả gộp hai vai trò Lễ tân và Kế toán (migration V22): cùng một tài khoản tiếp đón, đặt lịch và thu viện phí. Hoàn tiền hóa đơn đã thu vẫn chỉ dành cho Quản trị viên.
 
 Phân quyền được kiểm tra ở **hai lớp**: giao diện ẩn chức năng không thuộc vai trò, và backend chặn bằng `@PreAuthorize` (trả 403).
 
@@ -501,8 +507,10 @@ Phân quyền được kiểm tra ở **hai lớp**: giao diện ẩn chức nă
 | Thuốc không đủ tồn kho | Dừng cấp phát, nêu tên và mã thuốc thiếu |
 | Hóa đơn đã thanh toán / đã hủy / đã hoàn tiền | Từ chối thanh toán lại |
 | Mất kết nối khi thu tiền | Báo lỗi "CHƯA được lưu", không ghi nhận đã thu ở máy trạm (không còn chế độ thanh toán offline) |
-| Hai thu ngân thu cùng một hóa đơn | Người thứ hai nhận lỗi 409, yêu cầu tải lại |
+| Hai nhân viên thu ngân thu cùng một hóa đơn | Người thứ hai nhận lỗi 409, yêu cầu tải lại |
 | Chưa cấu hình tài khoản VietQR | Ẩn mã QR, thu bằng tiền mặt / thẻ / chuyển khoản có mã giao dịch |
+| Cấu hình VietQR sai (BIN không đủ 6 chữ số, số tài khoản sai định dạng) | Máy chủ báo lỗi nghiệp vụ nêu rõ biến cần sửa, không tạo mã QR sai |
+| Mất Internet khi thu bằng VietQR | Mã QR vẫn hiện vì được dựng tại chỗ từ `qrPayload`; thu ngân vẫn phải kiểm tra tiền đã vào tài khoản rồi nhập mã giao dịch |
 | Ca khám đã hoàn tất | Từ chối chỉnh sửa |
 
-> **Lưu ý đã biết:** tài khoản bệnh nhân tự đăng ký chưa tự động có hồ sơ bệnh nhân; hồ sơ được tạo khi đặt lịch hoặc khi lễ tân tiếp đón. Vì vậy "Lịch hẹn của tôi" và "Hồ sơ của tôi" chỉ dùng được sau khi tài khoản được liên kết với hồ sơ.
+> **Lưu ý đã biết:** đăng ký (`POST /auth/register`) tạo luôn hồ sơ bệnh nhân liên kết với tài khoản. Tài khoản bệnh nhân tạo theo cách khác (ví dụ do quản trị viên tạo hoặc dữ liệu mẫu) có thể chưa có hồ sơ; khi đó "Lịch hẹn của tôi" và "Hồ sơ của tôi" chỉ dùng được sau khi tài khoản được liên kết với hồ sơ.

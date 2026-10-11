@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * Entity Role – map bảng roles.
- * 7 roles: ADMIN, DOCTOR, NURSE, PHARMACIST, RECEPTIONIST, ACCOUNTANT, PATIENT.
+ * 6 roles: ADMIN, DOCTOR, NURSE, PHARMACIST, RECEPTIONIST (Lễ tân - Kế toán: tiếp đón + thu viện phí + báo cáo), PATIENT.
  */
 @Entity
 @Table(name = "roles")

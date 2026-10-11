@@ -7,21 +7,43 @@ import StaffScheduleModal from '../components/hr/StaffScheduleModal';
 import { AuthProvider } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 
+vi.mock('../services/api', () => ({
+  default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  BASE_URL: ''
+}));
+
+const ok = (data) => Promise.resolve({ success: true, data, message: 'OK' });
+const networkError = () => Promise.reject(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
+const backendError = (status, message, errorCode = 'BUSINESS_ERROR') =>
+  Promise.reject(Object.assign(new Error(`Request failed with status code ${status}`), {
+    response: { status, data: { errorCode, message } }
+  }));
+
+const STAFF = [
+  { id: 1, fullName: 'TS.BS Vi Mai Anh', specialty: 'Nội tổng quát', departmentId: 1, roomNo: 'P.101' },
+  { id: 2, fullName: 'DS. Lê Hải Quang', specialty: 'Dược', departmentId: 10, roomNo: 'Nhà thuốc' }
+];
+
+/** Backend giả lập: lịch trực của tuần được hỏi (2 ca ngay ngày đầu tuần), danh bạ nhân sự cố định. */
+const routeGet = (url, config = {}) => {
+  if (url === '/staff') return ok(STAFF);
+  if (url === '/schedules') {
+    const day = config.params?.startDate || '2026-10-12';
+    return ok([
+      { id: 11, staffId: 1, staffName: 'TS.BS Vi Mai Anh', departmentId: 1, workDate: day, shift: 'MORNING', roomNo: 'P.101' },
+      { id: 12, staffId: 2, staffName: 'DS. Lê Hải Quang', departmentId: 10, workDate: day, shift: 'AFTERNOON', roomNo: 'Nhà thuốc' }
+    ]);
+  }
+  return networkError();
+};
+
 describe('Staff & Schedule Module Suite (Sprint 8 - FR-8)', () => {
-
-  // Lỗi mạng (máy chủ offline) → service dùng dữ liệu cục bộ.
-  // Mặc định cho cả bộ test để kết quả không phụ thuộc việc có backend đang chạy trên máy hay không
-  // (máy chủ trả 401/403/500 giờ được báo lỗi lên giao diện thay vì âm thầm dùng dữ liệu mẫu).
-  const mockBackendOffline = () => {
-    const networkError = Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' });
-    vi.spyOn(api, 'get').mockRejectedValue(networkError);
-    vi.spyOn(api, 'post').mockRejectedValue(networkError);
-    vi.spyOn(api, 'delete').mockRejectedValue(networkError);
-  };
-
   beforeEach(() => {
     localStorage.clear();
-    mockBackendOffline();
+    vi.clearAllMocks();
+    api.get.mockImplementation(routeGet);
+    api.post.mockImplementation((url, body) => ok({ id: 99, ...body }));
+    api.delete.mockImplementation(() => ok(null));
   });
 
   afterEach(() => {
@@ -29,87 +51,65 @@ describe('Staff & Schedule Module Suite (Sprint 8 - FR-8)', () => {
   });
 
   describe('scheduleService Unit Tests', () => {
-    it('lấy danh sách nhân viên y tế (bác sĩ, dược sĩ, điều dưỡng)', async () => {
-      const staffList = await scheduleService.getStaffList();
-      expect(staffList).toBeDefined();
-      expect(staffList.length).toBeGreaterThan(0);
-      expect(staffList.some(s => s.fullName.includes('Vi Mai Anh'))).toBe(true);
-      expect(staffList.some(s => s.fullName.includes('Lê Hải Quang'))).toBe(true);
+    it('lấy danh sách nhân viên y tế từ máy chủ, có lọc theo khoa', async () => {
+      const staffList = await scheduleService.getStaffList(10);
+      expect(api.get).toHaveBeenCalledWith('/staff', { params: { departmentId: 10 } });
+      expect(staffList.map((s) => s.fullName)).toContain('TS.BS Vi Mai Anh');
     });
 
-    it('tra cứu lịch trực theo khoảng thời gian tuần', async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const schedules = await scheduleService.getSchedules({ startDate: today });
-      expect(schedules).toBeDefined();
-      expect(schedules.length).toBeGreaterThan(0);
-      expect(schedules[0].workDate).toBeDefined();
-      expect(schedules[0].shift).toBeDefined();
+    it('tra cứu lịch trực theo tuần: gửi đúng tham số và trả đúng dữ liệu máy chủ', async () => {
+      const schedules = await scheduleService.getSchedules({ startDate: '2026-10-12', endDate: '2026-10-18' });
+      expect(api.get).toHaveBeenCalledWith('/schedules', { params: { startDate: '2026-10-12', endDate: '2026-10-18' } });
+      expect(schedules).toHaveLength(2);
+      expect(schedules[0]).toMatchObject({ workDate: '2026-10-12', shift: 'MORNING' });
     });
 
-    it('xếp ca trực mới thành công', async () => {
-      const newSchedule = await scheduleService.createSchedule({
-        staffId: 1,
-        departmentId: 1,
-        workDate: '2026-10-25',
-        shift: 'NIGHT',
-        roomNo: 'P.Cấp cứu',
-        note: 'Trực ca đêm tăng cường'
-      });
-
-      expect(newSchedule).toBeDefined();
-      expect(newSchedule.staffId).toBe(1);
-      expect(newSchedule.shift).toBe('NIGHT');
-      expect(newSchedule.workDate).toBe('2026-10-25');
+    it('tuần chưa có ca trực trả danh sách rỗng, KHÔNG sinh lịch mẫu', async () => {
+      api.get.mockImplementation(() => ok([]));
+      expect(await scheduleService.getSchedules({ startDate: '2026-10-12' })).toEqual([]);
+      expect(await scheduleService.getStaffList()).toEqual([]);
+      expect(localStorage.length).toBe(0);
     });
 
-    it('chặn xếp lịch trùng ca trong cùng ngày cho một nhân viên', async () => {
-      const scheduleData = {
-        staffId: 2,
-        departmentId: 1,
-        workDate: '2026-10-26',
-        shift: 'MORNING'
-      };
-
-      await scheduleService.createSchedule(scheduleData);
-
-      await expect(
-        scheduleService.createSchedule(scheduleData)
-      ).rejects.toThrow(/đã có lịch trực/);
+    it('xếp ca trực mới: gửi lên máy chủ và trả bản ghi máy chủ tạo', async () => {
+      const data = { staffId: 1, departmentId: 1, workDate: '2026-10-25', shift: 'NIGHT', roomNo: 'P.Cấp cứu' };
+      const created = await scheduleService.createSchedule(data);
+      expect(api.post).toHaveBeenCalledWith('/schedules', data);
+      expect(created).toMatchObject({ id: 99, shift: 'NIGHT', workDate: '2026-10-25' });
     });
 
-    it('thông báo trùng ca dùng nhãn ca tiếng Việt và ngày dd/MM/yyyy', async () => {
-      const data = { staffId: 4, departmentId: 1, workDate: '2026-11-03', shift: 'NIGHT' };
-      await scheduleService.createSchedule(data);
-      await expect(scheduleService.createSchedule(data)).rejects.toThrow(/ca Đêm .*03\/11\/2026/);
+    it('trùng ca do máy chủ từ chối được báo nguyên văn', async () => {
+      api.post.mockImplementation(() => backendError(409, 'Nhân viên đã có lịch trực ca Sáng vào ngày 26/10/2026.'));
+      await expect(scheduleService.createSchedule({ staffId: 2, workDate: '2026-10-26', shift: 'MORNING' }))
+        .rejects.toThrow(/đã có lịch trực/);
+    });
+
+    it('mất kết nối: mọi thao tác báo lỗi, không ghi lịch cục bộ và không trả dữ liệu mẫu', async () => {
+      api.get.mockImplementation(() => networkError());
+      api.post.mockImplementation(() => networkError());
+      api.delete.mockImplementation(() => networkError());
+
+      await expect(scheduleService.getStaffList()).rejects.toMatchObject({ isNetworkError: true });
+      await expect(scheduleService.getSchedules({ startDate: '2026-10-12' })).rejects.toMatchObject({ isNetworkError: true });
+      await expect(scheduleService.createSchedule({ staffId: 1, workDate: '2026-10-25', shift: 'NIGHT' }))
+        .rejects.toMatchObject({ isNetworkError: true });
+      await expect(scheduleService.deleteSchedule(11)).rejects.toMatchObject({ isNetworkError: true });
+      expect(localStorage.length).toBe(0);
     });
 
     it('báo lỗi khi máy chủ phản hồi lỗi thay vì âm thầm trả dữ liệu mẫu', async () => {
-      vi.spyOn(api, 'get').mockRejectedValue(
-        Object.assign(new Error('Request failed with status code 500'), {
-          response: { status: 500, data: { message: 'Máy chủ lịch trực đang bảo trì' } }
-        })
-      );
+      api.get.mockImplementation(() => backendError(500, 'Máy chủ lịch trực đang bảo trì'));
       await expect(scheduleService.getSchedules({ startDate: '2026-10-12' })).rejects.toThrow('Máy chủ lịch trực đang bảo trì');
     });
 
-    it('dùng lịch trực cục bộ khi không kết nối được máy chủ', async () => {
-      const list = await scheduleService.getSchedules({ startDate: '2026-10-12', endDate: '2026-10-18' });
-      expect(list.length).toBeGreaterThan(0);
+    it('xóa ca trực theo ID', async () => {
+      expect(await scheduleService.deleteSchedule(11)).toBe(true);
+      expect(api.delete).toHaveBeenCalledWith('/schedules/11');
     });
 
-    it('xóa ca trực theo ID', async () => {
-      const created = await scheduleService.createSchedule({
-        staffId: 3,
-        departmentId: 10,
-        workDate: '2026-10-27',
-        shift: 'AFTERNOON'
-      });
-
-      const deleted = await scheduleService.deleteSchedule(created.id);
-      expect(deleted).toBe(true);
-
-      const listAfter = await scheduleService.getSchedules();
-      expect(listAfter.some(s => s.id === created.id)).toBe(false);
+    it('xóa ca trực thất bại thì không báo thành công', async () => {
+      api.delete.mockImplementation(() => backendError(403, 'Bạn không có quyền xóa ca trực.', 'FORBIDDEN'));
+      await expect(scheduleService.deleteSchedule(11)).rejects.toThrow('Bạn không có quyền xóa ca trực.');
     });
   });
 

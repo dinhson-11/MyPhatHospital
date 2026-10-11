@@ -28,6 +28,7 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 1. TIM MẠCH (Cardiovascular)
     {
         "group": "Tim mạch",
+        "ml_label": 5,
         "keywords": ["đau ngực", "tức ngực", "khó thở", "huyết áp", "hoa mắt",
                      "chóng mặt", "hồi hộp", "đánh trống ngực", "phù chân",
                      "mệt khi gắng sức", "đau thắt ngực", "tim đập nhanh"],
@@ -55,6 +56,7 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 2. HÔ HẤP (Respiratory)
     {
         "group": "Hô hấp",
+        "ml_label": 3,
         "keywords": ["ho", "sốt", "đờm", "rát họng", "viêm họng", "khàn tiếng",
                      "sổ mũi", "nghẹt mũi", "hắt hơi", "khó thở", "thở khò khè",
                      "đau ngực khi ho", "ho khan", "ho có đờm"],
@@ -82,6 +84,7 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 3. TIÊU HÓA (Gastrointestinal)
     {
         "group": "Tiêu hóa",
+        "ml_label": 6,
         "keywords": ["đau bụng", "dạ dày", "ợ chua", "buồn nôn", "thượng vị",
                      "tiêu chảy", "táo bón", "ợ nóng", "chướng bụng", "đầy hơi",
                      "nôn", "trào ngược", "đau vùng bụng", "khó tiêu"],
@@ -136,6 +139,7 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 5. CƠ XƯƠNG KHỚP (Musculoskeletal)
     {
         "group": "Cơ xương khớp",
+        "ml_label": 9,
         "keywords": ["vai gáy", "cột sống", "đau lưng", "thoái hóa", "tê bì",
                      "đau khớp", "sưng khớp", "cứng khớp", "đau cơ", "đau vai",
                      "đau cổ", "thoát vị đĩa đệm", "đau gối"],
@@ -163,6 +167,7 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 6. THẦN KINH (Neurology)
     {
         "group": "Thần kinh",
+        "ml_label": 7,
         "keywords": ["đau đầu", "chóng mặt", "mất ngủ", "hoa mắt", "co giật",
                      "tê tay", "tê chân", "yếu liệt", "run", "mất thăng bằng",
                      "nhức đầu", "đau nửa đầu", "giảm trí nhớ"],
@@ -217,7 +222,7 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 8. DA LIỄU (Dermatology)
     {
         "group": "Da liễu",
-        "dept_id": 8,
+        "ml_label": 8,
         "keywords": ["dị ứng, nổi mẩn da", "dị ứng, nổi mần da", "nổi mẩn da", "nổi mần da",
                      "nổi mẩn", "nổi mần", "dị ứng", "mẩn ngứa", "mần ngứa", "mẩn đỏ",
                      "phát ban", "ngứa", "mề đay", "mày đay", "chàm", "nấm da", "mụn",
@@ -254,6 +259,7 @@ DIAGNOSIS_KNOWLEDGE_BASE: List[Dict[str, Any]] = [
     # 9. MẮT – TAI MŨI HỌNG (Ophthalmology / ENT)
     {
         "group": "Mắt – Tai Mũi Họng",
+        "ml_label": 10,
         "keywords": ["đau mắt", "mờ mắt", "ù tai", "đau tai", "chảy mủ tai",
                      "viêm tai", "nghẹt tai", "giảm thị lực", "chảy nước mắt",
                      "viêm xoang", "đau xoang", "chảy mũi"],
@@ -556,15 +562,16 @@ class DiagnosisSuggestionService:
                           "tìm nguyên nhân hô hấp / tim mạch.",
             })
 
-        # Dự đoán gợi ý chuyên khoa từ ML Model để định hướng nhóm chẩn đoán
-        ml_dept_id = None
+        # Dự đoán nhóm bệnh từ ML Model. So khớp theo NHÃN của mô hình ("ml_label" của nhóm), không phải
+        # mã khoa thật (nhiều nhãn cùng quy về khoa 1 nên so theo khoa sẽ không phân biệt được nhóm).
+        ml_label = None
         try:
             from services.ml_triage_service import predict_department
             ml_pred = predict_department(symptoms_lower)
             if ml_pred is not None:
-                ml_dept_id = ml_pred[0]
+                ml_label = ml_pred[3].get("label")
         except Exception:
-            ml_dept_id = None
+            ml_label = None
 
         # Tính điểm cho từng nhóm bệnh lý (khớp NGUYÊN TỪ: "ho" không khớp "cho", "run" không khớp "trung")
         scored_groups: list[tuple[float, dict, int]] = []
@@ -574,10 +581,10 @@ class DiagnosisSuggestionService:
             match_count = len(matched)
             matched_len = sum(len(k) for k in matched)
 
-            if match_count > 0 or (ml_dept_id is not None and group.get("dept_id") == ml_dept_id):
+            if match_count > 0 or (ml_label is not None and group.get("ml_label") == ml_label):
                 # Điểm số kết hợp số từ khóa khớp và ưu tiên từ mô hình ML
                 score = match_count * 10.0 + (matched_len / 10.0)
-                if ml_dept_id is not None and group.get("dept_id") == ml_dept_id:
+                if ml_label is not None and group.get("ml_label") == ml_label:
                     score += 25.0
                 scored_groups.append((score, group, match_count))
 

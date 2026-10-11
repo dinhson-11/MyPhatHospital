@@ -12,7 +12,12 @@ spring:
     hibernate:
       ddl-auto: create-drop
     database-platform: org.hibernate.dialect.H2Dialect
-    show-sql: true
+    properties:
+      hibernate:
+        # application.yml đặt MySQLDialect; phải ghi đè ở đây, nếu không Hibernate sinh DDL MySQL
+        # ("engine=InnoDB") mà H2 từ chối nên schema test không bao giờ được tạo.
+        dialect: org.hibernate.dialect.H2Dialect
+    show-sql: false
 
   flyway:
     enabled: false   # H2 không tương thích 100% với MySQL Flyway scripts

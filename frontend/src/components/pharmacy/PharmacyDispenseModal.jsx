@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../common/ConfirmDialog';
 import Modal from '../common/Modal';
 import { formatDate, formatDateTime, formatVND } from '../../utils/format';
+import NewDrugDialog from './NewDrugDialog';
 
 const TABS = [
   { id: 'dispense', label: 'Cấp phát theo đơn', icon: 'local_pharmacy' },
@@ -50,6 +51,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
   const [inventory, setInventory] = useState({ status: 'idle', items: [], error: '' });
   const [inventoryFilter, setInventoryFilter] = useState('all');
   const [stockDrug, setStockDrug] = useState(null);
+  const [showNewDrug, setShowNewDrug] = useState(false);
   const [stockQty, setStockQty] = useState('');
   const [stockType, setStockType] = useState('IMPORT');
   const [stockError, setStockError] = useState('');
@@ -418,10 +420,16 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                   </button>
                 ))}
               </div>
-              <button type="button" onClick={loadInventory} disabled={inventory.status === 'loading'} className="btn btn-ghost btn-sm">
-                <span className={`material-symbols-outlined ${inventory.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
-                Làm mới
-              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setShowNewDrug(true)} className="btn btn-secondary btn-sm">
+                  <span className="material-symbols-outlined" aria-hidden="true">add</span>
+                  Thêm thuốc mới
+                </button>
+                <button type="button" onClick={loadInventory} disabled={inventory.status === 'loading'} className="btn btn-ghost btn-sm">
+                  <span className={`material-symbols-outlined ${inventory.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
+                  Làm mới
+                </button>
+              </div>
             </div>
 
             {inventory.status === 'error' ? (
@@ -524,6 +532,15 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
           </div>
         </form>
       </Modal>
+      <NewDrugDialog
+        isOpen={showNewDrug}
+        onClose={() => setShowNewDrug(false)}
+        onCreated={(drug) => {
+          setShowNewDrug(false);
+          notify(`Đã thêm thuốc ${drug?.name || ''} vào danh mục.`.replace('  ', ' '), 'success');
+          loadInventory();
+        }}
+      />
     </Modal>
   );
 }

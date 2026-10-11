@@ -1,3 +1,4 @@
+import { QRCodeSVG } from 'qrcode.react';
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from '../common/Modal';
 import invoiceService from '../../services/invoiceService';
@@ -268,7 +269,17 @@ export default function PaymentDialog({ isOpen, invoice, onClose, onPaid }) {
                 )}
                 {method === 'VIETQR' && (
                   <div className="flex justify-center">
-                    {qrImageFailed ? (
+                    {qr.data.qrPayload ? (
+                      // Mã QR dựng tại trình duyệt từ chuỗi VietQR do máy chủ sinh: không cần Internet, số tiền + nội dung chính xác
+                      <div
+                        role="img"
+                        aria-label={`Mã VietQR chuyển ${formatVND(qr.data.amount)} – nội dung ${qr.data.transferContent}`}
+                        data-testid="vietqr-code"
+                        className="rounded-xl border border-slate-200 bg-white p-2"
+                      >
+                        <QRCodeSVG value={qr.data.qrPayload} size={208} level="M" marginSize={1} bgColor="#ffffff" fgColor="#000000" />
+                      </div>
+                    ) : qrImageFailed ? (
                       <p className="text-[13px] text-slate-600 text-center max-w-xs">
                         Không tải được ảnh mã QR (cần kết nối Internet). Người bệnh có thể chuyển khoản theo thông tin bên dưới.
                       </p>

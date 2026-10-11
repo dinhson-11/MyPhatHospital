@@ -15,20 +15,23 @@ import java.util.List;
  */
 public interface ChatService {
 
+    /** Số phiên chat tối đa trả về trong một lần gọi danh sách. */
+    int MAX_SESSIONS = 200;
+
     /**
      * Tạo một phiên chat mới (có thể gắn với patientId hoặc khách vãng lai).
      */
     ChatSessionResponseDto createSession(Long patientId);
 
     /**
-     * Lấy danh sách tất cả các phiên chat gần nhất.
+     * Lấy danh sách các phiên chat gần nhất, tối đa {@code limit} (trần {@code ChatService.MAX_SESSIONS}).
      */
-    List<ChatSessionResponseDto> getAllSessions();
+    List<ChatSessionResponseDto> getAllSessions(int limit);
 
     /**
      * Lấy danh sách các phiên chat của một bệnh nhân.
      */
-    List<ChatSessionResponseDto> getSessionsByPatient(Long patientId);
+    List<ChatSessionResponseDto> getSessionsByPatient(Long patientId, int limit);
 
     /**
      * Lấy thông tin chi tiết một phiên chat.

@@ -407,4 +407,23 @@ class ChatServiceImplTest {
 
         assertThat(response.getSuggestedDepartment().getDeptId()).isEqualTo(3);
     }
+
+    @Test
+    @DisplayName("Danh sách phiên chat được giới hạn số dòng (trần 200, tối thiểu 1) thay vì trả toàn bộ lịch sử")
+    void testGetSessions_limitIsClamped() {
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(sessionRepository.findAllByOrderByCreatedAtDesc(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+        when(sessionRepository.findByPatientIdOrderByCreatedAtDesc(eq(7L), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+        chatService.getAllSessions(10_000);
+        verify(sessionRepository).findAllByOrderByCreatedAtDesc(page.capture());
+        assertThat(page.getValue().getPageSize()).isEqualTo(ChatService.MAX_SESSIONS);
+
+        chatService.getSessionsByPatient(7L, 0);
+        verify(sessionRepository).findByPatientIdOrderByCreatedAtDesc(eq(7L), page.capture());
+        assertThat(page.getValue().getPageSize()).isEqualTo(1);
+    }
 }

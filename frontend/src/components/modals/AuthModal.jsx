@@ -5,16 +5,18 @@ import { useToast } from '../../context/ToastContext';
 import { getErrorMessage } from '../../services/apiError';
 
 /**
- * Tài khoản mẫu để đăng nhập nhanh – CHỈ hiển thị ở môi trường phát triển (import.meta.env.DEV).
- * Bản build production không hiển thị khối này để tránh lộ thông tin đăng nhập.
+ * Tài khoản mẫu để đăng nhập nhanh, hiển thị ngay trên form đăng nhập.
+ * Chỉ hiện khi chạy `npm run dev` hoặc khi build với VITE_SHOW_DEMO_ACCOUNTS=true (docker-compose đọc biến này từ .env).
+ * Bản build KHÔNG đặt biến này (mặc định false) sẽ loại bỏ hẳn khối này để không lộ thông tin đăng nhập.
+ * Khi dùng CSDL thật: đặt VITE_SHOW_DEMO_ACCOUNTS=false và khóa các tài khoản mẫu (scripts/db/02_lock_demo_accounts.sql).
  */
+
 const DEMO_ROLE_ACCOUNTS = [
   { id: 'btn-demo-admin', username: 'admin', password: 'Admin@123', name: 'Ban Giám Đốc', role: 'Quản trị', icon: 'shield_person' },
   { id: 'btn-demo-doctor', username: 'bs.maianh', password: 'Doctor@123', name: 'TS.BS Vi Mai Anh', role: 'Bác sĩ – Trưởng khoa', icon: 'stethoscope' },
   { id: 'btn-demo-pharmacist', username: 'ds.quang', password: 'Pharmacist@123', name: 'DS. Lê Hải Quang', role: 'Dược sĩ', icon: 'medication' },
-  { id: 'btn-demo-receptionist', username: 'letan', password: 'Receptionist@123', name: 'CN. Thùy Linh', role: 'Tiếp đón – BHYT', icon: 'support_agent' },
+  { id: 'btn-demo-receptionist', username: 'letan', password: 'Receptionist@123', name: 'CN. Thùy Linh', role: 'Lễ tân – Kế toán', icon: 'support_agent' },
   { id: 'btn-demo-nurse', username: 'dieuduong', password: 'Nurse@123', name: 'ĐD. Thu Hà', role: 'Điều dưỡng', icon: 'vital_signs' },
-  { id: 'btn-demo-accountant', username: 'ketoan', password: 'Accountant@123', name: 'KT. Thị Hoa', role: 'Thu ngân – Viện phí', icon: 'payments' },
   { id: 'btn-demo-patient', username: 'benhnhan', password: 'Password@123', name: 'Trần Đức Minh', role: 'Bệnh nhân', icon: 'person' }
 ];
 
@@ -280,8 +282,8 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
               </button>
             </p>
 
-            {/* Đọc trực tiếp import.meta.env.DEV để bản build production loại bỏ hẳn khối này */}
-            {import.meta.env.DEV && (
+            {/* Biến import.meta.env.* được thay bằng hằng số lúc build: bản build tắt cờ này loại bỏ hẳn khối này */}
+            {(import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true') && (
               <DemoAccounts selectedUsername={loginForm.username} onPick={fillDemoAccount} />
             )}
           </form>
@@ -412,7 +414,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login' }) {
   );
 }
 
-/** Khối chọn nhanh tài khoản mẫu – chỉ render khi import.meta.env.DEV. */
+/** Khối tài khoản mẫu: hiển thị tên đăng nhập + mật khẩu, bấm để điền sẵn vào form. Chỉ render khi chạy dev hoặc VITE_SHOW_DEMO_ACCOUNTS=true. */
 function DemoAccounts({ selectedUsername, onPick }) {
   return (
     <section aria-labelledby="demo-accounts-title" className="pt-4 border-t border-slate-200 space-y-3">
@@ -421,9 +423,9 @@ function DemoAccounts({ selectedUsername, onPick }) {
           <span className="material-symbols-outlined text-base text-amber-600" aria-hidden="true">science</span>
           Tài khoản thử nghiệm
         </h3>
-        <span className="badge badge-warning">Chỉ hiện ở môi trường phát triển</span>
+        <span className="badge badge-warning">Chỉ dùng thử nghiệm</span>
       </div>
-      <p className="text-xs text-slate-500">Bấm vào một tài khoản để điền sẵn tên đăng nhập và mật khẩu.</p>
+      <p className="text-xs text-slate-500">Bấm vào một tài khoản để điền sẵn tên đăng nhập và mật khẩu. Không dùng các tài khoản này với cơ sở dữ liệu thật.</p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {DEMO_ROLE_ACCOUNTS.map((acc) => {
@@ -445,7 +447,10 @@ function DemoAccounts({ selectedUsername, onPick }) {
                 <span className="material-symbols-outlined text-base shrink-0" aria-hidden="true">{acc.icon}</span>
                 <span className="truncate">{acc.name}</span>
               </span>
-              <span className="block text-xs text-slate-500 truncate mt-0.5">{acc.username} • {acc.role}</span>
+              <span className="block text-xs text-slate-500 truncate mt-0.5">{acc.role}</span>
+              <span className="block text-xs text-slate-600 mt-0.5 break-all">
+                <span className="font-semibold">{acc.username}</span> / {acc.password}
+              </span>
             </button>
           );
         })}
