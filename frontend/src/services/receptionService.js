@@ -91,6 +91,26 @@ export const receptionService = {
     }
   },
 
+  /** Lễ tân hủy lịch BOOKED/CONFIRMED kèm lý do (PATCH /appointments/{id}/cancel). */
+  async cancelAppointment(appointmentId, reason) {
+    try {
+      const res = await apiClient.patch(`/appointments/${appointmentId}/cancel`, null, { params: { reason } });
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Không hủy được lịch hẹn.');
+    }
+  },
+
+  /** Đánh dấu bệnh nhân không đến (PATCH /appointments/{id}/status → NO_SHOW). */
+  async markNoShow(appointmentId) {
+    try {
+      const res = await apiClient.patch(`/appointments/${appointmentId}/status`, { status: 'NO_SHOW' });
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Không cập nhật được trạng thái lịch hẹn.');
+    }
+  },
+
   /**
    * Check-in: tạo ca khám từ lịch hẹn đã xác nhận.
    * Bắt buộc lịch hẹn có bệnh nhân và bác sĩ phụ trách thật (không gán mặc định).

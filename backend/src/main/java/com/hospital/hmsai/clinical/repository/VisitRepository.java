@@ -73,6 +73,25 @@ public interface VisitRepository extends JpaRepository<Visit, Long> {
 
     long countByStatus(VisitStatus status);
 
-    @Query("SELECT v FROM Visit v WHERE v.diagnosisCode IS NOT NULL AND v.diagnosisCode != ''")
-    List<Visit> findAllWithDiagnosis();
+    /** Số lần xuất hiện của một mã chẩn đoán (kết quả GROUP BY thực hiện trong DB, không nạp toàn bộ ca khám). */
+    interface DiagnosisCount {
+        String getCode();
+
+        long getCnt();
+    }
+
+    /** Top mã chẩn đoán theo số ca giảm dần (dùng Pageable để giới hạn số dòng). */
+    @Query("SELECT v.diagnosisCode AS code, COUNT(v) AS cnt FROM Visit v " +
+           "WHERE v.diagnosisCode IS NOT NULL AND v.diagnosisCode <> '' " +
+           "GROUP BY v.diagnosisCode ORDER BY COUNT(v) DESC, v.diagnosisCode ASC")
+    List<DiagnosisCount> findTopDiagnosisCounts(Pageable pageable);
+
+    /** Tổng số ca khám đã có mã chẩn đoán (mẫu số của tỷ lệ %). */
+    @Query("SELECT COUNT(v) FROM Visit v WHERE v.diagnosisCode IS NOT NULL AND v.diagnosisCode <> ''")
+    long countWithDiagnosis();
+
+    /** Ghi chú chẩn đoán gần nhất của một mã (để hiển thị tên bệnh). */
+    @Query("SELECT v.diagnosisNote FROM Visit v WHERE v.diagnosisCode = :code AND v.diagnosisNote IS NOT NULL " +
+           "ORDER BY v.visitTime DESC, v.id DESC")
+    List<String> findLatestNotesByDiagnosisCode(@Param("code") String code, Pageable pageable);
 }

@@ -36,6 +36,7 @@ import java.util.TreeMap;
 @Slf4j
 public class DispenseServiceImpl implements DispenseService {
 
+    private static final int MAX_DISPENSE_HISTORY = 200;
     private static final DateTimeFormatter VN_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final DispenseRepository dispenseRepository;
@@ -198,8 +199,10 @@ public class DispenseServiceImpl implements DispenseService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DispenseResponse> getAllDispenses() {
-        return dispenseRepository.findAllByOrderByDispensedAtDesc()
+    public List<DispenseResponse> getAllDispenses(int limit) {
+        int size = Math.min(Math.max(limit, 1), MAX_DISPENSE_HISTORY);
+        return dispenseRepository.findAllByOrderByDispensedAtDesc(org.springframework.data.domain.PageRequest.of(0, size))
+                .getContent()
                 .stream()
                 .map(d -> {
                     Prescription p = d.getPrescription();

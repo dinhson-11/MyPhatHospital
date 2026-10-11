@@ -256,8 +256,8 @@ describe('Báo cáo & thống kê – chỉ dùng số liệu thật', () => {
       });
     });
 
-    it('kế toán: chỉ thấy tab doanh thu và không gọi API chỉ dành cho quản trị', async () => {
-      loginAs(['ACCOUNTANT']);
+    it('lễ tân - kế toán: chỉ thấy tab doanh thu và không gọi API chỉ dành cho quản trị', async () => {
+      loginAs(['RECEPTIONIST']);
       mockApi();
       renderWithProviders(<StatisticsDashboardModal isOpen onClose={() => {}} />);
 
@@ -303,12 +303,23 @@ describe('Báo cáo & thống kê – chỉ dùng số liệu thật', () => {
       expect(await screen.findByText('Chưa có dữ liệu chẩn đoán')).toBeInTheDocument();
     });
 
-    it('lễ tân: không gọi các API báo cáo không có quyền', async () => {
+    it('lễ tân - kế toán: chỉ gọi API doanh thu, không gọi các API báo cáo dành riêng cho quản trị/bác sĩ', async () => {
       loginAs(['RECEPTIONIST']);
       mockApi();
       renderWithProviders(<WorkspaceDashboard onOpenReception={() => {}} onOpenSchedule={() => {}} />);
       expect(await screen.findByText('Chưa có bệnh nhân trong hàng đợi')).toBeInTheDocument();
-      expect(calledUrls().some((u) => u.startsWith('/reports/'))).toBe(false);
+      expect(calledUrls()).toContain('/reports/revenue');
+      expect(calledUrls()).not.toContain('/reports/kpi-summary');
+      expect(calledUrls()).not.toContain('/reports/visits-summary');
+      expect(calledUrls()).not.toContain('/reports/top-diagnoses');
+    });
+
+    it('bác sĩ: không gọi API doanh thu (chỉ quản trị và lễ tân - kế toán có quyền)', async () => {
+      loginAs(['DOCTOR']);
+      mockApi();
+      renderWithProviders(<WorkspaceDashboard onOpenSchedule={() => {}} />);
+      await waitFor(() => expect(calledUrls()).toContain('/reports/top-diagnoses'));
+      expect(calledUrls()).not.toContain('/reports/revenue');
     });
   });
 });

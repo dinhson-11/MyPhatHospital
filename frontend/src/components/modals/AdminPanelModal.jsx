@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from '../common/Modal';
+import UserManagementPanel from '../admin/UserManagementPanel';
 import { appointmentService } from '../../services/appointmentService';
 import { DEPARTMENTS, DOCTORS } from '../../services/dataService';
 import { getErrorMessage } from '../../services/apiError';
@@ -45,6 +46,7 @@ export default function AdminPanelModal({ isOpen, onClose }) {
   const [search, setSearch] = useState('');
   const [wasOpen, setWasOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [tab, setTab] = useState('appointments'); // appointments | users
 
   // Mỗi lần mở modal: hiển thị trạng thái đang tải (điều chỉnh state khi render, không đặt trong effect)
   if (wasOpen !== isOpen) {
@@ -114,9 +116,32 @@ export default function AdminPanelModal({ isOpen, onClose }) {
       size="xl"
       icon="admin_panel_settings"
       title="Bảng Điều Khiển Quản Trị"
-      subtitle="Tổng quan lịch khám và danh mục khoa phòng của bệnh viện"
+      subtitle="Lịch khám, danh mục khoa phòng và tài khoản của bệnh viện"
       bodyClassName="px-5 py-5 sm:px-6 overflow-y-auto space-y-5"
     >
+      {/* Chuyển giữa lịch khám và quản lý tài khoản */}
+      <div className="segmented" role="group" aria-label="Chọn nội dung quản trị">
+        <button
+          type="button"
+          aria-pressed={tab === 'appointments'}
+          onClick={() => setTab('appointments')}
+          className={tab === 'appointments' ? 'is-active' : ''}
+        >
+          Lịch khám
+        </button>
+        <button
+          type="button"
+          aria-pressed={tab === 'users'}
+          onClick={() => setTab('users')}
+          className={tab === 'users' ? 'is-active' : ''}
+        >
+          Tài khoản
+        </button>
+      </div>
+
+      {tab === 'users' && <UserManagementPanel />}
+
+      {tab === 'appointments' && (<>
       {/* Tổng quan */}
       <section aria-label="Số liệu tổng quan" className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard icon="domain" label="Khoa phòng" value={`${DEPARTMENTS.length} khoa`} />
@@ -268,6 +293,7 @@ export default function AdminPanelModal({ isOpen, onClose }) {
           </div>
         )}
       </section>
+      </>)}
     </Modal>
   );
 }

@@ -34,6 +34,9 @@ public class ChatMessageResponseDto {
 
     private String disclaimer;
 
+    /** Mã truy cập phiên chat; client gửi lại ở header X-Chat-Token khi đọc/ghi phiên này. */
+    private String sessionToken;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 }

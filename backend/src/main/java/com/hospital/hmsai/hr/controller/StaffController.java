@@ -23,7 +23,7 @@ public class StaffController {
     private final StaffService staffService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'PHARMACIST', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'PHARMACIST')")
     @Operation(summary = "Danh sách nhân viên y tế", description = "Tra cứu danh sách nhân viên y tế theo chuyên khoa hoặc toàn bệnh viện")
     public ResponseEntity<ApiResponse<List<StaffResponse>>> getAllStaff(
             @RequestParam(required = false) Long departmentId) {
@@ -33,7 +33,7 @@ public class StaffController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'PHARMACIST')")
     @Operation(summary = "Chi tiết hồ sơ nhân viên y tế", description = "Lấy thông tin chi tiết một nhân viên y tế theo ID hồ sơ")
     public ResponseEntity<ApiResponse<StaffResponse>> getStaffById(@PathVariable Long id) {
         log.info("GET /api/v1/staff/{}", id);

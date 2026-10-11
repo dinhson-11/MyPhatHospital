@@ -42,7 +42,7 @@ public class ReportController {
     }
 
     @GetMapping("/revenue")
-    @PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECEPTIONIST')")
     @Operation(summary = "Thống kê doanh thu", description = "Báo cáo doanh thu viện phí theo mốc thời gian, tiền mặt và chuyển khoản VietQR.")
     public ResponseEntity<ApiResponse<RevenueSummaryResponse>> getRevenueSummary(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

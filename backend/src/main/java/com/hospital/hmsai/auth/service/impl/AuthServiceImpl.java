@@ -8,6 +8,9 @@ import com.hospital.hmsai.auth.service.AuthService;
 import com.hospital.hmsai.common.exception.BusinessException;
 import com.hospital.hmsai.common.exception.DuplicateResourceException;
 import com.hospital.hmsai.common.exception.ResourceNotFoundException;
+import com.hospital.hmsai.patient.entity.Patient;
+import com.hospital.hmsai.patient.repository.PatientCodeGenerator;
+import com.hospital.hmsai.patient.repository.PatientRepository;
 import com.hospital.hmsai.security.JwtService;
 import com.hospital.hmsai.user.entity.Role;
 import com.hospital.hmsai.user.entity.User;
@@ -46,6 +49,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final PatientRepository patientRepository;
 
     @Override
     @Transactional
@@ -80,6 +84,18 @@ public class AuthServiceImpl implements AuthService {
 
         User savedUser = userRepository.save(user);
         log.info("Đã tạo user mới: id={}, username={}", savedUser.getId(), savedUser.getUsername());
+
+        // Tạo hồ sơ bệnh nhân liên kết để "Lịch hẹn/Hóa đơn/Hồ sơ của tôi" hoạt động ngay.
+        // Không tự gộp với hồ sơ cũ trùng SĐT + họ tên: người lạ có thể nhận hồ sơ của người khác,
+        // việc liên kết hồ sơ cũ phải do lễ tân xác minh.
+        Patient patient = Patient.builder()
+                .user(savedUser)
+                .patientCode(PatientCodeGenerator.generate(patientRepository::existsByPatientCode))
+                .fullName(savedUser.getFullName())
+                .phone(savedUser.getPhone())
+                .build();
+        patientRepository.save(patient);
+        log.info("Đã tạo hồ sơ bệnh nhân {} cho user {}", patient.getPatientCode(), savedUser.getUsername());
 
         // Sinh tokens
         UserDetails userDetails = buildUserDetails(savedUser);

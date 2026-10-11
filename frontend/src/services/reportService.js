@@ -8,7 +8,7 @@ import { PAYMENT_METHOD_LABELS } from '../utils/format';
  * để màn hình hiển thị trạng thái lỗi + nút thử lại. Giá trị backend không trả về được chuẩn hóa thành null
  * (giao diện hiển thị "—"), không thay bằng 0.
  *
- * Quyền backend: kpi-summary & visits-summary: ADMIN; revenue: ADMIN, ACCOUNTANT; top-diagnoses: ADMIN, DOCTOR.
+ * Quyền backend: kpi-summary & visits-summary: ADMIN; revenue: ADMIN, RECEPTIONIST (Lễ tân - Kế toán); top-diagnoses: ADMIN, DOCTOR.
  */
 
 /** Phương thức thanh toán theo thứ tự hiển thị, khớp enum PaymentMethod của backend. */

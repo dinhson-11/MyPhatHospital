@@ -494,4 +494,85 @@ class AiClinicalServiceImplTest {
 
         assertTrue(result.getIsSafe());
     }
+
+    // ------------------------------------------------------------------
+    // Fallback gợi ý chẩn đoán: khớp nguyên từ + dùng sinh hiệu
+    // ------------------------------------------------------------------
+
+    private DiagnosisSuggestionResponse fallbackDiagnosis(DiagnosisSuggestionRequest request) {
+        when(restTemplate.postForObject(contains("suggest-diagnosis"), any(), eq(DiagnosisSuggestionResponse.class)))
+                .thenThrow(new RestClientException("AI down"));
+        return aiClinicalService.suggestDiagnosis(request);
+    }
+
+    private static List<String> codes(DiagnosisSuggestionResponse r) {
+        return r.getSuggestions().stream().map(DiagnosisSuggestionItem::getCode).toList();
+    }
+
+    @Test
+    @DisplayName("Fallback chẩn đoán: chữ 'huyết áp' đơn thuần KHÔNG gợi ý tăng huyết áp (I10)")
+    void testDiagnosisFallback_bareBloodPressureWordDoesNotSuggestHypertension() {
+        DiagnosisSuggestionResponse r = fallbackDiagnosis(DiagnosisSuggestionRequest.builder()
+                .symptoms("Bệnh nhân hỏi về huyết áp của mình, khám định kỳ").build());
+        assertFalse(codes(r).contains("I10"));
+    }
+
+    @Test
+    @DisplayName("Fallback chẩn đoán: huyết áp đo được 85/55 → không gợi ý I10 dù mô tả chóng mặt")
+    void testDiagnosisFallback_lowMeasuredBloodPressureExcludesI10() {
+        DiagnosisSuggestionResponse r = fallbackDiagnosis(DiagnosisSuggestionRequest.builder()
+                .symptoms("chóng mặt, hoa mắt khi đứng dậy")
+                .vitalSigns(com.hospital.hmsai.clinical.dto.VitalSignsDto.builder()
+                        .bloodPressureSystolic(85).bloodPressureDiastolic(55).build())
+                .build());
+        assertFalse(codes(r).contains("I10"));
+        assertTrue(codes(r).contains("I20.9"));
+    }
+
+    @Test
+    @DisplayName("Fallback chẩn đoán: huyết áp đo được 160/100 → gợi ý I10")
+    void testDiagnosisFallback_highMeasuredBloodPressureSuggestsI10() {
+        DiagnosisSuggestionResponse r = fallbackDiagnosis(DiagnosisSuggestionRequest.builder()
+                .symptoms("chóng mặt, đau đầu")
+                .vitalSigns(com.hospital.hmsai.clinical.dto.VitalSignsDto.builder()
+                        .bloodPressureSystolic(160).bloodPressureDiastolic(100).build())
+                .build());
+        assertTrue(codes(r).contains("I10"));
+    }
+
+    @Test
+    @DisplayName("Fallback chẩn đoán: 'ho' khớp nguyên từ, không khớp trong 'cho'/'khoa'")
+    void testDiagnosisFallback_wholeWordMatching() {
+        DiagnosisSuggestionResponse noMatch = fallbackDiagnosis(DiagnosisSuggestionRequest.builder()
+                .symptoms("xin cho hỏi lịch khám khoa nhi").build());
+        assertEquals(List.of("R69", "Z00.0"), codes(noMatch));
+
+        DiagnosisSuggestionResponse match = fallbackDiagnosis(DiagnosisSuggestionRequest.builder()
+                .symptoms("ho khan 3 ngày").build());
+        assertTrue(codes(match).contains("J00"));
+    }
+
+    @Test
+    @DisplayName("Chẩn đoán: Java chuyển sinh hiệu sang AI Service, và tự lấy sinh hiệu từ ca khám khi request thiếu")
+    void testDiagnosis_forwardsVitalSignsFromVisit() {
+        testVisit.setVitalSigns("{\"bloodPressureSystolic\":150,\"bloodPressureDiastolic\":95,\"pulse\":88}");
+        when(visitRepository.findById(50L)).thenReturn(Optional.of(testVisit));
+        DiagnosisSuggestionResponse ok = DiagnosisSuggestionResponse.builder()
+                .suggestions(List.of(DiagnosisSuggestionItem.builder().code("I10").name("x").confidence(90.0).reason("r").build()))
+                .totalSuggestions(1).build();
+        org.mockito.ArgumentCaptor<Object> body = org.mockito.ArgumentCaptor.forClass(Object.class);
+        when(restTemplate.postForObject(contains("suggest-diagnosis"), body.capture(), eq(DiagnosisSuggestionResponse.class)))
+                .thenReturn(ok);
+
+        aiClinicalService.suggestAndAuditDiagnosis(50L,
+                DiagnosisSuggestionRequest.builder().symptoms("đau đầu chóng mặt").build());
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> payload = (java.util.Map<String, Object>)
+                ((org.springframework.http.HttpEntity<?>) body.getValue()).getBody();
+        com.hospital.hmsai.clinical.dto.VitalSignsDto sent =
+                (com.hospital.hmsai.clinical.dto.VitalSignsDto) payload.get("vital_signs");
+        assertEquals(150, sent.getBloodPressureSystolic());
+        assertEquals(88, sent.getPulse());
+    }
 }

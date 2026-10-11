@@ -235,3 +235,27 @@ class TestDiagnosisAgeAndMatching:
             "vitalSigns": {"bloodPressureSystolic": 150, "bloodPressureDiastolic": 95, "temperature": 37.0},
         })
         assert req.vital_signs.blood_pressure_systolic == 150
+
+
+class TestMlBoost:
+    """Mô hình ML phải thật sự ảnh hưởng chọn nhóm bệnh (trước đây so nhãn với mã khoa nên không bao giờ kích hoạt)."""
+
+    def test_ml_label_is_exposed_in_metadata(self):
+        from services.ml_triage_service import DEPT_METADATA
+        assert all(meta["label"] == label for label, meta in DEPT_METADATA.items())
+
+    def test_ml_prediction_selects_matching_group_without_keyword_match(self, monkeypatch):
+        import services.ml_triage_service as ml
+        meta = dict(ml.DEPT_METADATA[5])  # nhãn tim mạch
+        monkeypatch.setattr(ml, "predict_department", lambda text: (meta["dept_id"], meta["dept_name"], 0.9, meta))
+
+        result = DiagnosisSuggestionService.suggest_diagnosis(symptoms="cảm thấy không khỏe kéo dài")
+
+        assert result.total_suggestions > 0
+        assert {s.code for s in result.suggestions} & {"I10", "I20.9", "I25.1"}
+
+    def test_no_ml_prediction_gives_no_boost(self, monkeypatch):
+        import services.ml_triage_service as ml
+        monkeypatch.setattr(ml, "predict_department", lambda text: None)
+        result = DiagnosisSuggestionService.suggest_diagnosis(symptoms="cảm thấy không khỏe kéo dài")
+        assert not ({s.code for s in result.suggestions} & {"I10", "I20.9", "I25.1"})

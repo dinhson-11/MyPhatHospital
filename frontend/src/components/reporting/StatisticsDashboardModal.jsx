@@ -167,9 +167,9 @@ function Loadable({ resource, skeleton, children }) {
 }
 
 export default function StatisticsDashboardModal({ isOpen, onClose }) {
-  const { isAdmin, isAccountant } = useAuth();
+  const { isAdmin, isReceptionist } = useAuth();
   const canSeeOps = isAdmin; // KPI, lượt khám, mô hình bệnh: chỉ ADMIN (theo quyền backend)
-  const canSeeRevenue = isAdmin || isAccountant;
+  const canSeeRevenue = isReceptionist; // gồm ADMIN
 
   const tabs = useMemo(
     () => TABS.filter((t) => (t.adminOnly ? canSeeOps : canSeeRevenue)),
@@ -218,7 +218,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
   if (!canSeeRevenue && !canSeeOps) {
     return (
       <Modal isOpen={isOpen} onClose={onClose} title="Báo cáo & thống kê" icon="query_stats" size="sm">
-        <ErrorPanel title="Không có quyền truy cập" message="Chỉ quản trị viên và kế toán được xem báo cáo thống kê." />
+        <ErrorPanel title="Không có quyền truy cập" message="Chỉ quản trị viên và lễ tân - kế toán được xem báo cáo thống kê." />
       </Modal>
     );
   }

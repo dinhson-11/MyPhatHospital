@@ -27,6 +27,7 @@ export const Navbar = ({
   onOpenMyAppointments,
   onOpenProfile,
   onOpenPatientProfile,
+  onOpenMyInvoices,
   onOpenAdmin,
   onOpenAbout,
   onOpenContact,
@@ -48,7 +49,6 @@ export const Navbar = ({
     isReceptionist,
     isNurse,
     isPharmacist,
-    isAccountant,
     logout
   } = useAuth();
   const { showToast } = useToast();
@@ -64,10 +64,9 @@ export const Navbar = ({
   const roleTitle = (() => {
     if (isAdmin) return 'Quản trị viên';
     if (isDoctor) return 'Bác sĩ điều trị';
-    if (isReceptionist) return 'Lễ tân tiếp đón';
+    if (isReceptionist) return 'Lễ tân - Kế toán';
     if (isNurse) return 'Điều dưỡng viên';
     if (isPharmacist) return 'Dược sĩ';
-    if (isAccountant) return 'Kế toán viên';
     return 'Bệnh nhân';
   })();
 
@@ -77,8 +76,8 @@ export const Navbar = ({
     isNurse && onOpenNurse && { key: 'nurse', icon: 'vital_signs', label: 'Trạm điều dưỡng & xét nghiệm', action: onOpenNurse },
     isDoctor && onOpenClinical && { key: 'clinical', icon: 'stethoscope', label: 'Phòng khám bác sĩ', action: onOpenClinical },
     isPharmacist && onOpenPharmacy && { key: 'pharmacy', icon: 'medication', label: 'Nhà thuốc & cấp phát', action: onOpenPharmacy },
-    isAccountant && onOpenInvoice && { key: 'invoice', icon: 'receipt_long', label: 'Hóa đơn & viện phí', action: () => onOpenInvoice() },
-    (isAccountant || isAdmin) && onOpenReports && { key: 'reports', icon: 'query_stats', label: 'Báo cáo & thống kê', action: onOpenReports },
+    isReceptionist && onOpenInvoice && { key: 'invoice', icon: 'receipt_long', label: 'Hóa đơn & viện phí', action: () => onOpenInvoice() },
+    isReceptionist && onOpenReports && { key: 'reports', icon: 'query_stats', label: 'Báo cáo & thống kê', action: onOpenReports },
     isStaff && onOpenSchedule && { key: 'schedule', icon: 'calendar_month', label: 'Lịch trực nhân viên', action: () => onOpenSchedule() },
     isAdmin && onOpenAdmin && { key: 'admin', icon: 'admin_panel_settings', label: 'Quản trị hệ thống', action: onOpenAdmin }
   ].filter(Boolean);
@@ -276,6 +275,12 @@ export const Navbar = ({
                       <span>Lịch khám của tôi</span>
                     </button>
                   )}
+                  {!isStaff && onOpenMyInvoices && (
+                    <button type="button" onClick={() => runFromMenu(onOpenMyInvoices)} className="dropdown-item">
+                      <Icon name="receipt_long" />
+                      <span>Hóa đơn của tôi</span>
+                    </button>
+                  )}
                   {onOpenProfile && (
                     <button type="button" onClick={() => runFromMenu(onOpenProfile)} className="dropdown-item">
                       <Icon name="badge" />
@@ -372,6 +377,12 @@ export const Navbar = ({
             <button type="button" onClick={() => runFromMobile(onOpenMyAppointments)} className={mobileLink}>
               <Icon name="event_note" className="text-[20px] text-slate-500" />
               <span>Lịch khám của tôi</span>
+            </button>
+          )}
+          {isAuthenticated && !isStaff && onOpenMyInvoices && (
+            <button type="button" onClick={() => runFromMobile(onOpenMyInvoices)} className={mobileLink}>
+              <Icon name="receipt_long" className="text-[20px] text-slate-500" />
+              <span>Hóa đơn của tôi</span>
             </button>
           )}
           <a href={`tel:${HOTLINE}`} className={`${mobileLink} text-red-700 hover:text-red-800 hover:bg-red-50 font-semibold`}>

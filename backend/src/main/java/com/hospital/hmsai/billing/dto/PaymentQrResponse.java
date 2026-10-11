@@ -26,6 +26,12 @@ public class PaymentQrResponse {
     private BigDecimal amount;
     /** Nội dung chuyển khoản không dấu, dùng để đối soát, VD: "MPH HD261010000123". */
     private String transferContent;
+    /**
+     * Chuỗi nội dung mã VietQR (EMVCo/NAPAS 247) do máy chủ tự dựng: giao diện vẽ thẳng chuỗi này thành ảnh QR,
+     * không cần Internet. Quét bằng app ngân hàng sẽ tự điền tài khoản, số tiền và nội dung.
+     */
+    private String qrPayload;
+    /** Ảnh QR do img.vietqr.io vẽ – chỉ là phương án dự phòng khi không có {@link #qrPayload}. */
     private String qrImageUrl;
     private boolean demo;
 }

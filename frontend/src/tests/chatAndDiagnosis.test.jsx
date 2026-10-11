@@ -1,8 +1,18 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+vi.mock('../services/api', () => ({
+  default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  BASE_URL: ''
+}));
+
+import api from '../services/api';
 import ChatWidget from '../components/chat/ChatWidget';
 import DiagnosisSuggestBox from '../components/clinical/DiagnosisSuggestBox';
+
+const ok = (data) => Promise.resolve({ success: true, data, message: 'OK' });
+const networkError = () => Promise.reject(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
 
 describe('AI Chatbot & Diagnosis Suggestion Suite', () => {
 
@@ -47,6 +57,11 @@ describe('AI Chatbot & Diagnosis Suggestion Suite', () => {
   });
 
   describe('DiagnosisSuggestBox Component', () => {
+    beforeEach(() => {
+      // Mặc định dịch vụ AI không phản hồi → hộp gợi ý dùng gợi ý theo từ khóa tại chỗ
+      api.post.mockImplementation(networkError);
+    });
+
     it('should not render anything when symptoms text is empty', () => {
       const { container } = render(
         <DiagnosisSuggestBox symptomsText="" onSelectDiagnosis={() => {}} />
@@ -68,7 +83,7 @@ describe('AI Chatbot & Diagnosis Suggestion Suite', () => {
         />
       );
 
-      expect(screen.getByText(/AI Gợi ý Chẩn đoán ICD-10/i)).toBeInTheDocument();
+      expect(screen.getByText(/Gợi ý chẩn đoán ICD-10 \(3\)/i)).toBeInTheDocument();
 
       // Click "Xem gợi ý"
       const toggleBtn = screen.getByText('Xem gợi ý');
@@ -78,8 +93,7 @@ describe('AI Chatbot & Diagnosis Suggestion Suite', () => {
       expect(screen.getByText(/Tăng huyết áp vô căn/i)).toBeInTheDocument();
 
       // Click on suggestion card
-      const suggestionCard = screen.getByText('I10').closest('div');
-      fireEvent.click(suggestionCard);
+      fireEvent.click(screen.getByRole('button', { name: /Chọn mã I10/ }));
 
       expect(selectedCode).toBe('I10');
       expect(selectedName).toContain('Tăng huyết áp vô căn');
@@ -194,6 +208,53 @@ describe('AI Chatbot & Diagnosis Suggestion Suite', () => {
       // Close
       fireEvent.click(screen.getByText('Thu gọn'));
       expect(screen.queryByText('I10')).not.toBeInTheDocument();
+    });
+
+    it('should show server suggestions labelled as coming from the AI service', async () => {
+      api.post.mockImplementation((url) => {
+        if (url === '/ai/clinical/suggest-diagnosis') {
+          return ok({
+            suggestions: [{ code: 'E11.9', name: 'Đái tháo đường typ 2 không biến chứng', confidence: 0.91, reason: 'Từ máy chủ' }],
+            total_suggestions: 1
+          });
+        }
+        return networkError();
+      });
+
+      render(
+        <DiagnosisSuggestBox symptomsText="Khát nước nhiều, sụt cân" onSelectDiagnosis={() => {}} />
+      );
+      fireEvent.click(screen.getByText('Xem gợi ý'));
+
+      expect(await screen.findByText('Từ dịch vụ AI', {}, { timeout: 3000 })).toBeInTheDocument();
+      expect(api.post).toHaveBeenCalledWith(
+        '/ai/clinical/suggest-diagnosis',
+        expect.objectContaining({ symptoms: 'Khát nước nhiều, sụt cân' })
+      );
+      expect(screen.getByText('91%')).toBeInTheDocument();
+      expect(screen.getByText('Từ máy chủ')).toBeInTheDocument();
+    });
+
+    it('should fall back to keyword suggestions (clearly labelled) when the AI service is unreachable', async () => {
+      render(
+        <DiagnosisSuggestBox symptomsText="Đau bụng vùng thượng vị" onSelectDiagnosis={() => {}} />
+      );
+      fireEvent.click(screen.getByText('Xem gợi ý'));
+
+      await waitFor(() => expect(api.post).toHaveBeenCalled(), { timeout: 3000 });
+      expect(await screen.findByText('Gợi ý theo từ khóa')).toBeInTheDocument();
+      expect(screen.queryByText('Từ dịch vụ AI')).not.toBeInTheDocument();
+      expect(screen.getByText('K29.7')).toBeInTheDocument();
+    });
+
+    it('should not select a diagnosis when the box is disabled', () => {
+      const onSelect = vi.fn();
+      render(
+        <DiagnosisSuggestBox symptomsText="Bệnh nhân đau ngực" onSelectDiagnosis={onSelect} disabled />
+      );
+      fireEvent.click(screen.getByText('Xem gợi ý'));
+      fireEvent.click(screen.getByRole('button', { name: /Chọn mã I10/ }));
+      expect(onSelect).not.toHaveBeenCalled();
     });
   });
 

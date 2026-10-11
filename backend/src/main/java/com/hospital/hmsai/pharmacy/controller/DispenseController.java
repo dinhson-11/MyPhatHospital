@@ -62,9 +62,10 @@ public class DispenseController {
     @GetMapping("/dispenses")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
     @Operation(summary = "Lịch sử cấp phát thuốc", description = "Danh sách các lượt cấp phát thuốc gần đây của nhà thuốc")
-    public ResponseEntity<ApiResponse<List<DispenseResponse>>> getAllDispenses() {
-        log.info("GET /api/v1/prescriptions/dispenses");
-        List<DispenseResponse> list = dispenseService.getAllDispenses();
+    public ResponseEntity<ApiResponse<List<DispenseResponse>>> getAllDispenses(
+            @RequestParam(defaultValue = "50") int limit) {
+        log.info("GET /api/v1/prescriptions/dispenses?limit={}", limit);
+        List<DispenseResponse> list = dispenseService.getAllDispenses(limit);
         return ResponseEntity.ok(ApiResponse.success(list));
     }
 }

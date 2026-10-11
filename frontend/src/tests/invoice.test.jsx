@@ -7,7 +7,7 @@ vi.mock('../services/api', () => ({
   BASE_URL: ''
 }));
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ isAdmin: false, isAccountant: true })
+  useAuth: () => ({ isAdmin: false, isReceptionist: true })
 }));
 
 import api from '../services/api';
@@ -65,7 +65,8 @@ function routeGet(overrides = {}) {
       return ok({
         invoiceId: 10, invoiceCode: 'HD261012000010', bankBin: '970422', bankName: 'MB Bank (DEMO)',
         accountNo: '0000000000', accountName: 'MY PHAT HOSPITAL DEMO', amount: 136000,
-        transferContent: 'MPH HD261012000010', qrImageUrl: 'https://img.vietqr.io/image/x.png', demo: true
+        transferContent: 'MPH HD261012000010', qrImageUrl: 'https://img.vietqr.io/image/x.png', demo: true,
+        qrPayload: '00020101021238540010A00000072701240006970436011001234567890208QRIBFTTA530370454061360005802VN62220818MPH HD26101200001063042669'
       });
     }
     return networkError();
@@ -203,6 +204,10 @@ describe('Viện phí – giao diện thu ngân', () => {
     fireEvent.click(within(dialog).getByLabelText(/VietQR/));
     expect(await within(dialog).findByText(/Tài khoản DEMO/)).toBeInTheDocument();
     expect(within(dialog).getByText('MPH HD261012000010')).toBeInTheDocument();
+    // Mã QR được vẽ tại trình duyệt từ chuỗi VietQR của máy chủ (không dùng ảnh từ Internet khi đã có qrPayload)
+    const code = within(dialog).getByTestId('vietqr-code');
+    expect(code.querySelector('svg')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('img', { name: /Mã VietQR/ }).tagName).toBe('DIV');
 
     const submit = within(dialog).getByRole('button', { name: /Xác nhận đã thu/ });
     expect(submit).toBeDisabled();

@@ -1,3 +1,5 @@
+@tailwind base;
+
 /* ==========================================================================
    Hệ thống thiết kế – Mỹ Phát Hospital
    --------------------------------------------------------------------------
@@ -1139,3 +1141,8 @@ textarea:focus-visible,
     page-break-before: always;
   }
 }
+
+/* 8. TAILWIND UTILITIES ------------------------------------------------------
+   Đặt SAU các lớp thành phần ở trên để tiện ích (px-4, mt-2…) luôn thắng khi cùng áp lên một phần tử
+   (giống thứ tự khi Tailwind CDN chèn <style> sau cùng). */
+@tailwind utilities;

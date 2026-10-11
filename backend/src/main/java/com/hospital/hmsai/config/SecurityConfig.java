@@ -18,6 +18,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import com.hospital.hmsai.security.JwtAuthFilter;
+import org.springframework.beans.factory.annotation.Value;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +30,13 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
+
+    /**
+     * Các nguồn (origin) của giao diện web được phép gọi API từ trình duyệt, phân tách bằng dấu phẩy.
+     * Đặt bằng biến CORS_ALLOWED_ORIGINS (vd https://benhvien.example.com). KHÔNG dùng * khi bật credentials.
+     */
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}")
+    private java.util.List<String> allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -48,6 +56,10 @@ public class SecurityConfig {
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
+            // Chưa đăng nhập / token hết hạn → 401 (để frontend làm mới token); đã đăng nhập nhưng thiếu quyền → 403
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                new org.springframework.security.web.authentication.HttpStatusEntryPoint(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED)))
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -76,9 +88,9 @@ public class SecurityConfig {
     @Bean
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
         var configuration = new org.springframework.web.cors.CorsConfiguration();
-        configuration.setAllowedOriginPatterns(java.util.List.of("*"));
+        configuration.setAllowedOrigins(allowedOrigins.stream().map(String::trim).filter(o -> !o.isEmpty()).toList());
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(java.util.List.of("*"));
+        configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Accept", "X-Chat-Token"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

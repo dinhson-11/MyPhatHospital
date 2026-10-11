@@ -62,10 +62,10 @@ class RBACSecurityTest {
     private PublicPortalService publicPortalService;
 
     @Test
-    @DisplayName("SEC-01: Chưa đăng nhập truy cập API bảo mật bị từ chối truy cập (403 Forbidden)")
+    @DisplayName("SEC-01: Chưa đăng nhập truy cập API bảo mật bị từ chối (401 Unauthorized – để frontend làm mới token / đăng nhập lại)")
     void testUnauthenticatedAccess_Blocked() throws Exception {
         mockMvc.perform(get("/api/v1/patients"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -95,9 +95,9 @@ class RBACSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "ketoan", roles = {"ACCOUNTANT"})
-    @DisplayName("SEC-05: Kế toán cố tình thêm thuốc mới vào danh mục kho dược trả về 403 Forbidden")
-    void testAccountantCreateDrug_Returns403() throws Exception {
+    @WithMockUser(username = "letan", roles = {"RECEPTIONIST"})
+    @DisplayName("SEC-05: Lễ tân - Kế toán cố tình thêm thuốc mới vào danh mục kho dược trả về 403 Forbidden")
+    void testReceptionistCreateDrug_Returns403() throws Exception {
         mockMvc.perform(post("/api/v1/drugs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"Thuốc\", \"code\": \"TH01\", \"unit\": \"Viên\", \"price\": 1000, \"stockQuantity\": 10}"))
@@ -121,9 +121,9 @@ class RBACSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "ketoan", roles = {"ACCOUNTANT"})
-    @DisplayName("SEC-08: Kế toán được phép xem báo cáo doanh thu bệnh viện")
-    void testAccountantAccessRevenueReport_Allowed() throws Exception {
+    @WithMockUser(username = "letan", roles = {"RECEPTIONIST"})
+    @DisplayName("SEC-08: Lễ tân - Kế toán được phép xem báo cáo doanh thu bệnh viện")
+    void testReceptionistAccessRevenueReport_Allowed() throws Exception {
         when(reportService.getRevenueSummary(any(), any()))
                 .thenReturn(RevenueSummaryResponse.builder().totalRevenue(BigDecimal.ZERO).build());
 
@@ -168,7 +168,7 @@ class RBACSecurityTest {
     @DisplayName("SEC-12: Khách chưa đăng nhập không được xem lịch trực nhân viên")
     void testAnonymousViewSchedules_Blocked() throws Exception {
         mockMvc.perform(get("/api/v1/schedules"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

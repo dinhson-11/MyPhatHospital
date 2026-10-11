@@ -11,6 +11,7 @@ import com.hospital.hmsai.billing.pricing.InsurancePolicy;
 import com.hospital.hmsai.billing.pricing.LabFeeCatalog;
 import com.hospital.hmsai.billing.repository.InvoiceRepository;
 import com.hospital.hmsai.billing.service.InvoiceService;
+import com.hospital.hmsai.billing.util.VietQrPayload;
 import com.hospital.hmsai.clinical.entity.LabOrder;
 import com.hospital.hmsai.clinical.entity.Prescription;
 import com.hospital.hmsai.clinical.entity.PrescriptionItem;
@@ -384,6 +385,13 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         String content = "MPH " + invoice.getInvoiceCode();
+        String payload;
+        try {
+            payload = VietQrPayload.build(qr.getBankBin(), qr.getAccountNo(), amount, content);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("Cấu hình tài khoản VietQR không hợp lệ: " + e.getMessage()
+                    + ". Kiểm tra VIETQR_BANK_BIN (6 chữ số) và VIETQR_ACCOUNT_NO.");
+        }
         String url = "https://img.vietqr.io/image/" + qr.getBankBin() + "-" + qr.getAccountNo() + "-"
                 + qr.getTemplate() + ".png"
                 + "?amount=" + amount.toPlainString()
@@ -399,6 +407,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .accountName(qr.getAccountName())
                 .amount(amount)
                 .transferContent(content)
+                .qrPayload(payload)
                 .qrImageUrl(url)
                 .demo(qr.isDemo())
                 .build();

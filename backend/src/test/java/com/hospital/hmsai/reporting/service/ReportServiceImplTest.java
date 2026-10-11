@@ -2,6 +2,7 @@ package com.hospital.hmsai.reporting.service;
 
 import com.hospital.hmsai.ai.repository.AiClinicalSuggestionRepository;
 import com.hospital.hmsai.appointment.repository.AppointmentRepository;
+import com.hospital.hmsai.appointment.entity.AppointmentStatus;
 import com.hospital.hmsai.billing.entity.Invoice;
 import com.hospital.hmsai.billing.entity.InvoiceStatus;
 import com.hospital.hmsai.billing.entity.PaymentMethod;
@@ -140,11 +141,11 @@ class ReportServiceImplTest {
     @Test
     @DisplayName("Top bệnh lý ICD-10 xếp hạng theo tần suất xuất hiện giảm dần")
     void testTopDiagnoses_Success() {
-        Visit v1 = Visit.builder().diagnosisCode("I10").diagnosisNote("Tăng huyết áp vô căn").build();
-        Visit v2 = Visit.builder().diagnosisCode("I10").diagnosisNote("Tăng huyết áp vô căn").build();
-        Visit v3 = Visit.builder().diagnosisCode("E11").diagnosisNote("Đái tháo đường type 2").build();
-
-        when(visitRepository.findAllWithDiagnosis()).thenReturn(List.of(v1, v2, v3));
+        when(visitRepository.countWithDiagnosis()).thenReturn(3L);
+        when(visitRepository.findTopDiagnosisCounts(any())).thenReturn(List.of(
+                diagnosisCount("I10", 2), diagnosisCount("E11", 1)));
+        when(visitRepository.findLatestNotesByDiagnosisCode(eq("I10"), any())).thenReturn(List.of("Tăng huyết áp vô căn"));
+        when(visitRepository.findLatestNotesByDiagnosisCode(eq("E11"), any())).thenReturn(List.of());
 
         List<TopDiagnosisResponse> top = reportService.getTopDiagnoses(5);
 
@@ -153,13 +154,41 @@ class ReportServiceImplTest {
         assertThat(top.get(0).getCount()).isEqualTo(2);
         assertThat(top.get(1).getIcd10Code()).isEqualTo("E11");
         assertThat(top.get(1).getCount()).isEqualTo(1);
+        assertThat(top.get(0).getDiseaseName()).isEqualTo("Tăng huyết áp vô căn");
+        assertThat(top.get(0).getPercentage()).isEqualTo(66.7);
+        assertThat(top.get(1).getDiseaseName()).isEqualTo("E11"); // chưa có ghi chú → dùng mã
+    }
+
+    @Test
+    @DisplayName("Top bệnh lý: chỉ truy vấn tổng hợp trong DB, không nạp toàn bộ ca khám; limit được truyền xuống DB")
+    void testTopDiagnoses_AggregatesInDatabase() {
+        when(visitRepository.countWithDiagnosis()).thenReturn(0L);
+        assertThat(reportService.getTopDiagnoses(3)).isEmpty();
+
+        when(visitRepository.countWithDiagnosis()).thenReturn(10L);
+        when(visitRepository.findTopDiagnosisCounts(any())).thenReturn(List.of());
+        reportService.getTopDiagnoses(3);
+
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        org.mockito.Mockito.verify(visitRepository).findTopDiagnosisCounts(page.capture());
+        assertThat(page.getValue().getPageSize()).isEqualTo(3);
+        org.mockito.Mockito.verify(visitRepository, org.mockito.Mockito.never()).findAll();
+    }
+
+    private static VisitRepository.DiagnosisCount diagnosisCount(String code, long count) {
+        return new VisitRepository.DiagnosisCount() {
+            @Override public String getCode() { return code; }
+            @Override public long getCnt() { return count; }
+        };
     }
 
     @Test
     @DisplayName("KPI tổng quan phản ánh chính xác các số liệu điều hành")
     void testKpiSummary_Success() {
         when(patientRepository.count()).thenReturn(150L);
-        when(appointmentRepository.count()).thenReturn(20L);
+        when(appointmentRepository.countByScheduledAtBetweenAndStatusNot(any(), any(), eq(AppointmentStatus.CANCELLED)))
+                .thenReturn(7L);
         when(visitRepository.countByVisitTimeBetween(any(), any())).thenReturn(15L);
         when(invoiceRepository.findByStatusAndPaidAtBetween(any(), any(), any())).thenReturn(Collections.emptyList());
         when(staffProfileRepository.count()).thenReturn(12L);
@@ -170,10 +199,43 @@ class ReportServiceImplTest {
         KpiSummaryResponse kpi = reportService.getKpiSummary();
 
         assertThat(kpi.getTotalPatients()).isEqualTo(150);
-        assertThat(kpi.getTodayAppointments()).isEqualTo(20);
+        assertThat(kpi.getTodayAppointments()).isEqualTo(7);
         assertThat(kpi.getTodayVisits()).isEqualTo(15);
         assertThat(kpi.getActiveStaffCount()).isEqualTo(12);
         assertThat(kpi.getLowStockDrugsCount()).isEqualTo(1);
         assertThat(kpi.getAiAlertsCount()).isEqualTo(45);
+    }
+
+    @Test
+    @DisplayName("KPI lịch hẹn hôm nay chỉ đếm lịch trong ngày, không đếm lịch đã hủy")
+    void testKpiTodayAppointments_OnlyToday() {
+        reportService.getKpiSummary();
+
+        org.mockito.ArgumentCaptor<LocalDateTime> from = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        org.mockito.ArgumentCaptor<LocalDateTime> to = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        org.mockito.Mockito.verify(appointmentRepository)
+                .countByScheduledAtBetweenAndStatusNot(from.capture(), to.capture(), eq(AppointmentStatus.CANCELLED));
+        assertThat(from.getValue()).isEqualTo(LocalDate.now().atStartOfDay());
+        assertThat(to.getValue().toLocalDate()).isEqualTo(LocalDate.now());
+        org.mockito.Mockito.verify(appointmentRepository, org.mockito.Mockito.never()).count();
+    }
+
+    @Test
+    @DisplayName("KPI doanh thu hôm nay là tiền thực thu từ người bệnh, không gồm phần BHYT")
+    void testKpiTodayRevenue_UsesPatientAmount() {
+        Invoice a = new Invoice();
+        a.setTotalAmount(new BigDecimal("1000000"));
+        a.setInsuranceAmount(new BigDecimal("800000"));
+        a.setPatientAmount(new BigDecimal("200000"));
+        Invoice b = new Invoice();
+        b.setTotalAmount(new BigDecimal("300000"));
+        b.setInsuranceAmount(BigDecimal.ZERO);
+        b.setPatientAmount(new BigDecimal("300000"));
+        when(invoiceRepository.findByStatusAndPaidAtBetween(eq(InvoiceStatus.PAID), any(), any()))
+                .thenReturn(List.of(a, b));
+
+        KpiSummaryResponse kpi = reportService.getKpiSummary();
+
+        assertThat(kpi.getTodayRevenue()).isEqualByComparingTo("500000");
     }
 }

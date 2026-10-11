@@ -1,14 +1,23 @@
+# =============================================================
+# CƠ SỞ DỮ LIỆU: có 2 chế độ, chọn trong file .env (xem .env.example)
+#   1) MySQL đóng gói sẵn (dev/demo):  COMPOSE_PROFILES=local-db   -> service `mysql` bên dưới được khởi động
+#   2) MySQL THẬT/bên ngoài (server riêng, cloud, MySQL cài trên máy):
+#        bỏ COMPOSE_PROFILES, đặt MYSQL_HOST / MYSQL_PORT / MYSQL_DB / MYSQL_USER / MYSQL_PASSWORD
+#        -> service `mysql` KHÔNG chạy, backend nối thẳng vào máy chủ bạn chỉ định.
+# =============================================================
 services:
   mysql:
+    profiles: ["local-db"]
     image: mysql:8.0
     container_name: hmsai-mysql
     environment:
+      TZ: Asia/Ho_Chi_Minh   # NOW()/CURRENT_TIMESTAMP theo giờ Việt Nam, khớp backend
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: hmsai_db
       MYSQL_USER: ${MYSQL_USER:-hmsai_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-hmsai_password}
     ports:
-      - "${MYSQL_HOST_PORT:-3307}:3306"
+      - "${MYSQL_HOST_PORT:-3308}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -24,21 +33,42 @@ services:
     container_name: hmsai-backend
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hmsai_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-hmsai_user}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-hmsai_password}
+      # Kết nối CSDL (đọc bởi application-prod.yml). Mặc định trỏ vào service `mysql` đóng gói sẵn.
+      # Dùng DB thật: MYSQL_HOST=<máy chủ DB>, ví dụ host.docker.internal (MySQL cài trên chính máy này).
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DB: ${MYSQL_DB:-hmsai_db}
+      MYSQL_USER: ${MYSQL_USER:-hmsai_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-hmsai_password}
+      MYSQL_SSL_MODE: ${MYSQL_SSL_MODE:-PREFERRED}
+      MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL: ${MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL:-false}
+      # Origin của giao diện web được phép gọi API (CORS). Đổi khi dùng tên miền/cổng khác.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      BILLING_CONSULTATION_FEE: ${BILLING_CONSULTATION_FEE:-150000}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env - see .env.example}
       AI_SERVICE_URL: http://ai-service:8000
       VIETQR_BANK_BIN: ${VIETQR_BANK_BIN:-}
       VIETQR_BANK_NAME: ${VIETQR_BANK_NAME:-}
       VIETQR_ACCOUNT_NO: ${VIETQR_ACCOUNT_NO:-}
       VIETQR_ACCOUNT_NAME: ${VIETQR_ACCOUNT_NAME:-}
+      VIETQR_DEMO: ${VIETQR_DEMO:-false}
       BHYT_BASE_SALARY: ${BHYT_BASE_SALARY:-2340000}
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    # Cho phép dùng host.docker.internal để gọi MySQL cài trên máy chủ (Docker Desktop đã có sẵn; Linux cần dòng này)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
+        required: false   # bỏ qua khi dùng DB ngoài (service mysql không được bật)
     networks:
       - hmsai-network
 
@@ -46,17 +76,21 @@ services:
     build: ./ai-service
     container_name: hmsai-ai
     environment:
-      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-hmsai_user}:${MYSQL_PASSWORD:-hmsai_password}@mysql:3306/hmsai_db
+      TZ: Asia/Ho_Chi_Minh
       LLM_API_KEY: ${LLM_API_KEY:-}
     ports:
       - "8000:8000"
-    depends_on:
-      - mysql
     networks:
       - hmsai-network
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # true = hiện tài khoản demo trên form đăng nhập (chỉ dev/demo; đặt false khi dùng CSDL thật)
+        VITE_SHOW_DEMO_ACCOUNTS: ${VITE_SHOW_DEMO_ACCOUNTS:-false}
+        # URL backend mà TRÌNH DUYỆT gọi; được nhúng lúc build (đổi giá trị phải build lại frontend)
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
     container_name: hmsai-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:80"

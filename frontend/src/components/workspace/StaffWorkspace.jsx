@@ -55,7 +55,6 @@ export default function StaffWorkspace({
     isReceptionist,
     isNurse,
     isPharmacist,
-    isAccountant,
     logout
   } = useAuth();
   const { showToast } = useToast();
@@ -129,13 +128,11 @@ export default function StaffWorkspace({
     : isDoctor
     ? 'Bác sĩ điều trị'
     : isReceptionist
-    ? 'Lễ tân tiếp đón'
+    ? 'Lễ tân - Kế toán'
     : isNurse
     ? 'Điều dưỡng viên'
     : isPharmacist
     ? 'Dược sĩ'
-    : isAccountant
-    ? 'Kế toán viên'
     : 'Nhân viên';
 
   const handleLogout = () => {
@@ -157,13 +154,13 @@ export default function StaffWorkspace({
       label: 'Dược & viện phí',
       items: [
         { key: 'pharmacy', id: 'sidebarPharmacyBtn', icon: 'medication', show: isPharmacist, action: onOpenPharmacy },
-        { key: 'invoice', id: 'sidebarInvoiceBtn', icon: 'receipt_long', show: isAccountant, action: () => onOpenInvoice?.() }
+        { key: 'invoice', id: 'sidebarInvoiceBtn', icon: 'receipt_long', show: isReceptionist, action: () => onOpenInvoice?.() }
       ]
     },
     {
       label: 'Vận hành & báo cáo',
       items: [
-        { key: 'reports', id: 'sidebarReportsBtn', icon: 'query_stats', show: isAccountant || isAdmin, action: onOpenReports },
+        { key: 'reports', id: 'sidebarReportsBtn', icon: 'query_stats', show: isReceptionist, action: onOpenReports },
         { key: 'schedule', id: 'sidebarScheduleBtn', icon: 'calendar_month', show: true, action: () => onOpenSchedule?.() },
         { key: 'admin', id: 'sidebarAdminBtn', icon: 'admin_panel_settings', show: isAdmin, action: onOpenAdmin }
       ]

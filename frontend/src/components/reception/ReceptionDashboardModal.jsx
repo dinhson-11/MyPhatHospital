@@ -118,6 +118,54 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
     }
   };
 
+  // Máy chủ chỉ cho ghi nhận vắng mặt sau giờ hẹn → khóa nút trước giờ hẹn để không bấm nhầm
+  const notYetDue = (item) => Boolean(item.scheduledAt) && new Date(item.scheduledAt).getTime() > Date.now();
+
+  const handleCancel = async (item) => {
+    if (busy) return;
+    const reason = await confirm({
+      title: 'Hủy lịch hẹn?',
+      message: `Hủy lịch hẹn của ${item.fullName} lúc ${item.appointmentTime || '—'} ngày ${formatDate(item.date)}.`,
+      requireReason: true,
+      reasonLabel: 'Lý do hủy',
+      reasonPlaceholder: 'Ví dụ: bệnh nhân gọi báo bận, đổi sang ngày khác',
+      confirmText: 'Hủy lịch',
+      tone: 'danger'
+    });
+    if (!reason) return;
+    setBusy({ id: item.id, action: 'cancel' });
+    try {
+      await receptionService.cancelAppointment(item.id, reason);
+      showToast(`Đã hủy lịch hẹn của ${item.fullName}.`, 'success');
+      await loadQueue(queueDate);
+    } catch (err) {
+      showToast(err.message || 'Không hủy được lịch hẹn', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleNoShow = async (item) => {
+    if (busy) return;
+    const ok = await confirm({
+      title: 'Đánh dấu bệnh nhân không đến?',
+      message: `${item.fullName} sẽ được ghi nhận là vắng mặt; lịch hẹn kết thúc và không check-in được nữa.`,
+      confirmText: 'Ghi nhận vắng mặt',
+      tone: 'warning'
+    });
+    if (!ok) return;
+    setBusy({ id: item.id, action: 'noshow' });
+    try {
+      await receptionService.markNoShow(item.id);
+      showToast(`Đã ghi nhận ${item.fullName} không đến khám.`, 'success');
+      await loadQueue(queueDate);
+    } catch (err) {
+      showToast(err.message || 'Không cập nhật được trạng thái lịch hẹn', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleCheckIn = async (item) => {
     if (busy) return;
     const ok = await confirm({
@@ -352,6 +400,29 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                                   <span className="material-symbols-outlined" aria-hidden="true">login</span>
                                   {rowBusy && busy.action === 'checkin' ? 'Đang check-in…' : 'Check-in'}
                                 </button>
+                              )}
+                              {(item.status === 'BOOKED' || item.status === 'CONFIRMED') && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNoShow(item)}
+                                    disabled={Boolean(busy) || notYetDue(item)}
+                                    title={notYetDue(item) ? 'Chỉ ghi nhận vắng mặt sau giờ hẹn' : undefined}
+                                    aria-label={`Ghi nhận ${item.fullName} không đến`}
+                                    className="btn btn-light btn-sm"
+                                  >
+                                    Vắng mặt
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCancel(item)}
+                                    disabled={Boolean(busy)}
+                                    aria-label={`Hủy lịch hẹn của ${item.fullName}`}
+                                    className="btn btn-light btn-sm"
+                                  >
+                                    {rowBusy && busy.action === 'cancel' ? 'Đang hủy…' : 'Hủy lịch'}
+                                  </button>
+                                </>
                               )}
                               {item.status === 'CONFIRMED' && missing && (
                                 <span className="text-xs text-amber-800 w-full text-right">{missing}</span>

@@ -1,0 +1,82 @@
+name: CI
+
+# Chặn merge nếu bất kỳ job nào đỏ (bật "Require status checks" cho 4 job bên dưới ở Settings → Branches).
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (mvn test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      # Docker có sẵn trên runner: MySqlMigrationConstraintsTest chạy migration V1→V23 trên MySQL 8 thật (Testcontainers)
+      - name: Run tests
+        run: mvn -B -ntp test
+
+  frontend:
+    name: Frontend (oxlint + vitest + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npx oxlint
+      - name: Unit tests
+        run: npx vitest run
+      - name: Build
+        run: npm run build
+
+  ai-service:
+    name: AI Service (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ai-service/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      # File mô hình (*.joblib) bị .gitignore nên không có sau khi checkout; một số test cần mô hình đã huấn luyện.
+      # Huấn luyện lại từ tập dữ liệu trong mã nguồn (~7 giây) trước khi chạy test.
+      - name: Train triage model
+        run: python train_model.py
+      - name: Run tests
+        run: python -m pytest -q
+
+  compose:
+    name: Docker Compose (config)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Bắt lỗi cú pháp/biến thiếu trong docker-compose.yml ở cả hai chế độ CSDL (đóng gói và DB thật)
+      - name: Validate compose (MySQL đóng gói)
+        run: cp .env.example .env && sed -i 's/^JWT_SECRET=.*/JWT_SECRET=ci-secret-for-config-check-only/' .env && docker compose config --quiet
+      - name: Validate compose (MySQL thật)
+        run: sed -i '/^COMPOSE_PROFILES=/d' .env && printf 'MYSQL_HOST=db.example.com\nMYSQL_SSL_MODE=REQUIRED\n' >> .env && docker compose config --quiet

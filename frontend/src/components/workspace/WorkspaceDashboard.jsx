@@ -25,11 +25,11 @@ export default function WorkspaceDashboard({
   onOpenSchedule,
   onOpenAdmin
 }) {
-  const { user, isAdmin, isDoctor, isReceptionist, isNurse, isPharmacist, isAccountant } = useAuth();
+  const { user, isAdmin, isDoctor, isReceptionist, isNurse, isPharmacist } = useAuth();
 
   // Chỉ gọi những API mà vai trò hiện tại có quyền (tránh lỗi 403 hiển thị vô nghĩa)
   const canSeeKpi = isAdmin; // /reports/kpi-summary: ADMIN
-  const canSeeRevenue = isAdmin || isAccountant; // /reports/revenue: ADMIN, ACCOUNTANT
+  const canSeeRevenue = isReceptionist; // /reports/revenue: ADMIN, RECEPTIONIST (Lễ tân - Kế toán; isReceptionist đã gồm ADMIN)
   const canSeeDiagnoses = isAdmin || isDoctor; // /reports/top-diagnoses: ADMIN, DOCTOR
   const canSeeQueue = isAdmin || isReceptionist || isNurse || isDoctor;
 
@@ -49,13 +49,11 @@ export default function WorkspaceDashboard({
     : isDoctor
     ? 'Bác sĩ điều trị'
     : isReceptionist
-    ? 'Lễ tân tiếp đón'
+    ? 'Lễ tân - Kế toán'
     : isNurse
     ? 'Điều dưỡng viên'
     : isPharmacist
     ? 'Dược sĩ lâm sàng'
-    : isAccountant
-    ? 'Kế toán viện phí'
     : 'Nhân viên y tế';
 
   const rev = revenueToday.data;
@@ -77,8 +75,8 @@ export default function WorkspaceDashboard({
     { key: 'nurse', show: isNurse, action: onOpenNurse, icon: 'vital_signs', tag: 'Điều dưỡng', title: 'Trạm điều dưỡng & xét nghiệm', desc: 'Đo sinh hiệu (huyết áp, mạch, BMI) và cập nhật kết quả cận lâm sàng' },
     { key: 'clinical', show: isDoctor, action: onOpenClinical, icon: 'stethoscope', tag: 'Bác sĩ', title: 'Phòng khám bác sĩ', desc: 'Khám bệnh, tham khảo gợi ý ICD-10 của AI và kê đơn có kiểm tra an toàn' },
     { key: 'pharmacy', show: isPharmacist, action: onOpenPharmacy, icon: 'medication', tag: 'Dược sĩ', title: 'Nhà thuốc & kho dược', desc: 'Cấp phát thuốc theo đơn điện tử và theo dõi tồn kho' },
-    { key: 'invoice', show: isAccountant, action: () => onOpenInvoice?.(), icon: 'receipt_long', tag: 'Kế toán', title: 'Hóa đơn & viện phí', desc: 'Thu viện phí (tiền mặt, VietQR, chuyển khoản, thẻ) và in phiếu thu' },
-    { key: 'reports', show: isAccountant || isAdmin, action: onOpenReports, icon: 'query_stats', tag: 'Báo cáo', title: 'Báo cáo & thống kê', desc: 'Lượt khám, doanh thu viện phí theo phương thức và mô hình bệnh ICD-10' },
+    { key: 'invoice', show: isReceptionist, action: () => onOpenInvoice?.(), icon: 'receipt_long', tag: 'Thu ngân', title: 'Hóa đơn & viện phí', desc: 'Thu viện phí (tiền mặt, VietQR, chuyển khoản, thẻ) và in phiếu thu' },
+    { key: 'reports', show: isReceptionist, action: onOpenReports, icon: 'query_stats', tag: 'Báo cáo', title: 'Báo cáo & thống kê', desc: 'Lượt khám, doanh thu viện phí theo phương thức và mô hình bệnh ICD-10' },
     { key: 'schedule', show: true, action: () => onOpenSchedule?.(), icon: 'calendar_month', tag: 'Nhân sự', title: 'Lịch trực tuần', desc: 'Xem ca trực sáng, chiều, đêm của bác sĩ và điều dưỡng' },
     { key: 'admin', show: isAdmin, action: onOpenAdmin, icon: 'admin_panel_settings', tag: 'Quản trị', title: 'Quản trị hệ thống', desc: 'Quản lý lịch hẹn, tài khoản và danh mục của bệnh viện' }
   ].filter((item) => item.show && item.action);
@@ -181,7 +179,7 @@ export default function WorkspaceDashboard({
         </section>
       )}
 
-      {/* Doanh thu hôm nay – Kế toán (không phải quản trị) */}
+      {/* Doanh thu hôm nay – Lễ tân - Kế toán (không phải quản trị) */}
       {!canSeeKpi && canSeeRevenue && (
         <section aria-labelledby="ws-revenue-title" className="space-y-3">
           <h2 id="ws-revenue-title" className="text-section-title">Thu viện phí hôm nay</h2>

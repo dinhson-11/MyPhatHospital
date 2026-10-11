@@ -1,6 +1,8 @@
 package com.hospital.hmsai.user.controller;
 
 import com.hospital.hmsai.common.ApiResponse;
+import com.hospital.hmsai.common.exception.BusinessException;
+import com.hospital.hmsai.security.CustomUserDetails;
 import com.hospital.hmsai.user.dto.CreateUserRequest;
 import com.hospital.hmsai.user.dto.UpdateUserRequest;
 import com.hospital.hmsai.user.dto.UserResponse;
@@ -17,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -82,8 +85,16 @@ public class UserController {
     @Operation(summary = "Cập nhật thông tin user")
     public ResponseEntity<ApiResponse<UserResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody UpdateUserRequest request) {
+            @Valid @RequestBody UpdateUserRequest request,
+            Authentication authentication) {
         log.info("PUT /api/v1/users/{}", id);
+        // Quản trị viên không được tự khóa mình hoặc tự gỡ vai trò ADMIN (sẽ mất quyền quản trị hệ thống)
+        if (isSelf(id, authentication)
+                && ("LOCKED".equals(request.getStatus())
+                    || (request.getRoleCodes() != null && !request.getRoleCodes().isEmpty()
+                        && request.getRoleCodes().stream().noneMatch("ADMIN"::equalsIgnoreCase)))) {
+            throw new BusinessException("Không thể tự khóa hoặc tự gỡ quyền quản trị của chính mình");
+        }
         UserResponse response = userService.update(id, request);
         return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật thành công"));
     }
@@ -91,8 +102,11 @@ public class UserController {
     @PatchMapping("/{id}/lock")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Khóa tài khoản user")
-    public ResponseEntity<ApiResponse<Void>> lockUser(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> lockUser(@PathVariable Long id, Authentication authentication) {
         log.info("PATCH /api/v1/users/{}/lock", id);
+        if (isSelf(id, authentication)) {
+            throw new BusinessException("Không thể tự khóa tài khoản của chính mình");
+        }
         userService.lockUser(id);
         return ResponseEntity.ok(ApiResponse.success(null, "Đã khóa tài khoản"));
     }
@@ -104,5 +118,13 @@ public class UserController {
         log.info("PATCH /api/v1/users/{}/unlock", id);
         userService.unlockUser(id);
         return ResponseEntity.ok(ApiResponse.success(null, "Đã mở khóa tài khoản"));
+    }
+
+    /** id tài khoản cần thao tác có phải chính người đang đăng nhập không. */
+    private static boolean isSelf(Long id, Authentication authentication) {
+        return authentication != null
+                && authentication.getPrincipal() instanceof CustomUserDetails details
+                && id != null
+                && id.equals(details.getUserId());
     }
 }
