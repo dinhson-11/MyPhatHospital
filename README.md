@@ -171,7 +171,11 @@ thanhSonHospital/
 │
 ├── docker-compose.yml                # Orchestration (mysql đóng gói là tùy chọn: profile local-db)
 ├── scripts/db/                       # SQL tạo DB thật + khóa tài khoản mẫu
-├── docs/                             # Tài liệu phân tích thiết kế (SRS, use case, CSDL, kiến trúc & API)
+├── docs/
+│   ├── reports/                      # Tài liệu .docx (SRS, use case, thiết kế CSDL, kiến trúc & API, kiểm thử...)
+│   ├── database/                     # schema.sql, seed.sql (bản tham chiếu; Flyway mới là nguồn chính)
+│   ├── assets/                       # Hình ảnh phục vụ tài liệu
+│   └── LUONG_HOAT_DONG.md            # Luồng hoạt động nghiệp vụ
 ├── .env.example                      # ✅ Template biến môi trường (safe to commit)
 ├── .env                              # ❌ Secrets thật (git-ignored)
 ├── .gitignore
