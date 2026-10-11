@@ -66,6 +66,15 @@ Không làm bước này thì **bất kỳ ai cũng đăng nhập được với
 
 Toàn bộ 4 thành phần chạy trên một máy, frontend (Nginx) tự chuyển tiếp `/api/v1/` đến backend nên **không cần CORS** và chỉ cần mở cổng 80/443.
 
+> **Đường nhanh:** sau khi làm xong *Bước 1* (tạo máy ảo + mở cổng ở Oracle), SSH vào máy rồi chạy script [scripts/deploy/oracle-setup.sh](scripts/deploy/oracle-setup.sh). Nó tự làm *Bước 2 → 5*: mở iptables, cài Docker, sinh mật khẩu/JWT ngẫu nhiên, build, bật HTTPS (nếu có tên miền), đổi mật khẩu `admin` và khóa tài khoản demo.
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/dinhson-11/MyPhatHospital/main/scripts/deploy/oracle-setup.sh -o setup.sh
+> bash setup.sh                      # chạy bằng http://<IP>
+> bash setup.sh myphat.duckdns.org   # có tên miền -> tự bật HTTPS
+> cat ~/.myphat_admin_hardened       # xem mật khẩu admin mới
+> ```
+> Muốn hiểu hoặc làm thủ công từng bước thì đọc tiếp bên dưới.
+
 ### Bước 1. Tạo máy ảo
 1. Đăng ký tại <https://www.oracle.com/cloud/free/> (cần thẻ để xác minh, không bị trừ tiền nếu chỉ dùng tài nguyên *Always Free*).
 2. *Compute → Instances → Create instance*:
