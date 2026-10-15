@@ -15,6 +15,7 @@ import java.sql.Statement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Kiểm thử migration Flyway V1→V23 và các ràng buộc toàn vẹn trên MySQL 8 THẬT (Testcontainers).
@@ -80,11 +81,24 @@ class MySqlMigrationConstraintsTest {
     }
 
     @Test
-    @DisplayName("Toàn bộ migration V1→V23 chạy được trên MySQL 8")
+    @DisplayName("Toàn bộ migration V1→V24 chạy được trên MySQL 8")
     void allMigrationsApplyOnMySql8() {
         var result = flyway("latest").migrate();
-        assertEquals(23, result.migrationsExecuted);
-        assertEquals("23", result.targetSchemaVersion);
+        assertEquals(24, result.migrationsExecuted);
+        assertEquals("24", result.targetSchemaVersion);
+    }
+
+    @Test
+    @DisplayName("V24: users có cột ảnh đại diện; tài khoản có sẵn chưa có ảnh (hiển thị chữ cái đầu tên)")
+    void userAvatarColumnsAdded() throws Exception {
+        flyway("latest").migrate();
+        long users = count("SELECT COUNT(*) FROM users");
+        assertTrue(users > 0);
+        assertEquals(users, count("SELECT COUNT(*) FROM users WHERE avatar_url IS NULL AND avatar_public_id IS NULL"));
+
+        String longUrl = "https://res.cloudinary.com/x/image/upload/f_auto,q_auto/v1/" + "a".repeat(400);
+        exec("UPDATE users SET avatar_url = '" + longUrl + "', avatar_public_id = 'myphat-hospital/avatars/user-1-abc' WHERE username = 'admin'");
+        assertEquals(1, count("SELECT COUNT(*) FROM users WHERE avatar_url = '" + longUrl + "'"));
     }
 
     @Test

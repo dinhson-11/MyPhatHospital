@@ -25,6 +25,8 @@ public class UserResponse {
     private String fullName;
     private String email;
     private String phone;
+    /** Link ảnh đại diện (null = chưa có ảnh). */
+    private String avatarUrl;
     private String status;
     private List<String> roles;
     private StaffProfileInfo staffProfile;

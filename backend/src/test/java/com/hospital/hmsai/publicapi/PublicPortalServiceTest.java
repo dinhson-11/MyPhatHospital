@@ -69,6 +69,18 @@ class PublicPortalServiceTest {
         slot = LocalDate.now().plusDays(5).atTime(9, 0);
     }
 
+    @Test
+    @DisplayName("Danh sách bác sĩ công khai kèm ảnh đại diện của tài khoản (null nếu chưa có ảnh)")
+    void doctorsIncludeAccountAvatar() {
+        doctorA.getUser().setAvatarUrl("https://cdn/bs-a.jpg");
+        when(staffProfileRepository.findAll()).thenReturn(List.of(doctorA, doctorB));
+
+        List<PublicDoctorResponse> doctors = portalService.getDoctors();
+
+        assertEquals("https://cdn/bs-a.jpg", doctors.get(0).getAvatarUrl());
+        assertNull(doctors.get(1).getAvatarUrl());
+    }
+
     private PublicBookingRequest request() {
         return PublicBookingRequest.builder()
                 .fullName("Nguyễn Văn Khách")

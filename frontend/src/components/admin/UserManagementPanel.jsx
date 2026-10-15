@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Modal from '../common/Modal';
+import Avatar from '../common/Avatar';
+import AvatarUploader from '../common/AvatarUploader';
 import { useConfirm } from '../common/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -73,7 +75,7 @@ export function validateUserForm(form, isEdit) {
   return '';
 }
 
-function UserFormDialog({ isOpen, user, onClose, onSaved }) {
+function UserFormDialog({ isOpen, user, onClose, onSaved, onAvatarChanged }) {
   const isEdit = Boolean(user);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
@@ -124,6 +126,28 @@ function UserFormDialog({ isOpen, user, onClose, onSaved }) {
       title={isEdit ? `Sửa tài khoản ${user.username}` : 'Thêm tài khoản'}
       subtitle={isEdit ? 'Không đổi được tên đăng nhập và mật khẩu ở đây' : 'Tài khoản nhân viên do quản trị viên cấp'}
     >
+      {isEdit && (
+        <section aria-label="Ảnh đại diện" className="mb-4 p-3 rounded-xl border border-slate-200 bg-slate-50/60">
+          <AvatarUploader
+            key={user.id}
+            name={user.fullName || user.username}
+            avatarUrl={user.avatarUrl}
+            avatarClassName="avatar w-16 h-16 rounded-2xl text-xl"
+            onUpload={async (file) => {
+              const avatarUrl = await userService.uploadUserAvatar(user.id, file);
+              onAvatarChanged?.(user, avatarUrl);
+              return avatarUrl;
+            }}
+            onRemove={async () => {
+              await userService.removeUserAvatar(user.id);
+              onAvatarChanged?.(user, null);
+            }}
+          >
+            <p className="text-sm font-semibold text-slate-800">Ảnh đại diện</p>
+            <p className="text-xs text-slate-500">Lưu ngay khi chọn ảnh, không cần bấm Lưu bên dưới.</p>
+          </AvatarUploader>
+        </section>
+      )}
       <form onSubmit={submit} noValidate className="space-y-3.5" aria-label={isEdit ? 'Sửa tài khoản' : 'Thêm tài khoản'}>
         {error && (
           <div role="alert" className="alert alert-error">
@@ -219,7 +243,7 @@ function UserFormDialog({ isOpen, user, onClose, onSaved }) {
  * Quản trị viên không tự khóa được tài khoản của chính mình (tránh bị mất quyền quản trị).
  */
 export default function UserManagementPanel() {
-  const { user: me } = useAuth();
+  const { user: me, updateUser } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -291,6 +315,13 @@ export default function UserManagementPanel() {
 
   const isMe = (u) => me?.username && u.username === me.username;
 
+  const onAvatarChanged = (u, avatarUrl) => {
+    // Ảnh của chính quản trị viên → cập nhật luôn phiên đăng nhập (thanh điều hướng, hồ sơ)
+    if (isMe(u)) updateUser({ avatarUrl });
+    showToast(avatarUrl ? `Đã cập nhật ảnh đại diện của ${u.username}.` : `Đã gỡ ảnh đại diện của ${u.username}.`, 'success');
+    reload();
+  };
+
   return (
     <section aria-labelledby="admin-users-title" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -351,8 +382,13 @@ export default function UserManagementPanel() {
               {items.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    <span className="cell-primary block">{u.fullName}</span>
-                    <span className="block text-xs text-slate-500 font-mono">{u.username}</span>
+                    <span className="flex items-center gap-2.5">
+                      <Avatar name={u.fullName || u.username} src={u.avatarUrl} className="avatar avatar-sm" />
+                      <span className="min-w-0">
+                        <span className="cell-primary block">{u.fullName}</span>
+                        <span className="block text-xs text-slate-500 font-mono">{u.username}</span>
+                      </span>
+                    </span>
                   </td>
                   <td>
                     <span className="block text-xs text-slate-700 break-all">{u.email || '—'}</span>
@@ -413,6 +449,7 @@ export default function UserManagementPanel() {
         user={dialog.user}
         onClose={() => setDialog({ open: false, user: null })}
         onSaved={onSaved}
+        onAvatarChanged={onAvatarChanged}
       />
     </section>
   );

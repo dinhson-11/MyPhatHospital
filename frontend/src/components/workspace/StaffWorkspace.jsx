@@ -6,6 +6,7 @@ import logoHospital from '../../assets/logo.png';
 import GlobalPatientSearch from '../common/GlobalPatientSearch';
 import { hoursCompact } from '../../services/hospitalHours';
 import { formatDate } from '../../utils/format';
+import Avatar from '../common/Avatar';
 
 /** Tên hiển thị của từng phân hệ (dùng cho thanh bên và đường dẫn vị trí trên thanh trên cùng). */
 const MODULE_LABELS = {
@@ -17,17 +18,6 @@ const MODULE_LABELS = {
   reports: 'Báo cáo & thống kê',
   schedule: 'Lịch trực nhân viên',
   admin: 'Quản trị hệ thống'
-};
-
-const getInitials = (name) => {
-  if (!name) return 'U';
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .slice(-2)
-    .join('')
-    .toUpperCase();
 };
 
 const Icon = ({ name, className = '' }) => (
@@ -304,7 +294,7 @@ export default function StaffWorkspace({
 
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200/80">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <span className="avatar avatar-sm" aria-hidden="true">{getInitials(displayName)}</span>
+              <Avatar name={displayName} src={user?.avatarUrl} className="avatar avatar-sm" />
               {!sidebarCollapsed && (
                 <div className="flex flex-col truncate">
                   <span className="text-xs font-bold text-slate-800 truncate">{displayName}</span>
@@ -417,7 +407,7 @@ export default function StaffWorkspace({
                 aria-label={`Tài khoản: ${displayName} (${roleTitle})`}
                 className="flex items-center gap-2 p-1 pr-2 rounded-full border border-slate-200 hover:border-primary-fixed-dim bg-white cursor-pointer transition-colors"
               >
-                <span className="avatar avatar-sm" aria-hidden="true">{getInitials(displayName)}</span>
+                <Avatar name={displayName} src={user?.avatarUrl} className="avatar avatar-sm" />
                 <span className="hidden sm:inline text-xs font-bold text-slate-800">
                   {user?.fullName?.split(' ').slice(-1)[0] || user?.username}
                 </span>

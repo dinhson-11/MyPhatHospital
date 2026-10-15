@@ -53,6 +53,11 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  /** Cập nhật hồ sơ người dùng đang đăng nhập (VD: { avatarUrl }) – mọi chỗ hiển thị đổi ngay. */
+  const updateUser = useCallback((patch) => {
+    setUser(authService.updateCurrentUser(patch));
+  }, []);
+
   // Ổn định tham chiếu: AutoLogoutTimer và các effect khác phụ thuộc vào hàm này
   const logout = useCallback(() => {
     authService.logout();
@@ -92,8 +97,9 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       logout,
+      updateUser,
     };
-  }, [user, token, loading, login, register, logout]);
+  }, [user, token, loading, login, register, logout, updateUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -157,7 +157,6 @@ export const DOCTORS = [
     reviewsCount: 428,
     fee: 350000,
     room: 'Phòng khám ban đầu 101 (Tầng 1)',
-    avatar: 'https://images.unsplash.com/photo-1594824813637-44f0b2f52803?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
@@ -173,7 +172,6 @@ export const DOCTORS = [
     reviewsCount: 345,
     fee: 350000,
     room: 'Phòng khám Ngoại 402 (Tầng 4)',
-    avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2, 4, 6 (${hoursCompact()})`,
     available: true
   },
@@ -189,7 +187,6 @@ export const DOCTORS = [
     reviewsCount: 516,
     fee: 300000,
     room: 'Phòng khám Sản 302 (Tầng 3)',
-    avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2 đến Thứ 6 (${hoursCompact()})`,
     available: true
   },
@@ -205,7 +202,6 @@ export const DOCTORS = [
     reviewsCount: 265,
     fee: 280000,
     room: 'Phòng khám TMH 212 (Tầng 2)',
-    avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2, 4, 6 (${hoursCompact()})`,
     available: true
   },
@@ -221,7 +217,6 @@ export const DOCTORS = [
     reviewsCount: 310,
     fee: 300000,
     room: 'Phòng Trị liệu PHCN 206 (Tầng 2)',
-    avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
@@ -237,7 +232,6 @@ export const DOCTORS = [
     reviewsCount: 290,
     fee: 350000,
     room: 'Phòng Thẩm mỹ 209 (Tầng 2)',
-    avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 3, 5, 7 (${hoursCompact()})`,
     available: true
   },
@@ -253,7 +247,6 @@ export const DOCTORS = [
     reviewsCount: 382,
     fee: 280000,
     room: 'Phòng Siêu âm 104 (Tầng 1)',
-    avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
@@ -269,7 +262,6 @@ export const DOCTORS = [
     reviewsCount: 275,
     fee: 250000,
     room: 'Khu Xét nghiệm 105 (Tầng 1)',
-    avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true
   },
@@ -285,7 +277,6 @@ export const DOCTORS = [
     reviewsCount: 198,
     fee: 0,
     room: 'Phòng Dược Tầng 1 (Khu A)',
-    avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=400&q=80',
     schedule: `Thứ 2 đến Thứ 7 (${hoursCompact()})`,
     available: true,
     canBook: false,
@@ -420,8 +411,8 @@ function setCatalogStatus(status) {
 
 /**
  * Đồng bộ mã bác sĩ với backend (nguồn dữ liệu duy nhất là DB).
- * DOCTORS ở trên chỉ chứa nội dung trình bày (ảnh, kinh nghiệm...); `id` thật của bác sĩ
- * (staff_profiles.id) lấy từ GET /public/doctors, khớp theo `username`.
+ * DOCTORS ở trên chỉ chứa nội dung trình bày (kinh nghiệm, phòng khám...); `id` thật của bác sĩ
+ * (staff_profiles.id) và ảnh đại diện của tài khoản (`avatarUrl`) lấy từ GET /public/doctors, khớp theo `username`.
  * Chạy nền khi khởi động (main.jsx); các lời gọi trùng nhau dùng chung một request.
  */
 export function syncCatalogWithBackend() {
@@ -457,6 +448,7 @@ async function doSyncCatalog() {
       doc.id = real.id;
       if (real.departmentId) doc.departmentId = real.departmentId;
       doc.canBook = real.canBook;
+      doc.avatarUrl = real.avatarUrl || null;
     });
 
     TRIAGE_RULES.forEach((rule) => {

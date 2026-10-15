@@ -225,6 +225,7 @@ class AuthServiceTest {
                     .passwordHash("$2a$10$encodedHash")
                     .fullName("Quản trị viên")
                     .email("admin@hospital.com")
+                    .avatarUrl("https://cdn/admin.jpg")
                     .status(UserStatus.ACTIVE)
                     .roles(Set.of(Role.builder().id(1L).code("ADMIN").name("Quản trị viên").build()))
                     .build();
@@ -241,6 +242,7 @@ class AuthServiceTest {
             assertEquals("access-token", response.getAccessToken());
             assertEquals(1L, response.getUser().getId());
             assertTrue(response.getUser().getRoles().contains("ADMIN"));
+            assertEquals("https://cdn/admin.jpg", response.getUser().getAvatarUrl(), "Giao diện hiện ảnh đại diện ngay sau khi đăng nhập");
 
             verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
         }

@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +24,8 @@ public interface DrugRepository extends JpaRepository<Drug, Long> {
 
     boolean existsByCode(String code);
 
+    List<Drug> findByCodeIn(Collection<String> codes);
+
     /**
      * Đọc và khóa ghi dòng thuốc (SELECT ... FOR UPDATE) trước khi trừ/cộng tồn kho,
      * tránh mất cập nhật khi nhiều quầy cấp phát / nhập kho cùng lúc.
@@ -30,6 +33,11 @@ public interface DrugRepository extends JpaRepository<Drug, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT d FROM Drug d WHERE d.id = :id")
     Optional<Drug> findByIdForUpdate(@Param("id") Long id);
+
+    /** Như {@link #findByIdForUpdate} nhưng theo mã thuốc (nhập kho từ Excel). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Drug d WHERE d.code = :code")
+    Optional<Drug> findByCodeForUpdate(@Param("code") String code);
 
     @Query("SELECT d FROM Drug d WHERE " +
            "LOWER(d.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +

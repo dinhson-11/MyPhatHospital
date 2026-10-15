@@ -180,6 +180,40 @@ describe('Quản lý tài khoản (Quản trị viên)', () => {
     expect(body).not.toHaveProperty('password');
   });
 
+  it('ảnh đại diện: danh sách hiện ảnh; sửa tài khoản đổi ảnh ngay (POST /users/{id}/avatar) rồi tải lại danh sách', async () => {
+    const withAvatar = USERS.map((u) => (u.id === 2 ? { ...u, avatarUrl: 'https://cdn/linh.jpg' } : u));
+    api.get.mockImplementation(() => ok(page(withAvatar)));
+    api.post.mockImplementation(() => ok({ avatarUrl: 'https://cdn/linh-moi.jpg' }));
+    const { container } = renderPanel();
+
+    await screen.findByText('CN. Hoàng Thùy Linh');
+    expect(container.querySelector('img[src="https://cdn/linh.jpg"]')).not.toBeNull();
+    const loadsBefore = api.get.mock.calls.length;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa tài khoản letan' }));
+    const dialog = await screen.findByRole('dialog', { name: /Sửa tài khoản letan/ });
+    fireEvent.change(within(dialog).getByLabelText('Chọn ảnh đại diện'), {
+      target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] }
+    });
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/users/2/avatar', expect.any(FormData), expect.anything()));
+    await waitFor(() => expect(api.get.mock.calls.length).toBeGreaterThan(loadsBefore));
+    expect(JSON.parse(localStorage.getItem('hms_user')).avatarUrl).toBeUndefined();
+  });
+
+  it('quản trị viên đổi ảnh của chính mình → phiên đăng nhập cũng cập nhật ảnh', async () => {
+    api.post.mockImplementation(() => ok({ avatarUrl: 'https://cdn/admin.jpg' }));
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sửa tài khoản admin' }));
+    const dialog = await screen.findByRole('dialog', { name: /Sửa tài khoản admin/ });
+    fireEvent.change(within(dialog).getByLabelText('Chọn ảnh đại diện'), {
+      target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] }
+    });
+
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('hms_user')).avatarUrl).toBe('https://cdn/admin.jpg'));
+  });
+
   it('lỗi tải danh sách: hiện thông báo và nút Thử lại', async () => {
     api.get.mockImplementation(() => backendError(403, 'Không đủ quyền truy cập', 'ACCESS_DENIED'));
     renderPanel();

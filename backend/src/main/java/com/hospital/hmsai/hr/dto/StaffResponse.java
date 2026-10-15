@@ -22,6 +22,8 @@ public class StaffResponse {
     private String departmentName;
     private String specialty;
     private String licenseNo;
+    /** Ảnh đại diện của tài khoản (null = chưa có ảnh). */
+    private String avatarUrl;
 
     public static StaffResponse fromEntity(StaffProfile profile) {
         if (profile == null) return null;
@@ -31,12 +33,14 @@ public class StaffResponse {
         String username = null;
         String email = null;
         String phone = null;
+        String avatarUrl = null;
         if (profile.getUser() != null) {
             userId = profile.getUser().getId();
             fullName = profile.getUser().getFullName();
             username = profile.getUser().getUsername();
             email = profile.getUser().getEmail();
             phone = profile.getUser().getPhone();
+            avatarUrl = profile.getUser().getAvatarUrl();
         }
 
         Long deptId = null;
@@ -57,6 +61,7 @@ public class StaffResponse {
                 .departmentName(deptName)
                 .specialty(profile.getSpecialty())
                 .licenseNo(profile.getLicenseNo())
+                .avatarUrl(avatarUrl)
                 .build();
     }
 }

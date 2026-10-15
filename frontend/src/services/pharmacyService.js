@@ -15,6 +15,9 @@ const listOf = (res) => {
   return [];
 };
 
+/** Upload / nhập tới 1000 dòng cần lâu hơn thời gian chờ mặc định 5 giây của api. */
+const IMPORT_TIMEOUT = 30000;
+
 export const STOCK_ADJUSTMENT_LABELS = {
   IMPORT: 'Nhập thêm vào kho',
   EXPORT: 'Xuất kho (hủy/chuyển)',
@@ -127,6 +130,41 @@ export const pharmacyService = {
       return res?.data;
     } catch (err) {
       throw toAppError(err, 'Không thêm được thuốc mới.');
+    }
+  },
+
+  /** File Excel mẫu nhập thuốc (Blob .xlsx). */
+  async downloadDrugImportTemplate() {
+    try {
+      return await api.get('/drugs/import/template', { responseType: 'blob', timeout: IMPORT_TIMEOUT });
+    } catch (err) {
+      throw toAppError(err, 'Không tải được file mẫu.');
+    }
+  },
+
+  /** Xem trước file Excel: mỗi dòng có status NEW | EXISTS | INVALID, errors[] và existing (thuốc hiện có). */
+  async previewDrugImport(file) {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      // Ghi đè Content-Type mặc định (JSON) để axios gửi multipart, trình duyệt tự thêm boundary
+      const res = await api.post('/drugs/import/preview', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: IMPORT_TIMEOUT
+      });
+      return Array.isArray(res?.data) ? res.data : [];
+    } catch (err) {
+      throw toAppError(err, 'Không đọc được file Excel.');
+    }
+  },
+
+  /** Nhập các dòng đã chọn: items[] gồm dữ liệu dòng + action CREATE | RESTOCK. Trả về { created, restocked }. */
+  async importDrugs(items) {
+    try {
+      const res = await api.post('/drugs/import', { items }, { timeout: IMPORT_TIMEOUT });
+      return res?.data;
+    } catch (err) {
+      throw toAppError(err, 'Nhập thuốc từ Excel không thành công.');
     }
   }
 };

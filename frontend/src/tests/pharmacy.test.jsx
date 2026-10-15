@@ -271,6 +271,30 @@ describe('PharmacyDispenseModal – giao diện nhà thuốc', () => {
     expect(screen.getByRole('form', { name: 'Thêm thuốc mới' })).toBeInTheDocument();
   });
 
+  it('nhập từ Excel: mở hộp thoại, nhập xong thì báo kết quả và tải lại kho', async () => {
+    api.post.mockImplementation((url) => {
+      if (url === '/drugs/import/preview') {
+        return ok([{ rowNumber: 2, code: 'AMOX-250', name: 'Amoxicillin 250mg', price: 3000, quantity: 100, status: 'NEW', errors: [] }]);
+      }
+      if (url === '/drugs/import') return ok({ created: 1, restocked: 0 });
+      return networkError();
+    });
+    const { onShowToast } = renderModal();
+    fireEvent.click(screen.getByRole('tab', { name: /Kho dược/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Nhập từ Excel/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nhập thuốc từ Excel' });
+    const loadsBefore = api.get.mock.calls.filter(([url]) => url === '/drugs/all').length;
+
+    fireEvent.change(within(dialog).getByLabelText('Chọn file Excel'), {
+      target: { files: [new File(['x'], 'thuoc.xlsx')] }
+    });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Nhập 1 thuốc' }));
+
+    await waitFor(() => expect(onShowToast).toHaveBeenCalledWith('Đã thêm 1 thuốc mới.', 'success'));
+    expect(screen.queryByRole('dialog', { name: 'Nhập thuốc từ Excel' })).not.toBeInTheDocument();
+    await waitFor(() => expect(api.get.mock.calls.filter(([url]) => url === '/drugs/all').length).toBeGreaterThan(loadsBefore));
+  });
+
   it('mở modal: hiển thị hai tab và gợi ý nhập mã ca khám, KHÔNG có đơn mẫu tự nạp', async () => {
     renderModal();
     expect(screen.getByRole('dialog', { name: /Nhà thuốc & kho dược/ })).toBeInTheDocument();

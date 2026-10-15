@@ -1,8 +1,14 @@
 package com.hospital.hmsai.pharmacy.controller;
 
 import com.hospital.hmsai.common.ApiResponse;
+import com.hospital.hmsai.common.exception.BusinessException;
+import com.hospital.hmsai.pharmacy.dto.DrugImportPreviewRow;
+import com.hospital.hmsai.pharmacy.dto.DrugImportRequest;
+import com.hospital.hmsai.pharmacy.dto.DrugImportResult;
 import com.hospital.hmsai.pharmacy.dto.DrugInteractionResponse;
 import com.hospital.hmsai.pharmacy.dto.DrugResponse;
+import com.hospital.hmsai.pharmacy.importer.DrugExcelFormat;
+import com.hospital.hmsai.pharmacy.service.DrugImportService;
 import com.hospital.hmsai.pharmacy.service.DrugService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -13,10 +19,17 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -26,7 +39,11 @@ import java.util.List;
 @Tag(name = "Nhà thuốc & Dược phẩm", description = "APIs tra cứu danh mục thuốc và danh mục tương tác thuốc")
 public class DrugController {
 
+    private static final MediaType XLSX =
+            MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
     private final DrugService drugService;
+    private final DrugImportService drugImportService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('DOCTOR', 'PHARMACIST', 'RECEPTIONIST', 'ADMIN', 'NURSE', 'PATIENT')")
@@ -86,6 +103,43 @@ public class DrugController {
         log.info("POST /api/v1/drugs – mã thuốc: {}", request.getCode());
         DrugResponse response = drugService.createDrug(request);
         return ResponseEntity.ok(ApiResponse.success(response, "Thêm thuốc vào danh mục thành công"));
+    }
+
+    @GetMapping("/import/template")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
+    @Operation(summary = "Tải file Excel mẫu nhập thuốc", description = "File .xlsx gồm dòng tiêu đề và sheet hướng dẫn")
+    public ResponseEntity<byte[]> downloadImportTemplate() {
+        return ResponseEntity.ok()
+                .contentType(XLSX)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename("mau-nhap-thuoc.xlsx", StandardCharsets.UTF_8).build().toString())
+                .body(DrugExcelFormat.template());
+    }
+
+    @PostMapping(value = "/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
+    @Operation(summary = "Xem trước file Excel nhập thuốc",
+            description = "Đọc và kiểm tra file, phân loại từng dòng: NEW (thuốc mới), EXISTS (mã đã có), INVALID (lỗi). Không ghi dữ liệu.")
+    public ResponseEntity<ApiResponse<List<DrugImportPreviewRow>>> previewImport(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        if (file.isEmpty()) {
+            throw new BusinessException("Vui lòng chọn file Excel cần nhập");
+        }
+        log.info("POST /api/v1/drugs/import/preview – file: {}, {} bytes", file.getOriginalFilename(), file.getSize());
+        try (InputStream in = file.getInputStream()) {
+            return ResponseEntity.ok(ApiResponse.success(drugImportService.preview(in)));
+        }
+    }
+
+    @PostMapping("/import")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'ADMIN')")
+    @Operation(summary = "Nhập thuốc từ Excel",
+            description = "Lưu các dòng đã chọn sau bước xem trước: CREATE thêm thuốc mới, RESTOCK cộng tồn kho và cập nhật giá / hạn dùng. Lỗi ở bất kỳ dòng nào thì không lưu gì.")
+    public ResponseEntity<ApiResponse<DrugImportResult>> importDrugs(
+            @jakarta.validation.Valid @RequestBody DrugImportRequest request) {
+        log.info("POST /api/v1/drugs/import – {} dòng", request.getItems().size());
+        DrugImportResult result = drugImportService.importDrugs(request);
+        return ResponseEntity.ok(ApiResponse.success(result, "Nhập thuốc từ Excel thành công"));
     }
 
     @PutMapping("/{id}/stock")

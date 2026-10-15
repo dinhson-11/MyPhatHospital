@@ -21,6 +21,12 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  # Upload file (nhập thuốc từ Excel – tối đa 5MB)
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
   # Jackson
   jackson:
     default-property-inclusion: non_null
@@ -53,6 +59,12 @@ billing:
     template: compact2
     # true = hiển thị cảnh báo "tài khoản DEMO, không chuyển tiền thật" (chỉ dùng với tài khoản giả)
     demo: ${VIETQR_DEMO:false}
+
+# Ảnh đại diện tài khoản – lưu trên Cloudinary. Để trống CLOUDINARY_URL = tắt tải ảnh (hiện chữ cái đầu tên)
+# CLOUDINARY_URL dạng cloudinary://<api_key>:<api_secret>@<cloud_name> (Cloudinary Console → API Keys)
+avatar:
+  cloudinary-url: ${CLOUDINARY_URL:}
+  folder: ${CLOUDINARY_FOLDER:myphat-hospital/avatars}
 
 # Nguồn (origin) giao diện web được phép gọi API từ trình duyệt (CORS), phân tách bằng dấu phẩy
 app:

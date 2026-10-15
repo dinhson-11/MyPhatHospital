@@ -1,5 +1,7 @@
 import React from 'react';
 import Modal from '../common/Modal';
+import AvatarUploader from '../common/AvatarUploader';
+import { userService } from '../../services/userService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
@@ -27,13 +29,26 @@ function InfoRow({ label, children }) {
 }
 
 export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, onOpenPatientProfile, onOpenMyInvoices }) {
-  const { user, logout, isStaff } = useAuth();
+  const { user, logout, isStaff, updateUser } = useAuth();
   const { showToast } = useToast();
 
   const handleLogout = () => {
     logout();
     showToast('Đã đăng xuất khỏi hệ thống', 'info');
     onClose();
+  };
+
+  const uploadAvatar = async (file) => {
+    const avatarUrl = await userService.uploadMyAvatar(file);
+    updateUser({ avatarUrl });
+    showToast('Đã cập nhật ảnh đại diện', 'success');
+    return avatarUrl;
+  };
+
+  const removeAvatar = async () => {
+    await userService.removeMyAvatar();
+    updateUser({ avatarUrl: null });
+    showToast('Đã gỡ ảnh đại diện', 'info');
   };
 
   const roles = Array.isArray(user?.roles) ? user.roles : [];
@@ -51,24 +66,25 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, 
     >
       {user && (
         <>
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary-fixed border border-primary-fixed-dim">
-            <span
-              className="w-14 h-14 rounded-2xl bg-primary text-white flex items-center justify-center text-xl font-extrabold shrink-0"
-              aria-hidden="true"
+          <div className="p-4 rounded-2xl bg-primary-fixed border border-primary-fixed-dim">
+            <AvatarUploader
+              name={user.fullName || user.username}
+              avatarUrl={user.avatarUrl}
+              onUpload={uploadAvatar}
+              onRemove={removeAvatar}
             >
-              {user.fullName ? user.fullName.trim().charAt(0).toUpperCase() : 'U'}
-            </span>
-            <div className="min-w-0">
-              <h3 className="font-bold text-slate-900 text-base truncate">{user.fullName || user.username}</h3>
-              <p className="text-xs text-slate-500 font-mono truncate">@{user.username}</p>
-              {roles.length > 0 && (
-                <ul className="flex flex-wrap gap-1 mt-1.5" aria-label="Vai trò">
-                  {roles.map((r) => (
-                    <li key={r} className="badge badge-primary">{roleLabel(r)}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-slate-900 text-base truncate">{user.fullName || user.username}</h3>
+                <p className="text-xs text-slate-500 font-mono truncate">@{user.username}</p>
+                {roles.length > 0 && (
+                  <ul className="flex flex-wrap gap-1 mt-1.5" aria-label="Vai trò">
+                    {roles.map((r) => (
+                      <li key={r} className="badge badge-primary">{roleLabel(r)}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </AvatarUploader>
           </div>
 
           <dl className="text-sm">

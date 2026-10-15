@@ -223,6 +223,7 @@ public class AuthServiceImpl implements AuthService {
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
+                .avatarUrl(user.getAvatarUrl())
                 .roles(roleNames)
                 .build();
     }

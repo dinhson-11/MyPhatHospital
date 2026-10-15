@@ -35,6 +35,18 @@ function toDate(value) {
 
 const pad = (n) => String(n).padStart(2, '0');
 
+/** "Vi Mai Anh" → "MA" (2 chữ cái cuối của họ tên, như cách gọi tên người Việt) – dùng cho ảnh đại diện. */
+export function getInitials(name) {
+  if (!name) return 'U';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(-2)
+    .join('')
+    .toUpperCase();
+}
+
 /** "2026-10-10" → "10/10/2026". */
 export function formatDate(value) {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {

@@ -61,6 +61,7 @@ public class PublicPortalService {
                         .fullName(p.getUser().getFullName())
                         .departmentId(p.getDepartment() != null ? p.getDepartment().getId() : null)
                         .specialty(p.getSpecialty())
+                        .avatarUrl(p.getUser().getAvatarUrl())
                         .canBook(hasRole(p, ROLE_DOCTOR))
                         .build())
                 .toList();
