@@ -2,6 +2,7 @@ package com.hospital.hmsai.common.exception;
 
 import com.hospital.hmsai.clinical.safety.PrescriptionSafetyException;
 import com.hospital.hmsai.common.ApiErrorResponse;
+import com.hospital.hmsai.user.avatar.AvatarStorageException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.List;
 
@@ -193,6 +195,33 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.badRequest().body(response);
+    }
+
+    /**
+     * 400 – File upload vượt spring.servlet.multipart.max-file-size (nhập thuốc từ Excel)
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleUploadTooLarge(MaxUploadSizeExceededException ex) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .errorCode("FILE_TOO_LARGE")
+                .message("File vượt quá dung lượng cho phép (tối đa 5MB)")
+                .build();
+
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    /**
+     * 502 – Kho ảnh (Cloudinary) lỗi / không phản hồi khi đổi ảnh đại diện
+     */
+    @ExceptionHandler(AvatarStorageException.class)
+    public ResponseEntity<ApiErrorResponse> handleAvatarStorage(AvatarStorageException ex) {
+        log.error("Lỗi kho ảnh: {}", ex.getMessage(), ex.getCause());
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .errorCode("AVATAR_STORAGE_ERROR")
+                .message("Kho ảnh đang gặp sự cố, chưa lưu được ảnh. Vui lòng thử lại sau.")
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
     }
 
     /**

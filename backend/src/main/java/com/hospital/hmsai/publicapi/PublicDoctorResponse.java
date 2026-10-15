@@ -19,6 +19,8 @@ public class PublicDoctorResponse {
     private String fullName;
     private Long departmentId;
     private String specialty;
+    /** Ảnh đại diện của tài khoản bác sĩ (null = hiển thị chữ cái đầu tên). */
+    private String avatarUrl;
     /** true nếu là bác sĩ (có thể đặt lịch khám); dược sĩ chỉ hiển thị. */
     private boolean canBook;
 }

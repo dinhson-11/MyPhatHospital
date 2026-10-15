@@ -1,4 +1,5 @@
 import apiClient from './api';
+import { toAppError } from './apiError';
 
 /**
  * Quản lý tài khoản (chỉ Quản trị viên) – khớp UserController:
@@ -6,6 +7,7 @@ import apiClient from './api';
  *   POST   /users                    → tạo tài khoản
  *   PUT    /users/{id}               → sửa họ tên, email, SĐT, vai trò, hồ sơ nhân viên
  *   PATCH  /users/{id}/lock|unlock   → khóa / mở khóa
+ *   POST/DELETE /users/me/avatar, /users/{id}/avatar → đổi / gỡ ảnh đại diện (của mình | quản trị viên)
  * Lỗi nghiệp vụ (trùng tên đăng nhập, email...) được ném nguyên để giao diện hiện đúng thông báo của máy chủ.
  */
 
@@ -25,6 +27,32 @@ export const roleLabel = (code) => {
 };
 
 const unwrap = (res) => (res && typeof res === 'object' && 'data' in res ? res.data : res);
+
+/** Upload ảnh cần lâu hơn thời gian chờ mặc định 5 giây của api. */
+const AVATAR_TIMEOUT = 30000;
+
+async function postAvatar(url, file) {
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    // Ghi đè Content-Type mặc định (JSON) để axios gửi multipart, trình duyệt tự thêm boundary
+    const res = await apiClient.post(url, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: AVATAR_TIMEOUT
+    });
+    return unwrap(res)?.avatarUrl ?? null;
+  } catch (err) {
+    throw toAppError(err, 'Không đổi được ảnh đại diện.');
+  }
+}
+
+async function deleteAvatar(url) {
+  try {
+    await apiClient.delete(url);
+  } catch (err) {
+    throw toAppError(err, 'Không gỡ được ảnh đại diện.');
+  }
+}
 
 export const userService = {
   /** Một trang tài khoản. Trả { items, totalPages, totalElements, page }. */
@@ -55,6 +83,24 @@ export const userService = {
 
   async unlockUser(id) {
     await apiClient.patch(`/users/${id}/unlock`);
+  },
+
+  /** Đổi ảnh đại diện của chính mình. Trả về link ảnh mới. */
+  uploadMyAvatar(file) {
+    return postAvatar('/users/me/avatar', file);
+  },
+
+  removeMyAvatar() {
+    return deleteAvatar('/users/me/avatar');
+  },
+
+  /** Quản trị viên đổi ảnh đại diện của một tài khoản. Trả về link ảnh mới. */
+  uploadUserAvatar(id, file) {
+    return postAvatar(`/users/${id}/avatar`, file);
+  },
+
+  removeUserAvatar(id) {
+    return deleteAvatar(`/users/${id}/avatar`);
   }
 };
 

@@ -74,6 +74,16 @@ export const authService = {
     return localStorage.getItem(REFRESH_TOKEN_KEY);
   },
 
+  /** Cập nhật hồ sơ đang lưu của phiên đăng nhập (VD: ảnh đại diện vừa đổi). Trả về hồ sơ mới. */
+  updateCurrentUser(patch) {
+    const user = this.getCurrentUser();
+    if (!user) return null;
+    const next = { ...user, ...patch };
+    localStorage.setItem(USER_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event('hms_auth_changed'));
+    return next;
+  },
+
   saveSession(user, token, refreshToken) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     localStorage.setItem(TOKEN_KEY, token);

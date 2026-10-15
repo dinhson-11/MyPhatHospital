@@ -2,20 +2,10 @@ import React, { useState, useRef, useEffect, useId } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import logoHospital from '../../assets/logo.png';
+import Avatar from '../common/Avatar';
 
 const HOTLINE = '0789065493';
 const HOTLINE_DISPLAY = '0789 065 493';
-
-const getInitials = (name) => {
-  if (!name) return 'U';
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .slice(-2)
-    .join('')
-    .toUpperCase();
-};
 
 const Icon = ({ name, className = '' }) => (
   <span className={`material-symbols-outlined ${className}`} aria-hidden="true">{name}</span>
@@ -243,9 +233,7 @@ export const Navbar = ({
                 aria-label={`Tài khoản: ${user?.fullName || user?.username} (${roleTitle})`}
                 className="h-9 flex items-center gap-2 pl-1 pr-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
               >
-                <span className="avatar w-7 h-7 text-xs" aria-hidden="true">
-                  {getInitials(user?.fullName || user?.username)}
-                </span>
+                <Avatar name={user?.fullName || user?.username} src={user?.avatarUrl} className="avatar w-7 h-7 text-xs" />
                 <span className="hidden sm:flex flex-col text-left pr-0.5 leading-tight">
                   <span className="text-xs font-bold text-slate-800 max-w-[110px] xl:max-w-[130px] truncate">
                     {user?.fullName || user?.username}

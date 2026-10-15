@@ -22,6 +22,8 @@
         <jjwt.version>0.12.6</jjwt.version>
         <!-- Docker Engine 29+ từ chối API cũ của Testcontainers 1.19 (do Spring Boot 3.3 quản lý) -->
         <testcontainers.version>1.21.4</testcontainers.version>
+        <poi.version>5.4.0</poi.version>
+        <cloudinary.version>2.3.0</cloudinary.version>
     </properties>
 
     <dependencies>
@@ -88,6 +90,20 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.6.0</version>
+        </dependency>
+
+        <!-- Đọc / tạo file Excel (.xlsx) cho chức năng nhập thuốc hàng loạt -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+
+        <!-- Lưu ảnh đại diện tài khoản trên Cloudinary (CDN) -->
+        <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http5</artifactId>
+            <version>${cloudinary.version}</version>
         </dependency>
 
         <!-- Lombok -->

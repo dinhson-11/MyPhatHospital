@@ -41,6 +41,14 @@ public class User {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    /** Link ảnh đại diện trên CDN (Cloudinary); null = hiển thị chữ cái đầu tên. */
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    /** Mã ảnh trên kho ảnh, dùng để xóa ảnh cũ khi đổi / gỡ ảnh đại diện. */
+    @Column(name = "avatar_public_id")
+    private String avatarPublicId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     @Builder.Default

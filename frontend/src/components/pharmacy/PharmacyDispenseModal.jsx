@@ -6,6 +6,7 @@ import { useConfirm } from '../common/ConfirmDialog';
 import Modal from '../common/Modal';
 import { formatDate, formatDateTime, formatVND } from '../../utils/format';
 import NewDrugDialog from './NewDrugDialog';
+import ImportDrugsDialog from './ImportDrugsDialog';
 
 const TABS = [
   { id: 'dispense', label: 'Cấp phát theo đơn', icon: 'local_pharmacy' },
@@ -52,6 +53,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
   const [inventoryFilter, setInventoryFilter] = useState('all');
   const [stockDrug, setStockDrug] = useState(null);
   const [showNewDrug, setShowNewDrug] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [stockQty, setStockQty] = useState('');
   const [stockType, setStockType] = useState('IMPORT');
   const [stockError, setStockError] = useState('');
@@ -425,6 +427,10 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                   <span className="material-symbols-outlined" aria-hidden="true">add</span>
                   Thêm thuốc mới
                 </button>
+                <button type="button" onClick={() => setShowImport(true)} className="btn btn-secondary btn-sm">
+                  <span className="material-symbols-outlined" aria-hidden="true">upload_file</span>
+                  Nhập từ Excel
+                </button>
                 <button type="button" onClick={loadInventory} disabled={inventory.status === 'loading'} className="btn btn-ghost btn-sm">
                   <span className={`material-symbols-outlined ${inventory.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
                   Làm mới
@@ -538,6 +544,19 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
         onCreated={(drug) => {
           setShowNewDrug(false);
           notify(`Đã thêm thuốc ${drug?.name || ''} vào danh mục.`.replace('  ', ' '), 'success');
+          loadInventory();
+        }}
+      />
+      <ImportDrugsDialog
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImported={({ created, restocked, skipped }) => {
+          setShowImport(false);
+          const parts = [];
+          if (created) parts.push(`thêm ${created} thuốc mới`);
+          if (restocked) parts.push(`cập nhật tồn kho ${restocked} thuốc`);
+          const done = parts.join(', ');
+          notify(`Đã ${done}${skipped ? `; bỏ qua ${skipped} dòng` : ''}.`, 'success');
           loadInventory();
         }}
       />

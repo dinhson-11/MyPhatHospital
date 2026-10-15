@@ -1,8 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { DOCTORS } from '../../services/dataService';
+import React, { useState, useMemo, useSyncExternalStore } from 'react';
+import { DOCTORS, getCatalogVersion, subscribeCatalog } from '../../services/dataService';
+import Avatar from '../common/Avatar';
 
 export default function DoctorsSection({ onOpenBooking }) {
   const [selectedDeptId, setSelectedDeptId] = useState(0); // 0 = Tất cả
+  // Vẽ lại khi đồng bộ xong với máy chủ (ảnh đại diện, mã bác sĩ thật)
+  useSyncExternalStore(subscribeCatalog, getCatalogVersion, getCatalogVersion);
 
   // Danh sách khoa có trong danh sách bác sĩ
   const filterOptions = useMemo(() => {
@@ -73,14 +76,11 @@ export default function DoctorsSection({ onOpenBooking }) {
                 {/* Ảnh & tên bác sĩ */}
                 <div className="relative bg-gradient-to-br from-primary-fixed via-white to-slate-50 p-6 pb-4 flex items-center gap-4 border-b border-slate-100">
                   <div className="relative shrink-0">
-                    <img
-                      src={doc.avatar}
+                    <Avatar
+                      name={doc.name}
+                      src={doc.avatarUrl}
                       alt={doc.name}
-                      className="w-20 h-20 rounded-2xl object-cover border-2 border-white shadow-md group-hover:scale-105 transition-transform duration-300 bg-slate-100"
-                      loading="lazy"
-                      onError={(e) => {
-                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(doc.name)}&background=0B5394&color=fff&size=128`;
-                      }}
+                      className="avatar w-20 h-20 rounded-2xl text-2xl border-2 border-white shadow-md group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                   <div className="overflow-hidden">

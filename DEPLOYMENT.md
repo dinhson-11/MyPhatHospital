@@ -49,6 +49,8 @@ Chạy 2 lần: một lần cho `JWT_SECRET`, một lần cho `MYSQL_PASSWORD`. 
 | `VITE_SHOW_DEMO_ACCOUNTS` | Hiện tài khoản demo ở form đăng nhập | `false` |
 | `VIETQR_*`, `VIETQR_DEMO` | Tài khoản nhận tiền VietQR | Tài khoản thật, `VIETQR_DEMO=false` |
 | `LLM_API_KEY` | Khóa LLM cho chatbot (tùy chọn) | Để trống thì chatbot dùng luật từ khóa |
+| `CLOUDINARY_URL` | Kho ảnh đại diện tài khoản (Cloudinary) | `cloudinary://<key>:<secret>@<cloud>`; để trống thì tắt tải ảnh |
+| `CLOUDINARY_FOLDER` | Thư mục ảnh trên Cloudinary | `myphat-hospital/avatars` (máy phát triển: `myphat-hospital/dev/avatars`) |
 
 ### 2.3. Khóa tài khoản demo (bắt buộc)
 
@@ -59,6 +61,15 @@ Các migration Flyway tạo sẵn tài khoản mẫu với **mật khẩu công 
 3. Chạy `scripts/db/02_lock_demo_accounts.sql` trên DB để khóa các tài khoản mẫu còn lại.
 
 Không làm bước này thì **bất kỳ ai cũng đăng nhập được với quyền quản trị**.
+
+### 2.4. Kho ảnh đại diện: Cloudinary (gói Free, không cần thẻ)
+Ảnh đại diện **không** lưu trên máy chủ backend: Render free mất mọi file mỗi lần deploy / khởi động lại. Ảnh nằm trên Cloudinary (có CDN), DB chỉ giữ link ảnh.
+1. Đăng ký <https://cloudinary.com> (gói *Free*).
+2. *Console → Settings → API Keys* → copy dòng **API environment variable** dạng `cloudinary://<api_key>:<api_secret>@<cloud_name>`.
+3. Đặt biến `CLOUDINARY_URL` cho **backend** (không bao giờ đặt ở frontend: chứa khóa bí mật). Mỗi môi trường nên có `CLOUDINARY_FOLDER` riêng.
+4. Kiểm tra: đăng nhập → bấm ảnh/tên ở góc phải → *Thông tin tài khoản* → **Tải ảnh lên**.
+
+Chưa đặt `CLOUDINARY_URL` thì hệ thống vẫn chạy bình thường, chỉ báo "Chưa cấu hình kho ảnh" khi bấm tải ảnh.
 
 ---
 
@@ -121,6 +132,7 @@ VITE_SHOW_DEMO_ACCOUNTS=false
 SWAGGER_ENABLED=false
 CORS_ALLOWED_ORIGINS=https://<tên-miền-của-bạn>
 VIETQR_DEMO=false
+CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>   # xem mục 2.4
 ```
 
 ### Bước 4. Chạy
@@ -192,6 +204,8 @@ Thứ tự: **DB → AI service → Backend → Frontend**, vì mỗi bước c�
    | `CORS_ALLOWED_ORIGINS` | điền sau ở bước 4 (tạm để `https://localhost`) |
    | `SWAGGER_ENABLED` | `false` |
    | `VIETQR_*` | tài khoản thật (hoặc để trống để tắt) |
+   | `CLOUDINARY_URL` | từ Cloudinary (mục 2.4) |
+   | `CLOUDINARY_FOLDER` | `myphat-hospital/avatars` |
 
 3. Deploy và chờ log có `Started HmsAiApplication`. Kiểm tra `https://<backend>.onrender.com/actuator/health`.
 4. Nếu bị *Out of memory*: giảm `-Xmx` xuống `256m` hoặc nâng lên gói trả phí.
@@ -222,6 +236,7 @@ Quay lại Render → backend → sửa `CORS_ALLOWED_ORIGINS=https://<tên>.pag
 - [ ] Swagger (`/swagger-ui.html`) trả 404 hoặc bị chặn.
 - [ ] Đặt lịch khám, khám bệnh, lập hóa đơn và hiện mã VietQR hoạt động.
 - [ ] Ngày giờ hiển thị đúng giờ Việt Nam.
+- [ ] Đổi ảnh đại diện trong *Thông tin tài khoản* thành công; ảnh bác sĩ hiện trên trang chủ (mục 2.4).
 
 ## 6. Lỗi thường gặp
 

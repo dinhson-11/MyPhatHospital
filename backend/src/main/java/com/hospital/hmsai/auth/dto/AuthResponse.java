@@ -34,6 +34,8 @@ public class AuthResponse {
         private String username;
         private String fullName;
         private String email;
+        /** Link ảnh đại diện (null = hiển thị chữ cái đầu tên). */
+        private String avatarUrl;
         private java.util.List<String> roles;
     }
 }

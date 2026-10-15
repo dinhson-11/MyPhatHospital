@@ -53,6 +53,9 @@ services:
       VIETQR_ACCOUNT_NO: ${VIETQR_ACCOUNT_NO:-}
       VIETQR_ACCOUNT_NAME: ${VIETQR_ACCOUNT_NAME:-}
       VIETQR_DEMO: ${VIETQR_DEMO:-false}
+      # Ảnh đại diện tài khoản lưu trên Cloudinary (để trống = tắt tải ảnh)
+      CLOUDINARY_URL: ${CLOUDINARY_URL:-}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-myphat-hospital/avatars}
       BHYT_BASE_SALARY: ${BHYT_BASE_SALARY:-2340000}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
