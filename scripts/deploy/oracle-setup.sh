@@ -26,9 +26,16 @@ command -v sudo >/dev/null || die "Thiếu sudo."
 # ---------- 1. Tường lửa hệ điều hành ----------
 # Ubuntu trên Oracle có sẵn luật iptables chặn mọi cổng ngoài 22. (Cần thêm Ingress Rule 80/443 ở Security List trên web Oracle.)
 log "Mở cổng 80/443 trên iptables"
+# Luật ACCEPT phải nằm TRƯỚC luật REJECT; vị trí REJECT khác nhau giữa các image (dòng 5 hoặc 6) nên tìm động.
 for port in 80 443; do
-  sudo iptables -C INPUT -m state --state NEW -p tcp --dport "$port" -j ACCEPT 2>/dev/null \
-    || sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport "$port" -j ACCEPT
+  # Xóa luật cũ (có thể đã bị chèn sau REJECT ở lần chạy trước) rồi chèn lại đúng chỗ
+  while sudo iptables -D INPUT -m state --state NEW -p tcp --dport "$port" -j ACCEPT 2>/dev/null; do :; done
+  reject_line="$(sudo iptables -L INPUT -n --line-numbers | awk '$2 == "REJECT" { print $1; exit }')"
+  if [ -n "$reject_line" ]; then
+    sudo iptables -I INPUT "$reject_line" -m state --state NEW -p tcp --dport "$port" -j ACCEPT
+  else
+    sudo iptables -A INPUT -m state --state NEW -p tcp --dport "$port" -j ACCEPT
+  fi
 done
 if ! command -v netfilter-persistent >/dev/null; then
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -y -qq

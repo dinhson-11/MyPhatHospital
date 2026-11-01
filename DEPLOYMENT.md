@@ -100,8 +100,11 @@ Toàn bộ 4 thành phần chạy trên một máy, frontend (Nginx) tự chuy�
 ssh -i <file-key> ubuntu@<IP-công-khai>
 
 # Ubuntu của Oracle có tường lửa iptables chặn sẵn: mở 80/443
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+# Luật ACCEPT phải đứng TRƯỚC luật REJECT. Xem REJECT ở dòng số mấy (thường là 5 hoặc 6):
+sudo iptables -L INPUT -n --line-numbers
+# Thay 5 bằng số dòng của REJECT vừa thấy
+sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 80 -j ACCEPT
 sudo netfilter-persistent save
 
 curl -fsSL https://get.docker.com | sudo sh
