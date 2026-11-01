@@ -21,7 +21,7 @@ const GROUPS = [
 
 export function InvoiceStatusBadge({ status }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold ${STATUS_STYLES[status] || STATUS_STYLES.CANCELLED}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[0.75rem] font-semibold ${STATUS_STYLES[status] || STATUS_STYLES.CANCELLED}`}>
       {INVOICE_STATUS_LABELS[status] || status}
     </span>
   );
@@ -62,20 +62,20 @@ export default function InvoiceDetail({
     <article className="space-y-5" aria-labelledby="invoice-detail-title">
       {onBack && (
         <button type="button" onClick={onBack} className="lg:hidden inline-flex items-center gap-1 text-sm font-semibold text-primary">
-          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>
+          <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">arrow_back</span>
           Danh sách hóa đơn
         </button>
       )}
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[12px] uppercase tracking-wide text-slate-500">
+          <p className="text-[0.75rem] uppercase tracking-wide text-slate-500">
             {isPending ? 'Bảng kê chi phí' : 'Hóa đơn viện phí'}
           </p>
           <h3 id="invoice-detail-title" className="text-xl font-bold text-slate-900 dark:text-white font-mono">
             {invoice.invoiceCode || `#${invoice.id}`}
           </h3>
-          <p className="text-[13px] text-slate-500">Lập lúc {formatDateTime(invoice.createdAt)} · Ca khám #{invoice.visitId}</p>
+          <p className="text-[0.8125rem] text-slate-500">Lập lúc {formatDateTime(invoice.createdAt)} · Ca khám #{invoice.visitId}</p>
         </div>
         <InvoiceStatusBadge status={invoice.status} />
       </header>
@@ -96,9 +96,14 @@ export default function InvoiceDetail({
       </dl>
 
       <section aria-label="Bảng kê chi phí">
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+        <div
+          role="region"
+          aria-label="Bảng kê chi phí chi tiết"
+          tabIndex={0}
+          className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[13px]">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[0.8125rem]">
               <tr>
                 <th scope="col" className="py-2 px-3 text-left font-semibold">Nội dung</th>
                 <th scope="col" className="py-2 px-3 text-right font-semibold w-14">SL</th>
@@ -113,10 +118,10 @@ export default function InvoiceDetail({
               return (
                 <tbody key={group.type} className="divide-y divide-slate-100 dark:divide-slate-800">
                   <tr className="bg-white dark:bg-slate-900">
-                    <th scope="rowgroup" colSpan={3} className={`pt-3 pb-1 px-3 text-left text-[12px] font-bold uppercase tracking-wide ${group.tone}`}>
+                    <th scope="rowgroup" colSpan={3} className={`pt-3 pb-1 px-3 text-left text-[0.75rem] font-bold uppercase tracking-wide ${group.tone}`}>
                       {group.label}
                     </th>
-                    <td className="pt-3 pb-1 px-3 text-right text-[12px] font-semibold text-slate-500 hidden sm:table-cell">
+                    <td className="pt-3 pb-1 px-3 text-right text-[0.75rem] font-semibold text-slate-500 hidden sm:table-cell">
                       {formatVND(subtotal)}
                     </td>
                   </tr>
@@ -136,7 +141,7 @@ export default function InvoiceDetail({
           </table>
         </div>
         {mismatch && (
-          <p className="mt-2 text-[13px] text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
+          <p className="mt-2 text-[0.8125rem] text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2" role="alert">
             Tổng các khoản ({formatVND(itemsTotal)}) không khớp tổng hóa đơn ({formatVND(invoice.totalAmount)}).
             {isPending ? ' Vui lòng bấm "Tính lại" trước khi thu tiền.' : ''}
           </p>
@@ -151,7 +156,7 @@ export default function InvoiceDetail({
         <div className="flex justify-between gap-3 px-4 py-2.5 text-sm">
           <span className="text-slate-600 dark:text-slate-300">
             BHYT chi trả{hasInsurance ? ` (${Number(invoice.insuranceRate)}%)` : ''}
-            {invoice.insuranceNote && <span className="block text-[12px] text-slate-500">{invoice.insuranceNote}</span>}
+            {invoice.insuranceNote && <span className="block text-[0.75rem] text-slate-500">{invoice.insuranceNote}</span>}
           </span>
           <span className={`font-semibold tabular-nums ${hasInsurance ? 'text-emerald-700' : ''}`}>
             {hasInsurance ? `− ${formatVND(invoice.insuranceAmount)}` : formatVND(0)}
@@ -190,7 +195,7 @@ export default function InvoiceDetail({
       <footer className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
         {invoice.status !== 'CANCELLED' && (
           <button type="button" onClick={onPrint} className="btn btn-light inline-flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">print</span>
+            <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">print</span>
             {isPending ? 'In bảng kê' : 'In phiếu thu'}
           </button>
         )}
@@ -202,12 +207,12 @@ export default function InvoiceDetail({
             </button>
             <button type="button" onClick={onRecalculate} disabled={busy}
               className="px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">calculate</span>
+              <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">calculate</span>
               {busyAction === 'recalculate' ? 'Đang tính lại…' : 'Tính lại'}
             </button>
             <button type="button" onClick={onPay} disabled={busy || mismatch}
               className="px-5 py-2 rounded-lg text-sm font-bold bg-primary hover:bg-primary-dark text-white shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">payments</span>
+              <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">payments</span>
               Thu tiền
             </button>
           </>

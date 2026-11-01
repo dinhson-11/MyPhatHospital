@@ -102,9 +102,9 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
               onClick={() => onOpenBooking()}
               className="w-full h-12 px-5 rounded-2xl bg-primary hover:bg-primary-dark text-white font-label text-sm font-bold shadow-[0_6px_20px_rgba(11,83,148,0.28)] hover:shadow-[0_10px_25px_rgba(11,83,148,0.38)] transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer flex items-center justify-center gap-2 group whitespace-nowrap"
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-[20px]">calendar_month</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[1.25rem]">calendar_month</span>
               <span>Đặt Lịch Khám Ngay</span>
-              <span aria-hidden="true" className="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:translate-x-1">arrow_forward</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[1.125rem] transition-transform duration-200 group-hover:translate-x-1">arrow_forward</span>
             </button>
 
             <a
@@ -112,7 +112,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
               className="w-full h-12 px-4 rounded-2xl bg-red-50 hover:bg-red-100 text-red-800 font-label text-sm font-bold shadow-xs hover:shadow-sm transition-all duration-200 cursor-pointer border border-red-200 flex items-center justify-center gap-2 group whitespace-nowrap"
               title="Gọi tổng đài Mỹ Phát Hospital: 0789 065 493"
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-red-600 text-[19px] group-hover:scale-110 transition-transform animate-pulse">call</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-red-600 text-[1.1875rem] group-hover:scale-110 transition-transform animate-pulse">call</span>
               <span>Hotline: 0789 065 493</span>
             </a>
 
@@ -122,7 +122,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
                 onClick={onOpenMyAppointments}
                 className="w-full h-11 sm:h-12 px-4 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-label text-xs sm:text-sm font-bold shadow-xs hover:shadow-sm transition-all duration-200 cursor-pointer border border-slate-200 flex items-center justify-center gap-2 whitespace-nowrap"
               >
-                <span aria-hidden="true" className="material-symbols-outlined text-primary text-[19px]">receipt_long</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary text-[1.1875rem]">receipt_long</span>
                 <span>Tra cứu lịch hẹn</span>
               </button>
             ) : (
@@ -134,7 +134,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
               onClick={onScrollToAI}
               className="w-full h-11 sm:h-12 px-4 rounded-2xl bg-teal-50/90 hover:bg-teal-100 text-teal-900 font-label text-xs sm:text-sm font-semibold shadow-xs hover:shadow-sm transition-all duration-200 cursor-pointer border border-teal-200/80 flex items-center justify-center gap-2 whitespace-nowrap"
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-teal-700 text-[19px]">smart_toy</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-teal-700 text-[1.1875rem]">smart_toy</span>
               <span>Hỏi Trợ Lý AI 24/7</span>
             </button>
           </div>
@@ -149,7 +149,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-headline text-2xl font-extrabold text-primary tracking-tight">{h.title}</span>
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${h.iconBox}`}>
-                    <span aria-hidden="true" className="material-symbols-outlined text-[19px]">{h.icon}</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-[1.1875rem]">{h.icon}</span>
                   </div>
                 </div>
                 <div>
@@ -188,7 +188,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
                     selected ? 'bg-white text-primary shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <span aria-hidden="true" className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-[1rem]">{tab.icon}</span>
                   <span>{tab.label}</span>
                 </button>
               );
@@ -242,7 +242,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
               <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 border border-white/20 shadow-sm pointer-events-none">
                 <span
                   aria-hidden="true"
-                  className={`material-symbols-outlined text-[14px] ${activeVisual === 'president' ? 'text-amber-300' : 'text-teal-300'}`}
+                  className={`material-symbols-outlined text-[0.875rem] ${activeVisual === 'president' ? 'text-amber-300' : 'text-teal-300'}`}
                 >
                   {activeVisual === 'president' ? 'military_tech' : 'verified'}
                 </span>
@@ -269,7 +269,7 @@ export const HeroSection = ({ onOpenBooking, onScrollToAI, onOpenMyAppointments 
             {/* Chip nổi: Khẩu hiệu */}
             <div className="absolute -bottom-3 -left-2 sm:-left-4 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-xl border border-primary-fixed-dim flex items-center gap-3 animate-fade-in">
               <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-100">
-                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">favorite</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[1.125rem]">favorite</span>
               </div>
               <div className="flex flex-col">
                 <span className="font-label text-xs text-slate-500 font-medium">Khẩu hiệu y khoa</span>

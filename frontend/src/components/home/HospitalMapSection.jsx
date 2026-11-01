@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../context/useToast';
 import logoHospital from '../../assets/logo.png';
 import { HOURS_TEXT } from '../../services/hospitalHours';
 
@@ -33,7 +33,7 @@ export const HospitalMapSection = () => {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-primary text-xs font-bold uppercase tracking-wider mb-2 border border-primary-fixed-dim">
-              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">pin_drop</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[0.9375rem]">pin_drop</span>
               <span>Vị Trí & Chỉ Đường</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -51,9 +51,9 @@ export const HospitalMapSection = () => {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white font-label text-xs sm:text-sm font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-[18px]">location_on</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[1.125rem]">location_on</span>
               <span>Mở Google Maps</span>
-              <span aria-hidden="true" className="material-symbols-outlined text-primary-fixed-dim text-[15px]">open_in_new</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-primary-fixed-dim text-[0.9375rem]">open_in_new</span>
               <NewTabHint />
             </a>
           </div>
@@ -87,7 +87,7 @@ export const HospitalMapSection = () => {
               <div className="space-y-3 text-xs">
                 {/* Địa chỉ */}
                 <div className="flex items-start gap-2.5">
-                  <span aria-hidden="true" className="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">location_on</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-primary text-[1.125rem] shrink-0 mt-0.5">location_on</span>
                   <div>
                     <span className="text-slate-500 font-medium">Địa chỉ:</span>
                     <p className="text-slate-800 font-bold leading-snug">
@@ -98,7 +98,7 @@ export const HospitalMapSection = () => {
 
                 {/* Hotline */}
                 <div className="flex items-start gap-2.5">
-                  <span aria-hidden="true" className="material-symbols-outlined text-red-600 text-[18px] shrink-0 mt-0.5">call</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-red-600 text-[1.125rem] shrink-0 mt-0.5">call</span>
                   <div>
                     <span className="text-slate-500 font-medium">Hotline tư vấn & cấp cứu:</span>
                     <p>
@@ -112,7 +112,7 @@ export const HospitalMapSection = () => {
 
                 {/* Giờ khám */}
                 <div className="flex items-start gap-2.5">
-                  <span aria-hidden="true" className="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">schedule</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-primary text-[1.125rem] shrink-0 mt-0.5">schedule</span>
                   <div>
                     <span className="text-slate-500 font-medium">Giờ khám bệnh:</span>
                     <p className="text-slate-800 font-semibold">{HOURS_TEXT.days}</p>
@@ -133,7 +133,7 @@ export const HospitalMapSection = () => {
                 className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 title="Sao chép địa chỉ bệnh viện"
               >
-                <span aria-hidden="true" className="material-symbols-outlined text-[15px]">
+                <span aria-hidden="true" className="material-symbols-outlined text-[0.9375rem]">
                   {copied ? 'check' : 'content_copy'}
                 </span>
                 <span aria-live="polite">{copied ? 'Đã sao chép' : 'Chép địa chỉ'}</span>
@@ -145,7 +145,7 @@ export const HospitalMapSection = () => {
                 rel="noopener noreferrer"
                 className="flex-1 py-2 px-3 rounded-xl bg-primary-fixed hover:bg-primary-fixed-dim text-primary border border-primary-fixed-dim text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <span aria-hidden="true" className="material-symbols-outlined text-[15px]">directions</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[0.9375rem]">directions</span>
                 <span>Chỉ đường</span>
                 <NewTabHint />
               </a>
@@ -182,12 +182,12 @@ export const HospitalMapSection = () => {
                 <div className="truncate">
                   <p className="text-xs font-bold text-white truncate flex items-center gap-1">
                     <span>Mỹ Phát Hospital</span>
-                    <span aria-hidden="true" className="material-symbols-outlined text-[13px] text-teal-300">verified</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-[0.8125rem] text-teal-300">verified</span>
                   </p>
                   <p className="text-xs text-slate-300 truncate">1170 Quang Trung, Chũ</p>
                 </div>
               </div>
-              <span aria-hidden="true" className="material-symbols-outlined text-[16px] text-teal-300 shrink-0">open_in_new</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[1rem] text-teal-300 shrink-0">open_in_new</span>
             </a>
           </div>
         </div>

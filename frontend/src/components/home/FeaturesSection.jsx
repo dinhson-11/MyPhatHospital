@@ -71,7 +71,7 @@ export const FeaturesSection = ({
               <div
                 className={`w-12 h-12 rounded-xl ${f.bg} flex items-center justify-center ${f.color} mb-5 group-hover:scale-105 transition-transform`}
               >
-                <span aria-hidden="true" className="material-symbols-outlined text-[26px]">{f.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[1.625rem]">{f.icon}</span>
               </div>
               <h3 className="font-headline text-base font-bold text-on-surface mb-2">{f.title}</h3>
               <p className="font-body text-xs text-on-surface-variant leading-relaxed flex-1">{f.desc}</p>
@@ -82,7 +82,7 @@ export const FeaturesSection = ({
                   className="mt-4 self-start inline-flex items-center gap-1 text-xs font-bold text-primary hover:text-primary-dark hover:underline cursor-pointer"
                 >
                   <span>{f.actionLabel}</span>
-                  <span aria-hidden="true" className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-[1rem]">arrow_forward</span>
                 </button>
               )}
             </div>

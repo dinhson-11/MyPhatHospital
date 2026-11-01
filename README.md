@@ -419,6 +419,7 @@ cd backend
 ./mvnw test        # Windows: .\mvnw.cmd test
 
 # AI Service — Pytest
+# File mô hình (*.joblib) không nằm trong repo; conftest.py tự huấn luyện (~7 giây) ở lần chạy đầu
 cd ai-service
 pytest
 ```

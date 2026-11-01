@@ -4,7 +4,8 @@ import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import App from '../App';
 import { authService } from '../services/authService';
 import { AuthProvider } from '../context/AuthContext';
-import { ToastProvider, useToast } from '../context/ToastContext';
+import { ToastProvider } from '../context/ToastContext';
+import { useToast } from '../context/useToast';
 import AutoLogoutTimer from '../components/common/AutoLogoutTimer';
 
 // Hermetic: không gọi backend thật (mô phỏng mất kết nối → các service dùng luồng offline dev/test)

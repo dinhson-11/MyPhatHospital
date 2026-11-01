@@ -28,7 +28,7 @@ export default function DoctorsSection({ onOpenBooking }) {
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-fixed text-primary text-xs font-bold uppercase tracking-wider mb-4 border border-primary-fixed-dim">
-            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">badge</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[1rem]">badge</span>
             <span>Đội Ngũ Bác Sĩ & Chuyên Gia</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
@@ -97,17 +97,17 @@ export default function DoctorsSection({ onOpenBooking }) {
                 {/* Thông tin chi tiết */}
                 <div className="p-6 space-y-3.5">
                   <p className="text-xs text-slate-600 flex items-start gap-2 leading-relaxed">
-                    <span aria-hidden="true" className="material-symbols-outlined text-teal-600 text-[17px] shrink-0 mt-0.5">workspace_premium</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-teal-600 text-[1.0625rem] shrink-0 mt-0.5">workspace_premium</span>
                     <span>{doc.experience}</span>
                   </p>
 
                   <p className="text-xs text-slate-600 flex items-center gap-2">
-                    <span aria-hidden="true" className="material-symbols-outlined text-slate-400 text-[17px] shrink-0">schedule</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-slate-400 text-[1.0625rem] shrink-0">schedule</span>
                     <span>{doc.schedule}</span>
                   </p>
 
                   <p className="text-xs text-slate-600 flex items-center gap-2">
-                    <span aria-hidden="true" className="material-symbols-outlined text-slate-400 text-[17px] shrink-0">location_on</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-slate-400 text-[1.0625rem] shrink-0">location_on</span>
                     <span className="font-medium text-slate-700">{doc.room}</span>
                   </p>
 
@@ -129,7 +129,7 @@ export default function DoctorsSection({ onOpenBooking }) {
               {/* Thanh thông tin cuối thẻ */}
               <div className="px-6 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                 <span className="flex items-center gap-1 text-teal-800 font-medium">
-                  <span aria-hidden="true" className="material-symbols-outlined text-[14px] text-teal-600">verified</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-[0.875rem] text-teal-600">verified</span>
                   Đạt chuẩn y đức
                 </span>
                 <span className="text-slate-500">Mỹ Phát Hospital</span>
@@ -142,7 +142,7 @@ export default function DoctorsSection({ onOpenBooking }) {
         <div className="mt-14 rounded-2xl bg-primary-fixed border border-primary-fixed-dim p-8 sm:p-10 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="max-w-xl text-center md:text-left">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-primary text-xs font-bold uppercase tracking-wider mb-2 border border-primary-fixed-dim">
-              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">calendar_add_on</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[0.9375rem]">calendar_add_on</span>
               Dịch Vụ Đặt Khám Trực Tuyến
             </span>
             <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1 text-slate-900">
@@ -160,7 +160,7 @@ export default function DoctorsSection({ onOpenBooking }) {
               onClick={() => onOpenBooking()}
               className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-primary hover:bg-primary-dark text-white font-label text-sm font-bold shadow-lg shadow-primary/20 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-[20px]">calendar_month</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[1.25rem]">calendar_month</span>
               <span>Đặt Lịch Khám Tại Đây</span>
             </button>
             <a
@@ -168,7 +168,7 @@ export default function DoctorsSection({ onOpenBooking }) {
               aria-label="Gọi hotline 0789 065 493"
               className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-label text-sm font-bold border border-slate-200 transition-all duration-200 flex items-center justify-center gap-2"
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-[18px] text-red-600">call</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[1.125rem] text-red-600">call</span>
               <span>0789 065 493</span>
             </a>
           </div>

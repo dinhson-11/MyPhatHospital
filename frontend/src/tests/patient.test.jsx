@@ -8,9 +8,9 @@ vi.mock('../services/api', () => ({
 }));
 
 const showToast = vi.fn();
-vi.mock('../context/ToastContext', () => ({ useToast: () => ({ showToast }) }));
+vi.mock('../context/useToast', () => ({ useToast: () => ({ showToast }) }));
 const mockUser = { id: 1, username: 'benhnhan', role: 'PATIENT' };
-vi.mock('../context/AuthContext', () => ({
+vi.mock('../context/useAuth', () => ({
   useAuth: () => ({ user: mockUser })
 }));
 

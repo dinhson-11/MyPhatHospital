@@ -6,14 +6,14 @@ vi.mock('../services/api', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
   BASE_URL: ''
 }));
-vi.mock('../context/AuthContext', () => ({
+vi.mock('../context/useAuth', () => ({
   useAuth: () => ({ isAdmin: false, isReceptionist: true })
 }));
 
 import api from '../services/api';
 import invoiceService from '../services/invoiceService';
 import InvoiceModal from '../components/billing/InvoiceModal';
-import { suggestCashAmounts } from '../components/billing/PaymentDialog';
+import { suggestCashAmounts } from '../utils/payment';
 import { amountInWords, formatVND } from '../utils/format';
 
 const ok = (data) => Promise.resolve({ success: true, data, message: 'OK' });

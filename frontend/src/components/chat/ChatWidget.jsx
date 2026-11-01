@@ -182,7 +182,7 @@ export default function ChatWidget({ onOpenBooking }) {
   };
 
   const headerBtnClass =
-    'w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
+    'touch-target w-9 h-9 rounded-lg flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
 
   return (
     <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end">
@@ -193,16 +193,16 @@ export default function ChatWidget({ onOpenBooking }) {
           data-testid="ai-chat-window"
           role="dialog"
           aria-labelledby={titleId}
-          className="w-[calc(100vw-2rem)] sm:w-[410px] h-[560px] max-h-[calc(100dvh_-_7rem)] bg-white rounded-2xl shadow-pop border border-slate-200 flex flex-col overflow-hidden mb-3 animate-fade-in"
+          className="w-[calc(100vw-2rem)] sm:w-[25.625rem] h-[35rem] max-h-[calc(100dvh_-_10rem)] bg-white rounded-2xl shadow-pop border border-slate-200 flex flex-col overflow-hidden mb-3 animate-fade-in"
         >
           {/* Header */}
           <div className="px-3.5 py-3 bg-primary text-white flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <div
-                className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center border border-white/20 shrink-0"
+                className="hidden sm:flex w-10 h-10 rounded-xl bg-white/15 items-center justify-center border border-white/20 shrink-0"
                 aria-hidden="true"
               >
-                <span className="material-symbols-outlined text-[24px]">smart_toy</span>
+                <span className="material-symbols-outlined text-[1.5rem]">smart_toy</span>
               </div>
               <div className="min-w-0">
                 <h2 id={titleId} className="font-headline font-bold text-sm tracking-tight">
@@ -227,7 +227,7 @@ export default function ChatWidget({ onOpenBooking }) {
                   showHistory ? 'bg-white/25 text-white' : 'hover:bg-white/15 text-white/85 hover:text-white'
                 }`}
               >
-                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+                <span className="material-symbols-outlined text-[1.25rem]" aria-hidden="true">
                   {showHistory ? 'chat' : 'history'}
                 </span>
               </button>
@@ -240,7 +240,7 @@ export default function ChatWidget({ onOpenBooking }) {
                 title="Bắt đầu cuộc trò chuyện mới"
                 className={`${headerBtnClass} hover:bg-white/15 text-white/85 hover:text-white`}
               >
-                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">add_comment</span>
+                <span className="material-symbols-outlined text-[1.25rem]" aria-hidden="true">add_comment</span>
               </button>
 
               <button
@@ -250,7 +250,7 @@ export default function ChatWidget({ onOpenBooking }) {
                 title="Đóng (Esc)"
                 className={`${headerBtnClass} hover:bg-white/15 text-white/85 hover:text-white`}
               >
-                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
+                <span className="material-symbols-outlined text-[1.375rem]" aria-hidden="true">close</span>
               </button>
             </div>
           </div>
@@ -339,7 +339,7 @@ export default function ChatWidget({ onOpenBooking }) {
                   disabled={!inputText.trim() || isTyping}
                   className="w-10 h-10 rounded-lg bg-primary hover:bg-primary-dark text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
                 >
-                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">send</span>
+                  <span className="material-symbols-outlined text-[1.25rem]" aria-hidden="true">send</span>
                 </button>
               </form>
 
@@ -370,7 +370,7 @@ export default function ChatWidget({ onOpenBooking }) {
         aria-controls={isOpen ? windowId : undefined}
         className="relative flex items-center gap-2 h-12 px-4 sm:px-5 rounded-full bg-primary hover:bg-primary-dark text-white font-label font-semibold text-sm shadow-pop transition-colors cursor-pointer border border-white/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
       >
-        <span className="material-symbols-outlined text-[24px]" aria-hidden="true">
+        <span className="material-symbols-outlined text-[1.5rem]" aria-hidden="true">
           {isOpen ? 'close' : 'forum'}
         </span>
         <span className="hidden sm:inline">Hỏi AI Y tế 24/7</span>

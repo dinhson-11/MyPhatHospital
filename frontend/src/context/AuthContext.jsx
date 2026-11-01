@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { authService } from '../services/authService';
-
-const AuthContext = createContext(null);
+import { AuthContext } from './useAuth';
 
 const AUTH_STORAGE_KEYS = new Set(['hms_token', 'hms_user']);
 
@@ -98,10 +97,3 @@ export const AuthProvider = ({ children }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};

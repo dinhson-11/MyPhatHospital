@@ -17,7 +17,13 @@ export default {
         "2xl": "1536px"
       },
       extend: {
+        /* Cỡ chữ nhỏ nhất 13px (mặc định Tailwind 12px) cho người lớn tuổi, người kém mắt */
+        fontSize: {
+          xs: ["0.8125rem", { lineHeight: "1.25rem" }]
+        },
         colors: {
+          /* Chữ phụ đậm hơn mặc định (#64748b) để đạt 4.5:1 trên nền slate-50/100/200 – trùng --color-text-muted */
+          slate: { 500: "#566579" },
           /* Thương hiệu – Xanh navy y khoa (#0B5394) là màu chính; xanh ngọc (#2BA89B) là màu nhấn phụ */
           "brand": {
             50: "#f0f7ff",

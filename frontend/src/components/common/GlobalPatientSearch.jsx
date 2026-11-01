@@ -35,12 +35,18 @@ export default function GlobalPatientSearch({ isOpen, onClose, onSelectPatient }
     }
   };
 
-  useEffect(() => {
+  // Đóng hộp thoại → xóa từ khóa và kết quả (điều chỉnh state ngay trong lúc render)
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
     if (!isOpen) {
       setQuery('');
       setState({ status: 'idle', items: [], error: '' });
-      return undefined;
     }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
     const kw = query.trim();
     if (kw.length === 1) return undefined; // chờ đủ 2 ký tự
     const timer = setTimeout(() => runSearch(kw), kw ? 300 : 0);
@@ -81,7 +87,7 @@ export default function GlobalPatientSearch({ isOpen, onClose, onSelectPatient }
           />
         </div>
 
-        <p id="global-patient-search-status" className="text-[13px] text-slate-600" aria-live="polite">
+        <p id="global-patient-search-status" className="text-[0.8125rem] text-slate-600" aria-live="polite">
           {kw.length === 1
             ? 'Nhập ít nhất 2 ký tự để tìm.'
             : state.status === 'loading'
@@ -114,10 +120,10 @@ export default function GlobalPatientSearch({ isOpen, onClose, onSelectPatient }
                         <span className="font-bold text-slate-900">{p.fullName}</span>
                         <span className="badge badge-neutral font-mono">{p.patientCode || `#${p.id}`}</span>
                       </p>
-                      <p className="text-[13px] text-slate-600 mt-0.5">
+                      <p className="text-[0.8125rem] text-slate-600 mt-0.5">
                         {formatGender(p.gender)} · {p.dob ? `${formatDate(p.dob)}${age !== null ? ` (${age} tuổi)` : ''}` : 'Chưa rõ ngày sinh'}
                       </p>
-                      <p className="text-[13px] text-slate-600">
+                      <p className="text-[0.8125rem] text-slate-600">
                         SĐT: <SensitiveMask value={p.phone} type="phone" />
                         {p.nationalId && <> · CCCD: <SensitiveMask value={p.nationalId} type="cccd" /></>}
                       </p>

@@ -24,7 +24,7 @@ export default function VitalSignsForm({ values = {}, errors = {}, onChange, idP
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3">
         {VITAL_SIGN_FIELDS.map((field) => {
           const id = `${idPrefix}-${field.key}`;
           const error = errors[field.key];
@@ -54,7 +54,7 @@ export default function VitalSignsForm({ values = {}, errors = {}, onChange, idP
               </div>
               {error ? (
                 <p id={hintId} className="form-error">
-                  <span className="material-symbols-outlined text-[14px]" aria-hidden="true">error</span>
+                  <span className="material-symbols-outlined text-[0.875rem]" aria-hidden="true">error</span>
                   {error}
                 </p>
               ) : (
@@ -73,7 +73,7 @@ export default function VitalSignsForm({ values = {}, errors = {}, onChange, idP
             data-testid={`${idPrefix}-bmi`}
             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold ${BMI_TONE[bmi.tone]}`}
           >
-            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">monitor_weight</span>
+            <span className="material-symbols-outlined text-[1rem]" aria-hidden="true">monitor_weight</span>
             BMI {formatDecimal(bmi.bmi)} kg/m² · {bmi.category}
           </span>
         ) : (

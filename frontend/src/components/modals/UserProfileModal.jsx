@@ -1,7 +1,7 @@
 import React from 'react';
 import Modal from '../common/Modal';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
 
 const ROLE_LABELS = {
   ADMIN: 'Quản trị viên',
@@ -76,10 +76,10 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, 
             {user.departmentName && <InfoRow label="Khoa / Phòng">{user.departmentName}</InfoRow>}
             {user.room && <InfoRow label="Phòng làm việc">{user.room}</InfoRow>}
             <InfoRow label="Email">
-              {user.email || <span className="font-normal text-slate-400">Chưa cập nhật</span>}
+              {user.email || <span className="font-normal text-slate-600">Chưa cập nhật</span>}
             </InfoRow>
             <InfoRow label="Số điện thoại">
-              {phone || <span className="font-normal text-slate-400">Chưa cập nhật</span>}
+              {phone || <span className="font-normal text-slate-600">Chưa cập nhật</span>}
             </InfoRow>
           </dl>
 

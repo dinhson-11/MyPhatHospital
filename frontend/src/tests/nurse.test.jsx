@@ -8,7 +8,7 @@ vi.mock('../services/api', () => ({
 }));
 
 const showToast = vi.fn();
-vi.mock('../context/ToastContext', () => ({
+vi.mock('../context/useToast', () => ({
   useToast: () => ({ showToast }),
   ToastProvider: ({ children }) => children
 }));

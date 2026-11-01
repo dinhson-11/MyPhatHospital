@@ -1,10 +1,11 @@
 import React from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { reportService, getMethodBreakdown, formatPercent, formatCount } from '../../services/reportService';
 import { receptionService } from '../../services/receptionService';
 import { formatVND, formatDate, todayISO, APPOINTMENT_STATUS_LABELS } from '../../utils/format';
 import { useAsyncData } from '../reporting/useAsyncData';
 import { Icon, ErrorPanel, EmptyPanel, KpiCard, KpiSkeleton } from '../reporting/ReportStates';
+import TableWrap from '../common/TableWrap';
 
 const QUEUE_STATUS = {
   CHECKED_IN: { label: 'Đã vào khám', className: 'badge-success' },
@@ -92,7 +93,7 @@ export default function WorkspaceDashboard({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold">
-              <Icon name="calendar_today" className="text-[16px]" />
+              <Icon name="calendar_today" className="text-[1rem]" />
               <span>Hôm nay {formatDate(new Date())} · Mỹ Phát Hospital</span>
             </p>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
@@ -258,7 +259,7 @@ export default function WorkspaceDashboard({
                 <EmptyPanel icon="groups" title="Chưa có bệnh nhân trong hàng đợi" text="Bệnh nhân đặt lịch hoặc được tiếp nhận hôm nay sẽ hiển thị tại đây." />
               )}
               {queue.status === 'success' && queueItems.length > 0 && (
-                <div className="table-wrap border-0 rounded-none">
+                <TableWrap label="Hàng đợi bệnh nhân hôm nay" className="border-0 rounded-none">
                   <table className="table">
                     <caption className="sr-only">5 bệnh nhân đầu tiên trong hàng đợi hôm nay</caption>
                     <thead>
@@ -291,7 +292,7 @@ export default function WorkspaceDashboard({
                       })}
                     </tbody>
                   </table>
-                </div>
+                </TableWrap>
               )}
             </section>
           )}
@@ -340,7 +341,7 @@ export default function WorkspaceDashboard({
                           </span>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden" aria-hidden="true">
-                          <div className="bg-secondary h-2 rounded-full" style={{ width: `${Math.round((d.count / maxDiagCount) * 100)}%` }} />
+                          <div className="bg-teal-600 h-2 rounded-full" style={{ width: `${Math.round((d.count / maxDiagCount) * 100)}%` }} />
                         </div>
                       </li>
                     ))}

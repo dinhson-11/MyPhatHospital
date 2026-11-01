@@ -152,10 +152,10 @@ export const Footer = ({
               href="https://www.facebook.com/MyPhatHospital"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+              className="touch-target w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
               title="Fanpage Facebook Mỹ Phát Hospital"
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-[18px]">public</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[1.125rem]">public</span>
             </a>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { appointmentService } from '../../services/appointmentService';
 import { DEPARTMENTS, DOCTORS } from '../../services/dataService';
 import { getErrorMessage } from '../../services/apiError';
 import { APPOINTMENT_STATUS_LABELS, formatDate, formatDateTime, labelOf } from '../../utils/format';
+import TableWrap from '../common/TableWrap';
 
 const STATUS_BADGE = {
   BOOKED: 'badge-warning',
@@ -248,7 +249,7 @@ export default function AdminPanelModal({ isOpen, onClose }) {
             </button>
           </div>
         ) : (
-          <div className="table-wrap max-h-[55vh]">
+          <TableWrap label="Danh sách lịch khám" className="max-h-[55vh]">
             <table className="table">
               <caption className="sr-only">Danh sách lịch khám ({visible.length} lịch)</caption>
               <thead>
@@ -290,7 +291,7 @@ export default function AdminPanelModal({ isOpen, onClose }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         )}
       </section>
       </>)}

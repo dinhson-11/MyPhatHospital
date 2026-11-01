@@ -11,6 +11,10 @@ import 'material-symbols/outlined.css'
 import './index.css'
 import App from './App.jsx'
 import { syncCatalogWithBackend } from './services/dataService'
+import { applyTextSize, loadTextSize } from './utils/textSize'
+
+// Áp cỡ chữ người dùng đã chọn trước khi vẽ giao diện để không bị nháy kích thước
+applyTextSize(loadTextSize())
 
 // Chế độ tối đã được gỡ bỏ: xóa lớp `dark` / tùy chọn cũ còn lưu từ phiên bản trước
 // để giao diện không bị trộn sáng – tối.

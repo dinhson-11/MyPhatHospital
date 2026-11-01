@@ -315,6 +315,11 @@ class TestChatbotMatchingFixes:
 class TestMlTriageThreshold:
     """C2: Mô hình ML chỉ được dùng khi đủ tự tin và bỏ xa nhãn thứ hai."""
 
+    def test_trained_model_is_loaded(self):
+        # Không có test này thì test "bị từ chối" bên dưới vẫn pass khi thiếu mô hình (None vì không có mô hình)
+        from services.ml_triage_service import load_trained_model
+        assert load_trained_model() is not None
+
     def test_low_confidence_prediction_rejected(self):
         from services.ml_triage_service import predict_department
         assert predict_department("xyz abc") is None

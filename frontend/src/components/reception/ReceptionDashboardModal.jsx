@@ -7,12 +7,16 @@ import {
   insuranceStatus,
   BLOOD_TYPES
 } from '../../services/patientService';
-import { useToast } from '../../context/ToastContext';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useToast } from '../../context/useToast';
+import { useConfirm } from '../common/useConfirm';
 import Modal from '../common/Modal';
 import { APPOINTMENT_STATUS_LABELS, formatDate, formatGender, labelOf, todayISO } from '../../utils/format';
+import TableWrap from '../common/TableWrap';
 
 const maskPhone = (phone) => (phone && String(phone).length >= 7 ? `${String(phone).slice(0, 4)}***${String(phone).slice(-3)}` : (phone || '—'));
+
+// Máy chủ chỉ cho ghi nhận vắng mặt sau giờ hẹn → khóa nút trước giờ hẹn để không bấm nhầm
+const notYetDue = (item) => Boolean(item.scheduledAt) && new Date(item.scheduledAt).getTime() > Date.now();
 
 const TABS = [
   { id: 'queue', label: 'Hàng đợi tiếp nhận', icon: 'how_to_reg' },
@@ -78,8 +82,11 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('queue');
   const tabRefs = useRef({});
 
-  const [queue, setQueue] = useState({ status: 'idle', items: [], error: '' });
   const [queueDate, setQueueDate] = useState(todayISO());
+  // Trạng thái "đang tải" suy ra từ việc kết quả có thuộc lần tải hiện tại (ngày + lần làm mới) hay không
+  const [queueToken, setQueueToken] = useState(0);
+  const [queueResult, setQueueResult] = useState({ forKey: null, failed: false, items: [], error: '' });
+  const reloadWaitRef = useRef(false); // true: đang chờ tải lại sau thao tác → mở khóa nút khi tải xong
   const [searchTerm, setSearchTerm] = useState('');
   const [busy, setBusy] = useState(null); // { id, action }
 
@@ -90,19 +97,44 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
   const [patientQuery, setPatientQuery] = useState('');
   const [patientResults, setPatientResults] = useState({ status: 'idle', items: [], error: '' });
 
-  const loadQueue = useCallback(async (date) => {
-    setQueue((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await receptionService.getTodayQueue({ date });
-      setQueue({ status: 'ready', items, error: '' });
-    } catch (err) {
-      setQueue({ status: 'error', items: [], error: err.message });
-    }
-  }, []);
+  const reloadQueue = useCallback(() => setQueueToken((t) => t + 1), []);
+
+  // Mỗi lần mở modal: tải lại hàng đợi (điều chỉnh state ngay trong lúc render)
+  const [wasOpen, setWasOpen] = useState(false);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setQueueToken((t) => t + 1);
+  }
+
+  const queueKey = `${queueDate}#${queueToken}`;
 
   useEffect(() => {
-    if (isOpen) loadQueue(queueDate);
-  }, [isOpen, queueDate, loadQueue]);
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    const settle = (result) => {
+      if (cancelled) return;
+      setQueueResult({ forKey: queueKey, ...result });
+      if (reloadWaitRef.current) {
+        reloadWaitRef.current = false;
+        setBusy(null);
+      }
+    };
+    receptionService.getTodayQueue({ date: queueDate }).then(
+      (items) => settle({ failed: false, items, error: '' }),
+      (err) => settle({ failed: true, items: [], error: err.message })
+    );
+    return () => { cancelled = true; };
+  }, [isOpen, queueDate, queueKey]);
+
+  const queue = queueResult.forKey !== queueKey
+    ? { status: 'loading', items: queueResult.items, error: '' }
+    : { status: queueResult.failed ? 'error' : 'ready', items: queueResult.items, error: queueResult.error };
+
+  // Sau thao tác thành công: tải lại hàng đợi và giữ khóa nút cho tới khi tải xong
+  const reloadAfterAction = () => {
+    reloadWaitRef.current = true;
+    reloadQueue();
+  };
 
   const handleConfirm = async (item) => {
     if (busy) return;
@@ -110,16 +142,13 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
     try {
       await receptionService.confirmAppointment(item.id);
       showToast(`Đã xác nhận lịch hẹn của ${item.fullName}.`, 'success');
-      await loadQueue(queueDate);
+      reloadAfterAction();
     } catch (err) {
       showToast(err.message || 'Không xác nhận được lịch hẹn', 'error');
     } finally {
-      setBusy(null);
+      if (!reloadWaitRef.current) setBusy(null);
     }
   };
-
-  // Máy chủ chỉ cho ghi nhận vắng mặt sau giờ hẹn → khóa nút trước giờ hẹn để không bấm nhầm
-  const notYetDue = (item) => Boolean(item.scheduledAt) && new Date(item.scheduledAt).getTime() > Date.now();
 
   const handleCancel = async (item) => {
     if (busy) return;
@@ -137,11 +166,11 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
     try {
       await receptionService.cancelAppointment(item.id, reason);
       showToast(`Đã hủy lịch hẹn của ${item.fullName}.`, 'success');
-      await loadQueue(queueDate);
+      reloadAfterAction();
     } catch (err) {
       showToast(err.message || 'Không hủy được lịch hẹn', 'error');
     } finally {
-      setBusy(null);
+      if (!reloadWaitRef.current) setBusy(null);
     }
   };
 
@@ -158,11 +187,11 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
     try {
       await receptionService.markNoShow(item.id);
       showToast(`Đã ghi nhận ${item.fullName} không đến khám.`, 'success');
-      await loadQueue(queueDate);
+      reloadAfterAction();
     } catch (err) {
       showToast(err.message || 'Không cập nhật được trạng thái lịch hẹn', 'error');
     } finally {
-      setBusy(null);
+      if (!reloadWaitRef.current) setBusy(null);
     }
   };
 
@@ -183,11 +212,11 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
     try {
       const res = await receptionService.checkInPatient(item);
       showToast(`Đã check-in ${item.fullName}${res.visitId ? ` – ca khám #${res.visitId}` : ''}.`, 'success');
-      await loadQueue(queueDate);
+      reloadAfterAction();
     } catch (err) {
       showToast(err.message || 'Check-in không thành công', 'error');
     } finally {
-      setBusy(null);
+      if (!reloadWaitRef.current) setBusy(null);
     }
   };
 
@@ -304,7 +333,7 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
               onKeyDown={(e) => handleTabKeyDown(e, index)}
               className={`flex items-center gap-2 py-3 px-4 font-semibold text-sm border-b-2 transition-colors ${isSel ? 'border-primary text-primary bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{tab.icon}</span>
+              <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">{tab.icon}</span>
               {tab.label}{tab.id === 'queue' ? ` (${queue.items.length})` : ''}
             </button>
           );
@@ -330,7 +359,7 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                   className="input"
                 />
               </div>
-              <button type="button" onClick={() => loadQueue(queueDate)} disabled={queue.status === 'loading'} className="btn btn-secondary">
+              <button type="button" onClick={() => reloadQueue()} disabled={queue.status === 'loading'} className="btn btn-secondary">
                 <span className={`material-symbols-outlined ${queue.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
                 Làm mới
               </button>
@@ -339,14 +368,14 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
             {queue.status === 'error' ? (
               <div role="alert" className="p-4 rounded-xl border border-red-200 bg-red-50 text-sm text-red-900 flex flex-wrap items-center gap-3">
                 <span>{queue.error}</span>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => loadQueue(queueDate)}>Thử lại</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => reloadQueue()}>Thử lại</button>
               </div>
             ) : (
-              <div className="table-wrap">
+              <TableWrap label={`Lịch hẹn ngày ${formatDate(queueDate)}`}>
                 <table className="w-full text-left text-sm">
                   <caption className="sr-only">Lịch hẹn ngày {formatDate(queueDate)}</caption>
                   <thead>
-                    <tr className="bg-slate-50 text-[13px] font-semibold text-slate-700 border-b border-slate-200">
+                    <tr className="bg-slate-50 text-[0.8125rem] font-semibold text-slate-700 border-b border-slate-200">
                       <th scope="col" className="px-4 py-3">Bệnh nhân</th>
                       <th scope="col" className="px-4 py-3">Khoa & bác sĩ</th>
                       <th scope="col" className="px-4 py-3">Giờ hẹn</th>
@@ -358,10 +387,13 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                   <tbody className="divide-y divide-slate-100">
                     {filteredQueue.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-10 text-slate-600 text-[13px]">
-                          {queue.status === 'loading'
-                            ? 'Đang tải danh sách lịch hẹn…'
-                            : term ? `Không có bệnh nhân khớp với "${searchTerm}".` : `Không có lịch hẹn nào ngày ${formatDate(queueDate)}.`}
+                        <td colSpan={6} className="p-0 text-slate-600 text-[0.8125rem]">
+                          {/* Ghim ở mép trái vùng cuộn: bảng rộng hơn màn hình nên căn giữa theo cả bảng sẽ nằm ngoài tầm nhìn */}
+                          <div className="sticky left-0 w-[min(100%,calc(100vw-4rem))] py-10 px-4 text-center">
+                            {queue.status === 'loading'
+                              ? 'Đang tải danh sách lịch hẹn…'
+                              : term ? `Không có bệnh nhân khớp với "${searchTerm}".` : `Không có lịch hẹn nào ngày ${formatDate(queueDate)}.`}
+                          </div>
                         </td>
                       </tr>
                     ) : filteredQueue.map((item) => {
@@ -372,14 +404,14 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                         <tr key={item.id}>
                           <td className="px-4 py-3">
                             <div className="font-bold text-slate-900">{item.fullName || '—'}</div>
-                            <div className="text-[13px] text-slate-600 font-mono">{item.patientCode || '—'}</div>
+                            <div className="text-[0.8125rem] text-slate-600 font-mono">{item.patientCode || '—'}</div>
                           </td>
-                          <td className="px-4 py-3 text-[13px]">
+                          <td className="px-4 py-3 text-[0.8125rem]">
                             <div className="font-semibold text-slate-800">{item.departmentName || '—'}</div>
                             <div className="text-slate-600">{item.doctorName || 'Chưa phân công'}</div>
                           </td>
-                          <td className="px-4 py-3 text-[13px] font-semibold">{item.appointmentTime || '—'}</td>
-                          <td className="px-4 py-3 text-[13px] text-slate-700 max-w-[220px] truncate" title={item.symptoms}>{item.symptoms || '—'}</td>
+                          <td className="px-4 py-3 text-[0.8125rem] font-semibold">{item.appointmentTime || '—'}</td>
+                          <td className="px-4 py-3 text-[0.8125rem] text-slate-700 max-w-[220px] truncate" title={item.symptoms}>{item.symptoms || '—'}</td>
                           <td className="px-4 py-3"><span className={`badge ${st.badge}`}>{st.label}</span></td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2 flex-wrap">
@@ -428,7 +460,7 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                                 <span className="text-xs text-amber-800 w-full text-right">{missing}</span>
                               )}
                               {item.status === 'CHECKED_IN' && item.visitId && (
-                                <span className="text-[13px] text-emerald-800 font-semibold">Ca khám #{item.visitId}</span>
+                                <span className="text-[0.8125rem] text-emerald-800 font-semibold">Ca khám #{item.visitId}</span>
                               )}
                             </div>
                           </td>
@@ -437,7 +469,7 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
             )}
           </div>
         ) : (
@@ -457,10 +489,10 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                 <button type="submit" className="btn btn-secondary" disabled={patientResults.status === 'loading'}>Tìm</button>
               </form>
               {patientResults.status === 'error' && <p role="alert" className="form-error">{patientResults.error}</p>}
-              {patientResults.status === 'loading' && <p className="text-[13px] text-slate-600">Đang tìm…</p>}
+              {patientResults.status === 'loading' && <p className="text-[0.8125rem] text-slate-600">Đang tìm…</p>}
               {patientResults.status === 'ready' && (
                 patientResults.items.length === 0
-                  ? <p className="text-[13px] text-slate-600">Không tìm thấy hồ sơ phù hợp.</p>
+                  ? <p className="text-[0.8125rem] text-slate-600">Không tìm thấy hồ sơ phù hợp.</p>
                   : (
                     <ul className="space-y-2" aria-label="Kết quả tìm hồ sơ">
                       {patientResults.items.map((p) => (
@@ -469,7 +501,7 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                             type="button"
                             onClick={() => pickPatient(p)}
                             aria-current={editingPatient?.id === p.id ? 'true' : undefined}
-                            className={`w-full text-left p-3 rounded-xl border text-[13px] ${editingPatient?.id === p.id ? 'border-primary bg-primary-fixed' : 'border-slate-200 bg-white hover:border-slate-400'}`}
+                            className={`w-full text-left p-3 rounded-xl border text-[0.8125rem] ${editingPatient?.id === p.id ? 'border-primary bg-primary-fixed' : 'border-slate-200 bg-white hover:border-slate-400'}`}
                           >
                             <span className="block font-bold text-sm text-slate-900">{p.fullName}</span>
                             <span className="block text-slate-600">{p.patientCode} · {formatGender(p.gender)} · {formatDate(p.dob)}</span>
@@ -556,8 +588,8 @@ export const ReceptionDashboardModal = ({ isOpen, onClose }) => {
                   </Field>
                 </div>
                 {patientForm.insuranceNumber && ins.code !== 'VALID' && ins.code !== 'NONE' && (
-                  <p className="text-[13px] text-amber-900 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">warning</span>
+                  <p className="text-[0.8125rem] text-amber-900 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[1rem]" aria-hidden="true">warning</span>
                     {ins.label} – bệnh nhân có thể không được hưởng BHYT cho lượt khám này.
                   </p>
                 )}

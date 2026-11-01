@@ -2,16 +2,29 @@
 
 Ngày chạy: 31/10/2026 · Máy local Windows 11 · Java 21, Node 24, Python 3.14 (CI dùng Java 17, Node 22, Python 3.11)
 
+> **Lưu ý nhánh:** lần chạy đầu đo trên `main`. Giữa chừng nhánh được chuyển sang `feature/uiux-medical-billing-upgrade`
+> (khác `main` 96 file: không có avatar, import thuốc Excel, migration V24). Số liệu bên dưới là của **cả hai nhánh**, ghi rõ từng cột.
+
 ## Tổng quan
 
-| Phần | Lệnh | Kết quả |
-|------|------|---------|
-| Backend | `mvnw.cmd -B -ntp test` | 402 test chạy, **0 fail**, **9 skipped** (xem BUG-02) |
-| Frontend – test | `npx vitest run` | 448/448 pass (26 file) |
-| Frontend – lint | `npx oxlint` | exit 0, **31 warning** (xem BUG-03) |
-| ai-service | `python -m pytest -q` | 166 pass, **1 fail** (xem BUG-01) |
+| Phần | Lệnh | `main` (trước khi sửa) | `feature/uiux-medical-billing-upgrade` (hiện tại) |
+|------|------|------------------------|----------------------------------------------------|
+| Backend | `mvnw.cmd -B -ntp test` | 402 test, 0 fail, 9 skipped | 358 test, 0 fail, **0 skipped** (đã bật Docker, `clean test`) |
+| Frontend – test | `npx vitest run` | 448/448 pass (26 file) | 424/424 pass (24 file) |
+| Frontend – lint | `npx oxlint` | 31 warning | 25 warning (BUG-03) |
+| ai-service | `python -m pytest -q` | 166 pass, **1 fail** | 168/168 pass (BUG-01 đã sửa) |
 
-Chỉ có **1 test đỏ thật sự** (BUG-01). BUG-02 và BUG-03 là test bị bỏ qua / cảnh báo, không làm CI đỏ nhưng nên xử lý.
+Chỉ có **1 test đỏ thật sự** (BUG-01), đã sửa. BUG-02 đã đóng. BUG-03 còn 25 cảnh báo lint, không làm CI đỏ.
+
+## Trạng thái sửa lỗi
+
+| Bug | Trạng thái |
+|-----|-----------|
+| BUG-01 | **Đã sửa** – `ai-service/conftest.py` tự train mô hình, thêm `test_trained_model_is_loaded`, cập nhật README. Kiểm chứng: xoá `.joblib` rồi chạy pytest → 168 pass |
+| BUG-02 | **Đã đóng** – không phải lỗi code. Khi bật Docker, `allMigrationsApplyOnMySql8` fail "expected 23 but was 24" vì `backend/target/classes` còn file `V24__add_user_avatar.sql` sót từ lần build trên `main` (nhánh hiện tại không có V24). Chạy `mvnw.cmd clean test` → 8/8 test migration pass trên MySQL 8 thật |
+| BUG-03 | **Làm một phần** – đã sửa 6/31: `purity` (1) và 4 hàm thuần tách khỏi file component sang `src/utils/` (xem bên dưới). Còn 3 `only-export-components` (hook context) và 22 `set-state-in-effect`, giữ nguyên (xem lý do) |
+
+**Lưu ý khi đổi nhánh:** thư mục `backend/target` không bị git theo dõi nên giữ file build của nhánh cũ. Sau khi `git checkout` sang nhánh khác, chạy `mvnw.cmd clean test` thay vì `test` để tránh kết quả sai như BUG-02.
 
 ---
 
@@ -47,6 +60,11 @@ Chỉ có **1 test đỏ thật sự** (BUG-01). BUG-02 và BUG-03 là test bị
   - 23× `react(set-state-in-effect)`: gọi setState đồng bộ trong `useEffect`, gây render lặp.
   - 7× `react(only-export-components)`: file component export thêm hằng/hàm, làm hỏng Fast Refresh.
   - 1× `react(purity)`: `Date.now()` gọi trong lúc render ([ReceptionDashboardModal.jsx:122](frontend/src/components/reception/ReceptionDashboardModal.jsx#L122)).
+- **Đánh giá sau khi đọc code:**
+  - `set-state-in-effect` hầu hết là mẫu "tải dữ liệu khi mở modal" và "reset form khi `isOpen` đổi". Đây là đồng bộ với bên ngoài (gọi API, vòng đời modal), không phải lỗi logic. Sửa đúng cách phải đổi cách mount modal (dùng `key`/mount có điều kiện) hoặc dùng thư viện fetch, rủi ro hỏng hành vi cao so với lợi ích.
+  - `only-export-components` gồm cả hook `useToast`/`useAuth`/`useConfirm` được import ở 12 đến 23 file và mock theo đường dẫn trong test; tách ra phải sửa khoảng 50 file chỉ để lấy Fast Refresh lúc dev.
+  - `only-export-components` đã sửa 4/7 chỗ là hàm thuần ít nơi dùng: `printReceipt` → `utils/receipt.js`, `suggestCashAmounts` → `utils/payment.js`, `validateNewDrug` → `utils/drugForm.js`, `validateUserForm` → `utils/userForm.js` (đã cập nhật import ở component và 2 file test). Còn lại 3 hook: `useAuth`, `useToast`, `useConfirm`.
+  - `purity` đã sửa: đưa `notYetDue` ra cấp module trong `ReceptionDashboardModal.jsx`. Hành vi không đổi (vẫn tính lúc render, nút chưa tự mở khoá khi tới giờ nếu chưa re-render); đây là cách tắt cảnh báo, chưa phải thiết kế lại.
 - **File ảnh hưởng nhiều nhất:** `VisitDashboard.jsx` (3), `PaymentDialog.jsx` (3), `UserManagementPanel.jsx` (2), `PrescriptionForm.jsx` (2), `MyInvoicesModal.jsx` (2), `ReceptionDashboardModal.jsx` (2); các file còn lại 1 cảnh báo mỗi file.
 
 ## Ghi chú môi trường (không phải bug)

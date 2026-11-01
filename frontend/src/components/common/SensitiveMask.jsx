@@ -39,7 +39,7 @@ export default function SensitiveMask({ value, type = 'phone', className = '' })
         title={revealed ? 'Ẩn thông tin nhạy cảm' : 'Xem thông tin đầy đủ'}
         aria-label={revealed ? 'Ẩn thông tin nhạy cảm' : 'Xem thông tin đầy đủ'}
       >
-        <span className="material-symbols-outlined text-[15px] leading-none align-middle" aria-hidden="true">
+        <span className="material-symbols-outlined text-[0.9375rem] leading-none align-middle" aria-hidden="true">
           {revealed ? 'visibility_off' : 'visibility'}
         </span>
       </button>

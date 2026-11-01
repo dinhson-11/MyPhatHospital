@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { DEPARTMENTS, DOCTORS } from '../../services/dataService';
 import { getTimeSlots, parseLocalDate } from '../../services/hospitalHours';
 import { appointmentService } from '../../services/appointmentService';
 import { VN_MOBILE_REGEX } from '../../services/patientService';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
 import Modal from '../common/Modal';
 import { APPOINTMENT_STATUS_LABELS, formatDate, labelOf, todayISO } from '../../utils/format';
 
@@ -13,6 +13,9 @@ const tomorrowISO = () => {
   d.setDate(d.getDate() + 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+
+// Giá trị mặc định ổn định để việc so sánh theo tham chiếu không đặt lại biểu mẫu mỗi lần render
+const NO_INITIAL_DATA = {};
 
 const cleanPhone = (v) => String(v || '').replace(/[\s.-]/g, '');
 
@@ -27,7 +30,7 @@ const isPastSlot = (dateStr, slot, now = new Date()) => {
  * Đặt lịch khám: kiểm tra số điện thoại di động Việt Nam, ngày theo giờ địa phương,
  * chỉ hiển thị phiếu khi máy chủ đã ghi nhận lịch hẹn (trạng thái thật từ máy chủ).
  */
-export default function BookingModal({ isOpen, onClose, initialData = {}, onViewAppointments }) {
+export default function BookingModal({ isOpen, onClose, initialData = NO_INITIAL_DATA, onViewAppointments }) {
   const { user } = useAuth();
   const { showToast } = useToast();
 
@@ -43,28 +46,32 @@ export default function BookingModal({ isOpen, onClose, initialData = {}, onView
   const [loading, setLoading] = useState(false);
   const [ticket, setTicket] = useState(null);
 
-  useEffect(() => {
+  // Mở hộp thoại (hoặc đổi dữ liệu khởi tạo / người dùng) → đặt lại biểu mẫu; đóng → xóa phiếu.
+  // Điều chỉnh state ngay trong lúc render thay vì trong effect.
+  const [prevInputs, setPrevInputs] = useState(null);
+  if (!prevInputs || prevInputs.isOpen !== isOpen || prevInputs.initialData !== initialData || prevInputs.user !== user) {
+    setPrevInputs({ isOpen, initialData, user });
     if (!isOpen) {
       setTicket(null);
-      return;
-    }
-    setErrors({});
-    setSubmitError('');
-    setPatientName(user?.fullName || '');
-    setPhoneNumber(user?.phoneNumber || user?.phone || '');
-
-    const bookableDepts = DEPARTMENTS.filter((dept) => dept.canBook !== false);
-    if (initialData.departmentId && bookableDepts.some((dept) => dept.id === Number(initialData.departmentId))) {
-      setDepartmentId(String(initialData.departmentId));
     } else {
-      setDepartmentId(String(bookableDepts[0]?.id || ''));
+      setErrors({});
+      setSubmitError('');
+      setPatientName(user?.fullName || '');
+      setPhoneNumber(user?.phoneNumber || user?.phone || '');
+
+      const bookableDepts = DEPARTMENTS.filter((dept) => dept.canBook !== false);
+      if (initialData.departmentId && bookableDepts.some((dept) => dept.id === Number(initialData.departmentId))) {
+        setDepartmentId(String(initialData.departmentId));
+      } else {
+        setDepartmentId(String(bookableDepts[0]?.id || ''));
+      }
+      const targetDoc = initialData.doctorId ? DOCTORS.find((d) => d.id === Number(initialData.doctorId)) : null;
+      setDoctorId(targetDoc && targetDoc.canBook !== false ? String(initialData.doctorId) : '');
+      setNotes(initialData.notes || '');
+      setAppointmentDate(tomorrowISO());
+      setTimeSlot('');
     }
-    const targetDoc = initialData.doctorId ? DOCTORS.find((d) => d.id === Number(initialData.doctorId)) : null;
-    setDoctorId(targetDoc && targetDoc.canBook !== false ? String(initialData.doctorId) : '');
-    setNotes(initialData.notes || '');
-    setAppointmentDate(tomorrowISO());
-    setTimeSlot('');
-  }, [isOpen, initialData, user]);
+  }
 
   const timeSlots = getTimeSlots(parseLocalDate(appointmentDate));
   const availableSlots = timeSlots.filter((s) => !isPastSlot(appointmentDate, s));
@@ -158,7 +165,7 @@ export default function BookingModal({ isOpen, onClose, initialData = {}, onView
               <div><dt className="text-xs text-slate-600">Khung giờ</dt><dd className="font-bold text-slate-900">{ticket.timeSlot}</dd></div>
             </dl>
 
-            <p className="pt-3 text-[13px] text-slate-700">
+            <p className="pt-3 text-[0.8125rem] text-slate-700">
               {ticket.status === 'BOOKED'
                 ? 'Lịch hẹn đang chờ bệnh viện xác nhận. '
                 : ''}

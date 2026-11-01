@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { visitService, STANDARD_LAB_TESTS, LAB_ORDER_STATUS_LABELS, isHttpUrl } from '../../services/visitService';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../context/useToast';
 import { formatDateTime } from '../../utils/format';
 import Modal from '../common/Modal';
 
@@ -108,7 +108,7 @@ export default function LabOrderPanel({
     <div className="space-y-6">
       <section className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4" aria-labelledby="lab-list-title">
         <h4 id="lab-list-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">science</span>
+          <span className="material-symbols-outlined text-primary text-[1.25rem]" aria-hidden="true">science</span>
           Chỉ định cận lâm sàng của ca khám ({orders.length})
         </h4>
 
@@ -128,7 +128,7 @@ export default function LabOrderPanel({
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] text-slate-600">{formatDateTime(order.orderedAt)}</span>
+                      <span className="text-[0.8125rem] text-slate-600">{formatDateTime(order.orderedAt)}</span>
                       {canEnterResults && (
                         <button type="button" onClick={() => openResult(order)} className="btn btn-soft btn-sm">
                           {isResulted ? 'Cập nhật kết quả' : 'Nhập kết quả'}
@@ -138,14 +138,14 @@ export default function LabOrderPanel({
                   </div>
 
                   {latest ? (
-                    <div className="p-3 rounded-lg bg-slate-50 text-[13px] space-y-1.5 border border-slate-200">
+                    <div className="p-3 rounded-lg bg-slate-50 text-[0.8125rem] space-y-1.5 border border-slate-200">
                       <div className="font-bold text-primary flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">task_alt</span>
+                        <span className="material-symbols-outlined text-[1rem]" aria-hidden="true">task_alt</span>
                         Kết quả ({formatDateTime(latest.resultedAt)}):
                       </div>
                       <p className="text-slate-900 whitespace-pre-wrap leading-relaxed">{latest.resultText}</p>
                       {safeUrl && (
-                        <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline text-[13px]">
+                        <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline text-[0.8125rem]">
                           Xem tệp kết quả đính kèm
                         </a>
                       )}
@@ -154,7 +154,7 @@ export default function LabOrderPanel({
                       )}
                     </div>
                   ) : (
-                    <p className="text-[13px] text-slate-600 italic">Chưa có kết quả từ phòng xét nghiệm.</p>
+                    <p className="text-[0.8125rem] text-slate-600 italic">Chưa có kết quả từ phòng xét nghiệm.</p>
                   )}
                 </li>
               );
@@ -174,7 +174,7 @@ export default function LabOrderPanel({
       ) : (
         <form onSubmit={handleCreateOrder} noValidate className="bg-white rounded-2xl p-6 border border-slate-200 space-y-5" aria-labelledby="lab-form-title">
           <h4 id="lab-form-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">biotech</span>
+            <span className="material-symbols-outlined text-primary text-[1.375rem]" aria-hidden="true">biotech</span>
             Chỉ định cận lâm sàng mới
           </h4>
 
@@ -192,7 +192,7 @@ export default function LabOrderPanel({
                     disabled={pending}
                     title={pending ? 'Đã chỉ định, đang chờ kết quả' : undefined}
                     onClick={() => { setTestType(t.name); setOrderError(''); }}
-                    className={`px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`px-3 py-1.5 rounded-lg text-[0.8125rem] font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       selected ? 'bg-primary text-white border-primary' : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50'
                     }`}
                   >

@@ -11,9 +11,9 @@ import {
 } from '../../services/visitService';
 import { patientService } from '../../services/patientService';
 import { aiAlertService, AI_DISCLAIMER_TEXT } from '../../services/aiAlertService';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
+import { useConfirm } from '../common/useConfirm';
 import Modal from '../common/Modal';
 import PatientSafetyBanner from '../common/PatientSafetyBanner';
 import SensitiveMask from '../common/SensitiveMask';
@@ -101,7 +101,14 @@ export default function VisitDashboard({ isOpen, onClose }) {
   const confirm = useConfirm();
 
   const [visits, setVisits] = useState([]);
-  const [listState, setListState] = useState({ status: 'idle', error: '' });
+  // Danh sách ca khám: "đang tải" được suy ra từ việc kết quả có thuộc lần yêu cầu hiện tại hay không
+  const [listResult, setListResult] = useState({ forKey: null, error: '' });
+  const [listReq, setListReq] = useState(0);
+  // Mỗi lần mở phòng khám là một phiên mới (tải lại danh sách + dị ứng)
+  const [session, setSession] = useState({ open: isOpen, count: 0 });
+  if (session.open !== isOpen) {
+    setSession({ open: isOpen, count: isOpen ? session.count + 1 : session.count });
+  }
   const [activeVisitId, setActiveVisitId] = useState(null);
   const [activeTab, setActiveTab] = useState('clinical');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -113,8 +120,10 @@ export default function VisitDashboard({ isOpen, onClose }) {
   const [diagnosisError, setDiagnosisError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const [allergyState, setAllergyState] = useState({ status: 'idle', items: [] });
-  const [audit, setAudit] = useState({ status: 'idle', items: [], error: '' });
+  const [allergyResult, setAllergyResult] = useState({ forKey: null, status: 'ready', items: [] });
+  const [allergyReq, setAllergyReq] = useState(0);
+  const [auditResult, setAuditResult] = useState({ forKey: null, status: 'ready', items: [], error: '' });
+  const [auditReq, setAuditReq] = useState(0);
 
   const tabRefs = useRef({});
   const activeIdRef = useRef(null);
@@ -135,7 +144,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
     setBaseline(next);
     setVitalErrors({});
     setDiagnosisError('');
-    setAudit({ status: 'idle', items: [], error: '' });
+    setAuditReq((n) => n + 1);
   }, []);
 
   const replaceVisit = useCallback((updated) => {
@@ -143,57 +152,81 @@ export default function VisitDashboard({ isOpen, onClose }) {
     setVisits((prev) => prev.map((v) => (v.id === updated.id ? { ...v, ...updated } : v)));
   }, []);
 
-  const loadVisits = useCallback(async () => {
-    setListState({ status: 'loading', error: '' });
-    try {
-      const list = await visitService.getVisits();
-      setVisits(list);
-      setListState({ status: 'ready', error: '' });
-      const current = activeIdRef.current;
-      if (!(current && list.some((v) => v.id === current))) applyVisit(list[0] || null);
-    } catch (err) {
-      setListState({ status: 'error', error: err.message });
-    }
-  }, [applyVisit]);
+  const listKey = `${session.count}#${listReq}`;
+  const listSettled = listResult.forKey === listKey;
+  let listStatus = 'idle';
+  if (listSettled) listStatus = listResult.error ? 'error' : 'ready';
+  else if (isOpen) listStatus = 'loading';
+  const listState = { status: listStatus, error: listSettled ? listResult.error : '' };
+
+  const loadVisits = useCallback(() => setListReq((n) => n + 1), []);
 
   useEffect(() => {
-    if (isOpen) loadVisits();
-  }, [isOpen, loadVisits]);
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await visitService.getVisits();
+        if (cancelled) return;
+        setVisits(list);
+        setListResult({ forKey: listKey, error: '' });
+        const current = activeIdRef.current;
+        if (!(current && list.some((v) => v.id === current))) applyVisit(list[0] || null);
+      } catch (err) {
+        if (!cancelled) setListResult({ forKey: listKey, error: err.message });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, listKey, applyVisit]);
 
   // Dị ứng thật của bệnh nhân – nguồn duy nhất cho thanh cảnh báo và kiểm tra an toàn đơn thuốc
   const patientId = activeVisit?.patientId;
-  const loadAllergies = useCallback(async () => {
-    if (!patientId) {
-      setAllergyState({ status: 'error', items: [] });
-      return;
-    }
-    setAllergyState({ status: 'loading', items: [] });
-    try {
-      const items = await patientService.getAllergies(patientId);
-      setAllergyState({ status: 'ready', items });
-    } catch {
-      setAllergyState({ status: 'error', items: [] });
-    }
-  }, [patientId]);
+  const allergyKey = isOpen && activeVisitId ? `${session.count}:${activeVisitId}:${patientId}#${allergyReq}` : null;
+  const loadAllergies = useCallback(() => setAllergyReq((n) => n + 1), []);
 
   useEffect(() => {
-    if (isOpen && activeVisitId) loadAllergies();
-  }, [isOpen, activeVisitId, loadAllergies]);
+    if (!allergyKey || !patientId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await patientService.getAllergies(patientId);
+        if (!cancelled) setAllergyResult({ forKey: allergyKey, status: 'ready', items });
+      } catch {
+        if (!cancelled) setAllergyResult({ forKey: allergyKey, status: 'error', items: [] });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [allergyKey, patientId]);
 
-  const loadAudit = useCallback(async () => {
-    if (!activeVisitId) return;
-    setAudit((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await aiAlertService.getVisitAuditLogs(activeVisitId);
-      setAudit({ status: 'ready', items, error: '' });
-    } catch (err) {
-      setAudit({ status: 'error', items: [], error: err.message });
-    }
-  }, [activeVisitId]);
+  let allergyState = { status: 'idle', items: [] };
+  if (allergyKey) {
+    if (!patientId) allergyState = { status: 'error', items: [] };
+    else if (allergyResult.forKey === allergyKey) allergyState = { status: allergyResult.status, items: allergyResult.items };
+    else allergyState = { status: 'loading', items: [] };
+  }
+
+  // Nhật ký AI: chỉ tải khi mở tab; kết quả gắn với (ca khám, lần chọn/làm mới) nên đổi ca khám tự tải lại
+  const auditKey = activeVisitId ? `${activeVisitId}#${auditReq}` : null;
+  const auditSettled = auditKey !== null && auditResult.forKey === auditKey;
+  const loadAudit = useCallback(() => setAuditReq((n) => n + 1), []);
 
   useEffect(() => {
-    if (activeTab === 'ai_audit' && audit.status === 'idle' && activeVisitId) loadAudit();
-  }, [activeTab, audit.status, activeVisitId, loadAudit]);
+    if (activeTab !== 'ai_audit' || auditKey === null || auditSettled) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await aiAlertService.getVisitAuditLogs(activeVisitId);
+        if (!cancelled) setAuditResult({ forKey: auditKey, status: 'ready', items, error: '' });
+      } catch (err) {
+        if (!cancelled) setAuditResult({ forKey: auditKey, status: 'error', items: [], error: err.message });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, auditKey, auditSettled, activeVisitId]);
+
+  let audit = { status: 'idle', items: [], error: '' };
+  if (auditSettled) audit = auditResult;
+  else if (auditKey !== null && activeTab === 'ai_audit') audit = { status: 'loading', items: [], error: '' };
 
   const vitalCheck = useMemo(() => validateVitalSigns(form.vitals), [form.vitals]);
   const vitalWarnings = useMemo(() => getVitalWarnings(vitalCheck.values), [vitalCheck.values]);
@@ -406,7 +439,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
               Làm mới
             </button>
           </div>
-          <div className="flex rounded-lg bg-slate-100 p-1 text-[13px]" role="group" aria-label="Lọc theo trạng thái">
+          <div className="flex rounded-lg bg-slate-100 p-1 text-[0.8125rem]" role="group" aria-label="Lọc theo trạng thái">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f.id}
@@ -435,7 +468,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {listState.status === 'loading' && visits.length === 0 ? (
-            <p className="p-8 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải danh sách ca khám…</p>
+            <p className="p-8 text-center text-[0.8125rem] text-slate-600" aria-live="polite">Đang tải danh sách ca khám…</p>
           ) : listState.status === 'error' ? (
             <div role="alert" className="p-6 text-center space-y-3">
               <p className="text-sm text-red-800">{listState.error || 'Không tải được danh sách ca khám.'}</p>
@@ -445,7 +478,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
               </button>
             </div>
           ) : filteredVisits.length === 0 ? (
-            <div className="p-8 text-center text-[13px] text-slate-600 space-y-1">
+            <div className="p-8 text-center text-[0.8125rem] text-slate-600 space-y-1">
               <p>Không có ca khám nào phù hợp.</p>
               <p>Ca khám mới được tạo khi quầy tiếp đón check-in bệnh nhân.</p>
             </div>
@@ -468,11 +501,11 @@ export default function VisitDashboard({ isOpen, onClose }) {
                           {labelOf(VISIT_STATUS_LABELS, v.status, 'Không rõ')}
                         </span>
                       </span>
-                      <span className="block text-[13px] text-slate-600">
+                      <span className="block text-[0.8125rem] text-slate-600">
                         {v.patientCode || '—'} · {formatGender(v.patientGender)} · {formatDateTime(v.visitTime)}
                       </span>
                       {v.chiefComplaint && (
-                        <span className="block text-[13px] text-slate-600 mt-1 line-clamp-1">{v.chiefComplaint}</span>
+                        <span className="block text-[0.8125rem] text-slate-600 mt-1 line-clamp-1">{v.chiefComplaint}</span>
                       )}
                     </button>
                   </li>
@@ -485,7 +518,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
 
       {/* Cột phải: không gian khám */}
       {activeVisit ? (
-        <section className="flex-1 flex flex-col min-h-0 bg-slate-50" aria-label={`Ca khám của ${activeVisit.patientName}`}>
+        <section className="flex-1 flex flex-col min-h-0 min-w-0 bg-slate-50" aria-label={`Ca khám của ${activeVisit.patientName}`}>
           <div className="bg-white border-b border-slate-200 px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <span className="w-11 h-11 shrink-0 rounded-xl bg-primary-fixed text-primary font-bold flex items-center justify-center" aria-hidden="true">
@@ -499,7 +532,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                     {labelOf(VISIT_STATUS_LABELS, activeVisit.status, 'Không rõ')}
                   </span>
                 </div>
-                <p className="text-[13px] text-slate-600 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="text-[0.8125rem] text-slate-600 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span>Giới tính: <strong className="text-slate-900">{formatGender(activeVisit.patientGender)}</strong></span>
                   <span>
                     Ngày sinh: <strong className="text-slate-900">{formatDate(activeVisit.patientDob)}</strong>
@@ -537,9 +570,9 @@ export default function VisitDashboard({ isOpen, onClose }) {
                   tabIndex={selected ? 0 : -1}
                   onClick={() => setActiveTab(tab.id)}
                   onKeyDown={(e) => handleTabKeyDown(e, index)}
-                  className={`py-3 px-3 text-[13px] font-semibold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:bg-primary-fixed ${selected ? 'border-primary text-primary' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                  className={`py-3 px-3 text-[0.8125rem] font-semibold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:bg-primary-fixed ${selected ? 'border-primary text-primary' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{tab.icon}</span>
+                  <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">{tab.icon}</span>
                   {tab.label}{count !== null ? ` (${count})` : ''}
                 </button>
               );
@@ -550,13 +583,14 @@ export default function VisitDashboard({ isOpen, onClose }) {
             role="tabpanel"
             id={`visit-panel-${activeTab}`}
             aria-labelledby={`visit-tab-${activeTab}`}
+            tabIndex={0}
             className="flex-1 overflow-y-auto min-h-0 p-5 sm:p-6 space-y-6"
           >
             {activeTab === 'clinical' && (
               <>
                 <section className="card p-5 sm:p-6 space-y-4" aria-labelledby="vitals-title">
                   <h4 id="vitals-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">vital_signs</span>
+                    <span className="material-symbols-outlined text-primary text-[1.25rem]" aria-hidden="true">vital_signs</span>
                     Chỉ số sinh hiệu
                   </h4>
                   <VitalSignsForm
@@ -570,7 +604,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
 
                 <section className="card p-5 sm:p-6 space-y-5" aria-labelledby="dx-title">
                   <h4 id="dx-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">medical_information</span>
+                    <span className="material-symbols-outlined text-primary text-[1.25rem]" aria-hidden="true">medical_information</span>
                     Khám lâm sàng & chẩn đoán
                   </h4>
 
@@ -679,32 +713,32 @@ export default function VisitDashboard({ isOpen, onClose }) {
               <article className="card p-6 sm:p-8 space-y-5 max-w-3xl mx-auto print:p-0 print:border-none print:shadow-none">
                 <header className="text-center border-b border-slate-200 pb-4">
                   <h4 className="text-xl font-bold text-primary">BỆNH VIỆN MỸ PHÁT</h4>
-                  <p className="text-[13px] text-slate-600">1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0789 065 493</p>
+                  <p className="text-[0.8125rem] text-slate-600">1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0789 065 493</p>
                   <h5 className="text-lg font-bold text-slate-900 mt-3">PHIẾU KHÁM BỆNH & TÓM TẮT ĐIỀU TRỊ</h5>
-                  <p className="text-[13px] text-slate-600">Ca khám #{activeVisit.id} · Ngày khám: {formatDate(activeVisit.visitTime)}</p>
+                  <p className="text-[0.8125rem] text-slate-600">Ca khám #{activeVisit.id} · Ngày khám: {formatDate(activeVisit.visitTime)}</p>
                 </header>
 
                 {isDirty && (
-                  <p className="text-[13px] p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 print:hidden">
+                  <p className="text-[0.8125rem] p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 print:hidden">
                     Có thay đổi chưa lưu – phiếu dưới đây hiển thị dữ liệu đã lưu trên hệ thống.
                   </p>
                 )}
 
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[0.8125rem]">
                   <div><dt className="inline text-slate-600">Họ và tên: </dt><dd className="inline font-bold">{activeVisit.patientName}</dd></div>
                   <div><dt className="inline text-slate-600">Mã bệnh nhân: </dt><dd className="inline font-bold">{activeVisit.patientCode || '—'}</dd></div>
                   <div><dt className="inline text-slate-600">Giới tính: </dt><dd className="inline font-bold">{formatGender(activeVisit.patientGender)}</dd></div>
                   <div><dt className="inline text-slate-600">Ngày sinh: </dt><dd className="inline font-bold">{formatDate(activeVisit.patientDob)}</dd></div>
                 </dl>
 
-                <div className="p-3 rounded-lg bg-slate-50 text-[13px]">
+                <div className="p-3 rounded-lg bg-slate-50 text-[0.8125rem]">
                   <p className="font-semibold mb-1">Sinh hiệu</p>
                   <p>
                     {VITAL_SIGN_FIELDS.map((f) => `${f.label}: ${formatVitalValue(f, activeVisit.vitalSigns?.[f.key])}`).join(' · ')}
                   </p>
                 </div>
 
-                <div className="text-[13px] space-y-1.5 border-t border-slate-200 pt-3">
+                <div className="text-[0.8125rem] space-y-1.5 border-t border-slate-200 pt-3">
                   <p>Lý do khám: <span className="font-medium">{activeVisit.chiefComplaint || '—'}</span></p>
                   <p>
                     Chẩn đoán: <strong className="text-primary text-sm">{activeVisit.diagnosisCode || 'Chưa có'}</strong>
@@ -719,7 +753,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                 </div>
 
                 {(activeVisit.prescriptions || []).length > 0 && (
-                  <div className="text-[13px] space-y-2 border-t border-slate-200 pt-3">
+                  <div className="text-[0.8125rem] space-y-2 border-t border-slate-200 pt-3">
                     <p className="font-bold text-primary">Đơn thuốc</p>
                     {activeVisit.prescriptions.map((p, idx) => (
                       <ol key={p.id || idx} className="pl-3 space-y-1">
@@ -734,7 +768,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                   </div>
                 )}
 
-                <footer className="flex justify-between items-end pt-6 text-[13px] border-t border-slate-200">
+                <footer className="flex justify-between items-end pt-6 text-[0.8125rem] border-t border-slate-200">
                   <p>Trạng thái: <strong>{labelOf(VISIT_STATUS_LABELS, activeVisit.status, '—')}</strong></p>
                   <div className="text-center">
                     <p className="italic mb-8">Bác sĩ khám bệnh</p>
@@ -756,10 +790,10 @@ export default function VisitDashboard({ isOpen, onClose }) {
                 <div className="flex items-start justify-between flex-wrap gap-2">
                   <div>
                     <h4 id="ai-audit-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">history_edu</span>
+                      <span className="material-symbols-outlined text-primary text-[1.25rem]" aria-hidden="true">history_edu</span>
                       Lịch sử phân tích AI của ca khám
                     </h4>
-                    <p className="text-[13px] text-slate-600 mt-1">
+                    <p className="text-[0.8125rem] text-slate-600 mt-1">
                       Mọi lần kiểm tra an toàn đơn thuốc và gợi ý chẩn đoán đều được ghi lại để truy vết.
                     </p>
                   </div>
@@ -775,14 +809,14 @@ export default function VisitDashboard({ isOpen, onClose }) {
                 </div>
 
                 {audit.status === 'loading' || audit.status === 'idle' ? (
-                  <p className="py-10 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải lịch sử phân tích…</p>
+                  <p className="py-10 text-center text-[0.8125rem] text-slate-600" aria-live="polite">Đang tải lịch sử phân tích…</p>
                 ) : audit.status === 'error' ? (
                   <div role="alert" className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-900 text-sm flex flex-wrap items-center gap-3">
                     <span>{audit.error}</span>
                     <button type="button" className="btn btn-secondary btn-sm" onClick={loadAudit}>Thử lại</button>
                   </div>
                 ) : audit.items.length === 0 ? (
-                  <p className="py-10 text-center text-[13px] text-slate-600 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                  <p className="py-10 text-center text-[0.8125rem] text-slate-600 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                     Chưa có lần phân tích AI nào cho ca khám này.
                   </p>
                 ) : (
@@ -792,7 +826,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                       const pct = logItem.confidenceScore != null ? Math.round(Number(logItem.confidenceScore) * 100) : null;
                       return (
                         <li key={logItem.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-                          <div className="flex items-center justify-between text-[13px] flex-wrap gap-2">
+                          <div className="flex items-center justify-between text-[0.8125rem] flex-wrap gap-2">
                             <span className={`badge ${logItem.suggestionType === 'DIAGNOSIS_SUGGESTION' ? 'badge-info' : 'badge-warning'}`}>
                               {labelOf(AI_TYPE_LABELS, logItem.suggestionType, 'Phân tích AI')}
                             </span>
@@ -802,12 +836,12 @@ export default function VisitDashboard({ isOpen, onClose }) {
                             </span>
                           </div>
                           {lines.length > 0 && (
-                            <ul className="list-disc pl-5 text-[13px] text-slate-900 space-y-0.5">
+                            <ul className="list-disc pl-5 text-[0.8125rem] text-slate-900 space-y-0.5">
                               {lines.map((l, i) => <li key={i}>{l}</li>)}
                             </ul>
                           )}
                           {logItem.outputContent && (
-                            <details className="text-[13px]">
+                            <details className="text-[0.8125rem]">
                               <summary className="cursor-pointer text-primary font-semibold">Xem dữ liệu gốc</summary>
                               <pre className="mt-2 whitespace-pre-wrap break-words bg-white rounded-lg p-3 border border-slate-200 text-xs">{logItem.outputContent}</pre>
                             </details>
@@ -819,7 +853,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
                 )}
 
                 <p className="pt-3 border-t border-slate-200 flex items-center gap-2 text-xs text-slate-600 italic">
-                  <span className="material-symbols-outlined text-[16px]" aria-hidden="true">verified_user</span>
+                  <span className="material-symbols-outlined text-[1rem]" aria-hidden="true">verified_user</span>
                   {AI_DISCLAIMER_TEXT}
                 </p>
               </section>
@@ -827,7 +861,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
           </div>
 
           <div className="bg-white border-t border-slate-200 px-5 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[13px] text-slate-600" aria-live="polite">
+            <p className="text-[0.8125rem] text-slate-600" aria-live="polite">
               {isCompleted
                 ? 'Ca khám đã hoàn tất – hồ sơ đã khóa.'
                 : isDirty ? 'Có thay đổi chưa lưu (F9 để lưu nhanh).' : 'Mọi thay đổi đã được lưu.'}

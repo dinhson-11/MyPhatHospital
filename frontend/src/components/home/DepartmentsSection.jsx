@@ -24,7 +24,7 @@ export default function DepartmentsSection({ onOpenBooking, onOpenAllDepartments
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-fixed text-primary text-xs font-bold uppercase tracking-wider mb-4 border border-primary-fixed-dim">
-            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">local_hospital</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[1rem]">local_hospital</span>
             <span>Hệ Thống Khoa Phòng</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
@@ -52,7 +52,7 @@ export default function DepartmentsSection({ onOpenBooking, onOpenAllDepartments
                     : 'bg-white text-slate-600 hover:bg-primary-fixed hover:text-primary border border-slate-200/80'
                 }`}
               >
-                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">{cat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[1.125rem]">{cat.icon}</span>
                 <span>{cat.name}</span>
                 <span
                   className={`px-2 py-0.5 rounded-full text-xs font-mono ${
@@ -100,7 +100,7 @@ export default function DepartmentsSection({ onOpenBooking, onOpenAllDepartments
                   </p>
 
                   <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <span aria-hidden="true" className="material-symbols-outlined text-[16px] text-primary shrink-0">meeting_room</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-[1rem] text-primary shrink-0">meeting_room</span>
                     <span className="truncate font-medium">{dept.room}</span>
                   </div>
                 </div>
@@ -114,7 +114,7 @@ export default function DepartmentsSection({ onOpenBooking, onOpenAllDepartments
                       aria-label={`Đặt khám ${dept.name}`}
                       className="flex-1 py-2.5 px-4 bg-primary hover:bg-primary-dark text-white rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <span aria-hidden="true" className="material-symbols-outlined text-[17px]">calendar_month</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-[1.0625rem]">calendar_month</span>
                       <span>Đặt khám</span>
                     </button>
                   ) : (
@@ -125,7 +125,7 @@ export default function DepartmentsSection({ onOpenBooking, onOpenAllDepartments
                       aria-label={`Thông tin dịch vụ ${dept.name}`}
                       className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <span aria-hidden="true" className="material-symbols-outlined text-[17px] text-primary">info</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-[1.0625rem] text-primary">info</span>
                       <span>Thông tin dịch vụ</span>
                     </button>
                   )}

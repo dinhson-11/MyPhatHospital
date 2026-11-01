@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { triageService } from '../../services/triageService';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../context/useToast';
 
 const QUICK_TAGS = [
   { label: 'Đau tức ngực, khó thở', text: 'Tôi bị đau tức ngực trái, hồi hộp đánh trống ngực và khó thở khi gắng sức' },

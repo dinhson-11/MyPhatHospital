@@ -2,7 +2,8 @@ import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { authService } from '../services/authService';
-import { AuthProvider, useAuth } from '../context/AuthContext';
+import { AuthProvider } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { ToastProvider } from '../context/ToastContext';
 import AuthModal from '../components/modals/AuthModal';
 
