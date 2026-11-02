@@ -427,7 +427,8 @@ function DemoAccounts({ selectedUsername, onPick }) {
       </div>
       <p className="text-xs text-slate-500">Bấm vào một tài khoản để điền sẵn tên đăng nhập và mật khẩu. Không dùng các tài khoản này với cơ sở dữ liệu thật.</p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {/* 2 cột: 3 cột quá hẹp khiến mật khẩu bị ngắt giữa chữ ("Doc / tor@123") */}
+      <div className="grid grid-cols-1 xs:grid-cols-2 gap-2">
         {DEMO_ROLE_ACCOUNTS.map((acc) => {
           const active = selectedUsername === acc.username;
           return (
@@ -441,15 +442,16 @@ function DemoAccounts({ selectedUsername, onPick }) {
                 active
                   ? 'bg-primary-fixed border-primary text-primary'
                   : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300'
-              } ${acc.username === 'benhnhan' ? 'col-span-2 sm:col-span-3' : ''}`}
+              } ${acc.username === 'benhnhan' ? 'xs:col-span-2' : ''}`}
             >
               <span className="flex items-center gap-1.5 text-xs font-bold truncate">
                 <span className="material-symbols-outlined text-base shrink-0" aria-hidden="true">{acc.icon}</span>
                 <span className="truncate">{acc.name}</span>
               </span>
               <span className="block text-xs text-slate-500 truncate mt-0.5">{acc.role}</span>
-              <span className="block text-xs text-slate-600 mt-0.5 break-all">
-                <span className="font-semibold">{acc.username}</span> / {acc.password}
+              <span className="block text-xs text-slate-600 mt-0.5">
+                <span className="font-semibold">{acc.username}</span>
+                <span className="whitespace-nowrap"> / {acc.password}</span>
               </span>
             </button>
           );

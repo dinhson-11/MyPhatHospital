@@ -105,7 +105,7 @@ export default function Modal({
   const content = (
     <div
       ref={overlayRef}
-      className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 animate-fade-in"
       style={BASE_OVERLAY_STYLE}
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose?.();

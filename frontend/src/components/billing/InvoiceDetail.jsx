@@ -164,7 +164,7 @@ export default function InvoiceDetail({
         </div>
         <div className="flex justify-between items-center px-4 py-3 bg-primary-fixed/60 dark:bg-slate-800 rounded-b-xl">
           <span className="font-semibold text-slate-900 dark:text-white">Người bệnh phải trả</span>
-          <span className="text-2xl font-extrabold text-primary dark:text-sky-300 tabular-nums">{formatVND(invoice.patientAmount)}</span>
+          <span className="text-2xl font-bold text-primary dark:text-sky-300 tabular-nums">{formatVND(invoice.patientAmount)}</span>
         </div>
       </section>
 

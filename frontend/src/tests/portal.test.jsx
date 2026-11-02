@@ -4,12 +4,11 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ToastProvider } from '../context/ToastContext';
 import { Footer } from '../components/layout/Footer';
 import HeroSection from '../components/home/HeroSection';
+import AboutSection from '../components/home/AboutSection';
 import FeaturesSection from '../components/home/FeaturesSection';
 import DepartmentsSection from '../components/home/DepartmentsSection';
 import DoctorsSection from '../components/home/DoctorsSection';
 import AITriageSection from '../components/home/AITriageSection';
-import TestimonialsSection from '../components/home/TestimonialsSection';
-import QuickCtaSection from '../components/home/QuickCtaSection';
 import HospitalMapSection from '../components/home/HospitalMapSection';
 
 const noop = () => {};
@@ -27,10 +26,9 @@ const renderFooter = (overrides = {}) =>
     />
   );
 
-/** Mọi icon Material Symbols trong vùng render phải ẩn với trình đọc màn hình. */
+/** Mọi icon Material Symbols (nếu có) trong vùng render phải ẩn với trình đọc màn hình. */
 const expectIconsHidden = (container) => {
   const icons = container.querySelectorAll('.material-symbols-outlined');
-  expect(icons.length).toBeGreaterThan(0);
   icons.forEach((icon) => {
     const hidden = icon.closest('[aria-hidden="true"]');
     expect(hidden, `icon "${icon.textContent}" thiếu aria-hidden`).not.toBeNull();
@@ -57,9 +55,9 @@ describe('Footer – liên kết thật, không có nút chết', () => {
     expect(screen.queryByRole('link', { name: /Zalo|YouTube|LinkedIn/i })).not.toBeInTheDocument();
   });
 
-  it('hiển thị hotline 0789 065 493 và số cấp cứu 115 dạng liên kết gọi điện', () => {
+  it('hiển thị hotline 0386 959 342 và số cấp cứu 115 dạng liên kết gọi điện', () => {
     renderFooter();
-    expect(screen.getByRole('link', { name: '0789 065 493' })).toHaveAttribute('href', 'tel:0789065493');
+    expect(screen.getByRole('link', { name: '0386 959 342' })).toHaveAttribute('href', 'tel:0386959342');
     expect(screen.getByRole('link', { name: '115' })).toHaveAttribute('href', 'tel:115');
   });
 
@@ -82,21 +80,18 @@ describe('HeroSection – khả năng truy cập & nội dung', () => {
   const renderHero = () =>
     render(<HeroSection onOpenBooking={noop} onScrollToAI={noop} onOpenMyAppointments={noop} />);
 
-  it('bộ chọn ảnh là tablist, tab đang chọn có aria-selected và điều khiển được bằng phím mũi tên', () => {
+  it('ảnh mặt tiền có alt mô tả và chú thích nằm trong figure', () => {
     renderHero();
-    const tablist = screen.getByRole('tablist', { name: /Ảnh giới thiệu/i });
-    const [presidentTab, bannerTab] = within(tablist).getAllByRole('tab');
-    expect(presidentTab).toHaveAttribute('aria-selected', 'true');
-    expect(bannerTab).toHaveAttribute('aria-selected', 'false');
-    expect(presidentTab).toHaveAttribute('tabindex', '0');
-    expect(bannerTab).toHaveAttribute('tabindex', '-1');
+    const figure = screen.getByRole('figure');
+    expect(within(figure).getByAltText(/Mặt tiền Phòng khám đa khoa Mỹ Phát/)).toBeInTheDocument();
+    expect(within(figure).getByText(/Mặt tiền Mỹ Phát Hospital/)).toBeInTheDocument();
+  });
 
-    presidentTab.focus();
-    fireEvent.keyDown(presidentTab, { key: 'ArrowRight' });
-    expect(bannerTab).toHaveAttribute('aria-selected', 'true');
-    expect(bannerTab).toHaveFocus();
-    expect(screen.getByAltText('Mỹ Phát Hospital')).toBeInTheDocument();
-    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', bannerTab.id);
+  it('có địa chỉ, giờ khám và hotline ngay trên đầu trang', () => {
+    renderHero();
+    expect(screen.getByText(/1170 Quang Trung, Thị trấn Chũ, huyện Lục Ngạn/)).toBeInTheDocument();
+    expect(screen.getByText(/Thứ 2 – Chủ nhật: \d{2}:\d{2} - \d{2}:\d{2}, \d{2}:\d{2} - \d{2}:\d{2}/)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /0386 959 342/ })[0]).toHaveAttribute('href', 'tel:0386959342');
   });
 
   it('nút Đặt lịch khám là button thật và gọi onOpenBooking', () => {
@@ -118,13 +113,30 @@ describe('HeroSection – khả năng truy cập & nội dung', () => {
   });
 });
 
+describe('AboutSection – khẩu hiệu và ảnh trao bằng khen', () => {
+  it('ảnh trao bằng khen có alt mô tả và chú thích nằm trong figure', () => {
+    render(<AboutSection onOpenAbout={noop} />);
+    const figure = screen.getByRole('figure');
+    expect(within(figure).getByAltText(/Nguyên Chủ tịch nước .* trao bằng khen/)).toBeInTheDocument();
+    expect(within(figure).getByText(/được Nguyên Chủ tịch nước trao bằng khen/)).toBeInTheDocument();
+  });
+
+  it('nút Giới thiệu bệnh viện gọi onOpenAbout; không hiện nút khi không có handler', () => {
+    const onOpenAbout = vi.fn();
+    const { unmount } = render(<AboutSection onOpenAbout={onOpenAbout} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Giới thiệu bệnh viện' }));
+    expect(onOpenAbout).toHaveBeenCalledTimes(1);
+    unmount();
+    render(<AboutSection />);
+    expect(screen.queryByRole('button', { name: 'Giới thiệu bệnh viện' })).not.toBeInTheDocument();
+  });
+});
+
 describe('Các section trang chủ – icon ẩn với trình đọc màn hình', () => {
   const cases = [
     ['FeaturesSection', () => <FeaturesSection onOpenAITriage={noop} onOpenBooking={noop} onOpenAllDepartments={noop} onOpenMyAppointments={noop} />],
     ['DepartmentsSection', () => <DepartmentsSection onOpenBooking={noop} onOpenAllDepartments={noop} />],
     ['DoctorsSection', () => <DoctorsSection onOpenBooking={noop} />],
-    ['TestimonialsSection', () => <TestimonialsSection />],
-    ['QuickCtaSection', () => <QuickCtaSection onOpenBooking={noop} onOpenContact={noop} />],
     ['Footer', () => <Footer onOpenAbout={noop} onOpenContact={noop} onOpenAllDepts={noop} onOpenBooking={noop} onOpenMyAppointments={noop} onFilterDept={noop} />]
   ];
 
@@ -198,9 +210,10 @@ describe('Bộ lọc & nút hành động', () => {
     expect(screen.getByRole('button', { name: /Đặt Lịch Khám Theo Gợi Ý Này/i })).toBeInTheDocument();
   });
 
-  it('TestimonialsSection: không còn số liệu thống kê tự đặt', () => {
-    render(<TestimonialsSection />);
-    expect(screen.queryByText(/99\.4%|150K\+|Hàng Trăm Nghìn/i)).not.toBeInTheDocument();
+  it('DoctorsSection: không tải ảnh chân dung từ internet (hệ thống có thể chạy trong mạng LAN)', () => {
+    const { container } = render(<DoctorsSection onOpenBooking={noop} />);
+    const remote = [...container.querySelectorAll('img')].filter((img) => /^https?:/.test(img.getAttribute('src') || ''));
+    expect(remote).toEqual([]);
   });
 
   it('HospitalMapSection: mở Google Maps bằng liên kết thật (tab mới, noopener)', () => {

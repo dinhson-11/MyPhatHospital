@@ -27,7 +27,7 @@ export default function ReceiptPrint({ invoice }) {
         <div>
           <div style={{ fontWeight: 800, fontSize: '12pt' }}>BỆNH VIỆN MỸ PHÁT</div>
           <div style={{ fontSize: '9pt' }}>1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang</div>
-          <div style={{ fontSize: '9pt' }}>Điện thoại: 0789 065 493</div>
+          <div style={{ fontSize: '9pt' }}>Điện thoại: 0386 959 342</div>
         </div>
         <div style={{ textAlign: 'right', fontSize: '9pt' }}>
           <div>Số: <strong>{invoice.invoiceCode || invoice.id}</strong></div>

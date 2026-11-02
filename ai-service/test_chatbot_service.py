@@ -213,7 +213,7 @@ class TestChatbotEmergencyRedFlags:
         result = ChatbotService.process_message(message)
         assert result.intent == "EMERGENCY", message
         assert "115" in result.reply
-        assert "0789 065 493" in result.reply
+        assert "0386 959 342" in result.reply
         assert result.suggested_department is None
 
     @pytest.mark.parametrize("message", [
@@ -233,7 +233,7 @@ class TestChatbotEmergencyRedFlags:
         reply = ChatbotService.process_message("tôi muốn chết").reply
         assert "115" in reply
         assert "Hỗ trợ tâm lý" in reply
-        assert "0789 065 493" in reply
+        assert "0386 959 342" in reply
 
     @pytest.mark.parametrize("message", [
         "tôi đang mang thai bị ra máu",

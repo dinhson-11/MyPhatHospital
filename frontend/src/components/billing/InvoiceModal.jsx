@@ -24,7 +24,7 @@ function ShiftSummary({ summary, loading, error, onRefresh }) {
       className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 sm:px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900">
       <div>
         <p className="text-[0.75rem] text-slate-500">Đã thu hôm nay</p>
-        <p className="text-lg font-extrabold text-slate-900 dark:text-white tabular-nums">
+        <p className="text-lg font-bold text-slate-900 dark:text-white tabular-nums">
           {loading ? '…' : summary ? formatVND(summary.collectedAmount) : '—'}
           {summary && <span className="ml-1 text-[0.75rem] font-medium text-slate-500">({summary.paidCount} hóa đơn)</span>}
         </p>

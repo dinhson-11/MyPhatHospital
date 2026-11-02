@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 > **Địa chỉ:** 1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang  
-> **Hotline:** 0789 065 493 &nbsp;|&nbsp; **Email:** myphathospital@gmail.com  
+> **Hotline:** 0386 959 342 &nbsp;|&nbsp; **Email:** myphathospital@gmail.com  
 > **Facebook:** [facebook.com/MyPhatHospital](https://www.facebook.com/MyPhatHospital)
 
 </div>
@@ -473,7 +473,7 @@ test:     Tests
 |-|-|
 | 🏥 **Bệnh viện** | Mỹ Phát Hospital |
 | 📍 **Địa chỉ** | 1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang |
-| 📞 **Hotline** | 0789 065 493 |
+| 📞 **Hotline** | 0386 959 342 |
 | 📧 **Email** | myphathospital@gmail.com |
 | 📘 **Facebook** | [facebook.com/MyPhatHospital](https://www.facebook.com/MyPhatHospital) |
 

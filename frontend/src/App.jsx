@@ -8,12 +8,11 @@ import Modal from './components/common/Modal';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import HeroSection from './components/home/HeroSection';
+import AboutSection from './components/home/AboutSection';
 import FeaturesSection from './components/home/FeaturesSection';
 import DepartmentsSection from './components/home/DepartmentsSection';
 import DoctorsSection from './components/home/DoctorsSection';
 import AITriageSection from './components/home/AITriageSection';
-import TestimonialsSection from './components/home/TestimonialsSection';
-import QuickCtaSection from './components/home/QuickCtaSection';
 import HospitalMapSection from './components/home/HospitalMapSection';
 
 // Modals
@@ -213,9 +212,10 @@ function MainApp() {
             <FeaturesSection
               onOpenAITriage={handleOpenAITriage}
               onOpenBooking={() => handleOpenBooking()}
-              onOpenAllDepartments={() => openModal('departments')}
               onOpenMyAppointments={() => openModal('appointments')}
             />
+
+            <AboutSection onOpenAbout={() => openModal('about')} />
 
             <DepartmentsSection
               onOpenBooking={handleOpenBooking}
@@ -226,13 +226,6 @@ function MainApp() {
             <DoctorsSection key={`doctors-${catalogVersion}`} onOpenBooking={handleOpenBooking} />
 
             <AITriageSection onOpenBooking={handleOpenBooking} />
-
-            <TestimonialsSection />
-
-            <QuickCtaSection
-              onOpenBooking={() => handleOpenBooking()}
-              onOpenContact={() => openModal('contact')}
-            />
 
             <HospitalMapSection />
           </main>

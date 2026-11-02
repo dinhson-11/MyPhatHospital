@@ -328,8 +328,8 @@ export default function StaffScheduleModal({
         subtitle={(
           <>
             Phân công trực bác sĩ chuyên khoa &amp; điều dưỡng · Cấp cứu 24/24:{' '}
-            <a href="tel:0789065493" className="font-semibold text-primary hover:underline whitespace-nowrap">
-              0789 065 493
+            <a href="tel:0386959342" className="font-semibold text-primary hover:underline whitespace-nowrap">
+              0386 959 342
             </a>
           </>
         )}

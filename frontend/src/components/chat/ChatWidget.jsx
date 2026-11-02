@@ -137,7 +137,7 @@ export default function ChatWidget({ onOpenBooking }) {
           ...prev,
           aiNotice(
             Date.now() + 2,
-            'Xin lỗi, hệ thống đang gặp trục trặc khi kết nối. Quý khách vui lòng thử lại sau hoặc liên hệ đường dây nóng Mỹ Phát Hospital: 0789 065 493.'
+            'Xin lỗi, hệ thống đang gặp trục trặc khi kết nối. Quý khách vui lòng thử lại sau hoặc liên hệ đường dây nóng Mỹ Phát Hospital: 0386 959 342.'
           ),
         ]);
       } finally {
@@ -302,7 +302,7 @@ export default function ChatWidget({ onOpenBooking }) {
                     type="button"
                     onClick={() => handleSendMessage(prompt)}
                     disabled={isTyping}
-                    className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:border-primary hover:bg-primary-fixed hover:text-primary text-slate-700 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:border-primary hover:bg-primary-fixed hover:text-primary text-slate-700 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     {prompt}
                   </button>
@@ -368,16 +368,12 @@ export default function ChatWidget({ onOpenBooking }) {
         aria-label="Mở Trợ lý AI Y tế (Hỏi AI Y tế 24/7)"
         aria-expanded={isOpen}
         aria-controls={isOpen ? windowId : undefined}
-        className="relative flex items-center gap-2 h-12 px-4 sm:px-5 rounded-full bg-primary hover:bg-primary-dark text-white font-label font-semibold text-sm shadow-pop transition-colors cursor-pointer border border-white/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+        className="relative flex items-center gap-2 h-12 px-4 sm:px-5 rounded-lg bg-primary hover:bg-primary-dark text-white font-label font-semibold text-sm shadow-pop transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
       >
         <span className="material-symbols-outlined text-[1.5rem]" aria-hidden="true">
           {isOpen ? 'close' : 'forum'}
         </span>
         <span className="hidden sm:inline">Hỏi AI Y tế 24/7</span>
-        <span
-          className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white/70"
-          aria-hidden="true"
-        />
       </button>
     </div>
   );

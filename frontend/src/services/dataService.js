@@ -304,7 +304,7 @@ export const TRIAGE_RULES = [
     urgency: 'HIGH',
     urgencyLabel: 'Cảnh báo khẩn cấp: Tiếp nhận cấp cứu ban đầu ngay',
     confidence: '99%',
-    advice: 'Đây là tình huống cần được xử lý sơ cứu và kiểm tra thể trạng tức thì. Quý khách vui lòng đưa bệnh nhân đến ngay Quầy Tiếp đón Cấp cứu Tầng 1 Mỹ Phát Hospital hoặc gọi hotline 0789 065 493.'
+    advice: 'Đây là tình huống cần được xử lý sơ cứu và kiểm tra thể trạng tức thì. Quý khách vui lòng đưa bệnh nhân đến ngay Quầy Tiếp đón Cấp cứu Tầng 1 Mỹ Phát Hospital hoặc gọi hotline 0386 959 342.'
   },
   {
     keywords: ['khớp gối', 'cổ vai gáy', 'đau lưng', 'thoát vị đĩa đệm', 'đau vai gáy', 'vật lý trị liệu', 'đông y', 'châm cứu', 'bấm huyệt', 'cơ xương khớp', 'tê bì chân tay'],

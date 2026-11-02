@@ -178,7 +178,7 @@ export default function PaymentDialog({ isOpen, invoice, onClose, onPaid }) {
       <form id="payment-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div className="rounded-xl bg-primary-fixed dark:bg-slate-800 border border-primary-fixed-dim dark:border-slate-700 p-4">
           <p className="text-[0.8125rem] text-slate-600 dark:text-slate-300">Người bệnh phải trả</p>
-          <p className="text-3xl font-extrabold text-primary dark:text-sky-300 tracking-tight">{formatVND(due)}</p>
+          <p className="text-3xl font-bold text-primary dark:text-sky-300 tracking-tight">{formatVND(due)}</p>
           {Number(invoice.insuranceAmount) > 0 && (
             <p className="text-[0.8125rem] text-slate-600 dark:text-slate-300 mt-1">
               Tổng chi phí {formatVND(invoice.totalAmount)} – BHYT chi trả {formatVND(invoice.insuranceAmount)}
@@ -256,7 +256,7 @@ export default function PaymentDialog({ isOpen, invoice, onClose, onPaid }) {
                 : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-200'
             }`}>
               <span className="text-sm font-medium">{change !== null && change < 0 ? 'Còn thiếu' : 'Tiền thừa trả khách'}</span>
-              <span className="text-xl font-extrabold">{change === null ? '—' : formatVND(Math.abs(change))}</span>
+              <span className="text-xl font-bold">{change === null ? '—' : formatVND(Math.abs(change))}</span>
             </div>
           </div>
         )}

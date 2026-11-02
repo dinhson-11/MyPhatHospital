@@ -190,7 +190,7 @@ export default function StaffWorkspace({
         <button
           type="button"
           aria-label="Đóng menu điều hướng"
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-30 lg:hidden cursor-default"
+          className="fixed inset-0 bg-slate-900/50 z-30 lg:hidden cursor-default"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}

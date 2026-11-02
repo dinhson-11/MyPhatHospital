@@ -74,11 +74,13 @@ describe('App shell – thanh điều hướng, không gian làm việc, bảo m
     localStorage.clear();
   });
 
-  it('nhân viên: nút "Lịch trực" trên thanh điều hướng hiển thị và mở lịch trực', async () => {
+  it('nhân viên: mở lịch trực từ menu tài khoản (thanh trên không còn nút riêng cho đỡ chật)', async () => {
     loginAs(['ADMIN']);
     render(<App />);
 
-    const btn = screen.getByRole('button', { name: /^Lịch trực$/i });
+    expect(screen.queryByRole('button', { name: /^Lịch trực$/i })).not.toBeInTheDocument();
+    fireEvent.click(document.getElementById('userMenuBtn'));
+    const btn = screen.getByRole('button', { name: /Lịch trực nhân viên/i });
     fireEvent.click(btn);
     expect(await screen.findByRole('dialog', { name: /Lịch Trực Nhân Viên Y Tế/i })).toBeInTheDocument();
   });

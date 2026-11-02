@@ -170,7 +170,7 @@ export default function BookingModal({ isOpen, onClose, initialData = NO_INITIAL
                 ? 'Lịch hẹn đang chờ bệnh viện xác nhận. '
                 : ''}
               Vui lòng đến quầy tiếp đón tầng 1 trước giờ hẹn 15 phút và đọc mã phiếu khám.
-              Địa chỉ: 1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0789 065 493.
+              Địa chỉ: 1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0386 959 342.
             </p>
           </article>
 

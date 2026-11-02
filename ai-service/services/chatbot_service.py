@@ -174,9 +174,9 @@ FAQ_KB: list[dict] = [
         "keywords": ["địa chỉ", "ở đâu", "đường đến", "vị trí", "google map"],
         "reply": ("📍 **Địa chỉ Mỹ Phát Hospital:**\n\n"
                   "1170 Quang Trung, Thị Trấn Chũ, Huyện Lục Ngạn, Tỉnh Bắc Giang\n"
-                  "📞 Hotline: 0789 065 493 (24/7)\n"
+                  "📞 Hotline: 0386 959 342 (24/7)\n"
                   "🌐 Chỉ đường: https://maps.app.goo.gl/2vAWcXFcfgSGPS7H6\n"
-                  "⏰ Cấp cứu 24/7: 0789 065 493"),
+                  "⏰ Cấp cứu 24/7: 0386 959 342"),
     },
     {
         "keywords": ["xét nghiệm", "làm xét nghiệm", "lấy máu", "kết quả xét nghiệm"],
@@ -268,18 +268,18 @@ EMERGENCY_REPLY = (
     "Triệu chứng bạn mô tả có thể là dấu hiệu cấp cứu nghiêm trọng. "
     "Vui lòng **gọi ngay số 115** hoặc đến **Khoa Khám bệnh / Cấp cứu ban đầu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
     "• Không tự ý dùng thuốc hoặc chờ đợi tại nhà.\n\n"
-    "Mỹ Phát Hospital – Cấp cứu 24/7: 0789 065 493"
+    "Mỹ Phát Hospital – Cấp cứu 24/7: 0386 959 342"
 )
 
 SUICIDE_REPLY = (
     "🚨 **Bạn không đơn độc – hãy tìm trợ giúp ngay bây giờ**\n\n"
     "Nếu bạn đang có ý định làm hại bản thân hoặc đang gặp nguy hiểm, vui lòng **gọi ngay số 115** "
     "hoặc đến **Khoa Khám bệnh / Cấp cứu ban đầu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n\n"
-    "• Hỗ trợ tâm lý khẩn cấp 24/7: Hotline Mỹ Phát Hospital **0789 065 493** – nhân viên y tế sẽ lắng nghe "
+    "• Hỗ trợ tâm lý khẩn cấp 24/7: Hotline Mỹ Phát Hospital **0386 959 342** – nhân viên y tế sẽ lắng nghe "
     "và kết nối bạn với bác sĩ.\n"
     "• Nếu bạn là trẻ em (dưới 16 tuổi): Tổng đài quốc gia bảo vệ trẻ em **111** (miễn phí, 24/7).\n"
     "• Hãy ở cạnh hoặc gọi ngay cho người thân, bạn bè mà bạn tin tưởng; cất xa thuốc và vật sắc nhọn.\n\n"
-    "Mỹ Phát Hospital – Cấp cứu 24/7: 0789 065 493"
+    "Mỹ Phát Hospital – Cấp cứu 24/7: 0386 959 342"
 )
 
 # ============================================================================

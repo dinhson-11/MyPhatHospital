@@ -356,7 +356,7 @@ class ChatServiceImplTest {
 
         assertThat(response.getIntent()).as(message).isEqualTo("EMERGENCY");
         assertThat(response.getShowBookingButton()).isFalse();
-        assertThat(response.getMessage()).contains("115").contains("0789 065 493");
+        assertThat(response.getMessage()).contains("115").contains("0386 959 342");
     }
 
     @ParameterizedTest

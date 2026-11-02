@@ -102,11 +102,24 @@ export default {
         boxShadow: {
           /* Tương thích tên lớp kiểu Tailwind v4 đang dùng trong mã nguồn */
           "2xs": "0 1px 0 0 rgb(15 23 42 / 0.05)",
-          "xs": "0 1px 2px 0 rgb(15 23 42 / 0.05)",
-          "card": "0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)",
-          "card-hover": "0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05)",
-          "pop": "0 12px 32px -8px rgb(15 23 42 / 0.18), 0 4px 8px -4px rgb(15 23 42 / 0.08)",
+          /* Giao diện phẳng: thẻ và nút không đổ bóng, chỉ lớp nổi (menu, hộp thoại) mới có bóng nhẹ */
+          "xs": "none",
+          "sm": "none",
+          "card": "none",
+          "card-hover": "none",
+          "md": "0 1px 3px 0 rgb(15 23 42 / 0.10)",
+          "lg": "0 4px 12px -2px rgb(15 23 42 / 0.14)",
+          "xl": "0 8px 20px -4px rgb(15 23 42 / 0.16)",
+          "2xl": "0 12px 28px -6px rgb(15 23 42 / 0.20)",
+          "pop": "0 4px 12px -2px rgb(15 23 42 / 0.14)",
           "focus": "0 0 0 3px rgb(11 83 148 / 0.28)"
+        },
+        /* Bo góc nhỏ hơn mặc định Tailwind (lg 8, xl 12, 2xl 16) để bớt cảm giác "nút bấm bóng loáng" */
+        borderRadius: {
+          "lg": "4px",
+          "xl": "6px",
+          "2xl": "8px",
+          "3xl": "10px"
         },
         backdropBlur: {
           "xs": "2px"

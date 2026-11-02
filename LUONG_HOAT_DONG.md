@@ -503,7 +503,7 @@ Phân quyền được kiểm tra ở **hai lớp**: giao diện ẩn chức nă
 | AI Service lỗi / quá hạn (chatbot) | Backend dùng bộ luật dự phòng nội bộ, vẫn trả lời kèm khoa gợi ý |
 | AI Service lỗi (kiểm tra thuốc) | Dùng dữ liệu tương tác thuốc trong cơ sở dữ liệu |
 | Mô hình ML không chắc chắn | Chuyển sang luật từ khóa; không khớp thì gợi ý Khoa Khám bệnh / Cấp cứu ban đầu |
-| Từ khóa khẩn cấp | Cảnh báo gọi 115 và hotline 0789 065 493 |
+| Từ khóa khẩn cấp | Cảnh báo gọi 115 và hotline 0386 959 342 |
 | Thuốc không đủ tồn kho | Dừng cấp phát, nêu tên và mã thuốc thiếu |
 | Hóa đơn đã thanh toán / đã hủy / đã hoàn tiền | Từ chối thanh toán lại |
 | Mất kết nối khi thu tiền | Báo lỗi "CHƯA được lưu", không ghi nhận đã thu ở máy trạm (không còn chế độ thanh toán offline) |

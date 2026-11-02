@@ -54,7 +54,7 @@ export function KpiCard({ label, value, icon, hint, tone = 'primary', valueClass
           <Icon name={icon} />
         </span>
       </div>
-      <p className={`${valueClassName} font-extrabold text-slate-900 font-headline tabular-nums break-words`}>{value}</p>
+      <p className={`${valueClassName} font-bold text-slate-900 font-headline tabular-nums break-words`}>{value}</p>
       {hint && <p className="text-xs text-slate-500 mt-2">{hint}</p>}
     </div>
   );

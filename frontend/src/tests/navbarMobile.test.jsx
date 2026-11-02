@@ -37,6 +37,27 @@ describe('Navbar – header điện thoại không tràn', () => {
     expect(brand.closest('a').className).not.toMatch(/\bshrink-0\b/);
   });
 
+  it('đã đăng nhập: thanh trên không lặp "Lịch trực"/"Lịch khám của tôi" (đã có trong menu tài khoản) và chỉ hiện link mục từ 2xl', () => {
+    localStorage.setItem('hms_token', 'fake.token');
+    localStorage.setItem('hms_user', JSON.stringify({ id: 1, username: 'admin', fullName: 'Quản trị', roles: ['ADMIN'] }));
+    renderNavbar({ onOpenSchedule: vi.fn(), onOpenMyAppointments: vi.fn(), onOpenWorkspace: vi.fn() });
+
+    expect(document.getElementById('headerScheduleBtn')).toBeNull();
+    expect(document.getElementById('headerMyAppointmentsBtn')).toBeNull();
+    expect(screen.getByRole('navigation', { name: 'Các mục trên trang' }).className).toMatch(/\bhidden\b.*\b2xl:flex\b/);
+    // Tên người dùng chỉ hiện từ xl, dưới đó chỉ còn avatar để thanh trên không tràn
+    const nameLabel = screen.getByText('Quản trị', { selector: 'span.truncate' });
+    expect(nameLabel.parentElement.className).toMatch(/\bhidden\b.*\bxl:flex\b/);
+
+    fireEvent.click(document.getElementById('userMenuBtn'));
+    expect(screen.getByRole('button', { name: /Lịch trực nhân viên/ })).toBeInTheDocument();
+  });
+
+  it('chưa đăng nhập: link mục trên trang hiện từ xl', () => {
+    renderNavbar();
+    expect(screen.getByRole('navigation', { name: 'Các mục trên trang' }).className).toMatch(/\bhidden\b.*\bxl:flex\b/);
+  });
+
   it('menu di động có mục Đăng nhập khi chưa đăng nhập và mở được hộp thoại đăng nhập', () => {
     const onOpenAuth = vi.fn();
     renderNavbar({ onOpenAuth });

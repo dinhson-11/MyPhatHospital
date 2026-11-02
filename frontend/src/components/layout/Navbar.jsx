@@ -4,8 +4,8 @@ import { useToast } from '../../context/useToast';
 import logoHospital from '../../assets/logo.png';
 import TextSizeControl from '../common/TextSizeControl';
 
-const HOTLINE = '0789065493';
-const HOTLINE_DISPLAY = '0789 065 493';
+const HOTLINE = '0386959342';
+const HOTLINE_DISPLAY = '0386 959 342';
 
 const getInitials = (name) => {
   if (!name) return 'U';
@@ -141,41 +141,52 @@ export const Navbar = ({
   };
 
   const actionBtn =
-    'touch-target inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-semibold transition-colors duration-150 cursor-pointer whitespace-nowrap';
+    'touch-target inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer whitespace-nowrap';
   const mobileLink =
-    'flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-primary text-left';
+    'flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-primary text-left';
+  const navLink = 'px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-primary whitespace-nowrap';
+  // Khi đã đăng nhập, thanh trên có thêm nút Không gian làm việc và menu tài khoản nên chỉ đủ chỗ cho
+  // các liên kết mục từ màn 2xl; dưới mức đó người dùng dùng menu (nút ☰) như trên điện thoại.
+  const wideNavClass = isAuthenticated ? 'hidden 2xl:flex' : 'hidden xl:flex';
+  const narrowOnlyClass = isAuthenticated ? '2xl:hidden' : 'xl:hidden';
 
   return (
-    <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 backdrop-blur-xl shadow-xs border-b border-slate-200/80">
+    <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white border-b border-slate-200">
       <div className="h-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
         {/* Logo & tên bệnh viện */}
-        <a href="#top" onClick={scrollToTop} className="flex items-center gap-3 shrink min-w-0 group rounded-xl">
-          <span className="relative shrink-0">
-            <img
-              alt=""
-              className="h-10 sm:h-11 w-auto object-contain rounded-full bg-white p-0.5 border border-slate-200"
-              src={logoHospital}
-              onError={(e) => {
-                e.currentTarget.src = '/logo.png';
-              }}
-            />
-          </span>
+        <a href="#top" onClick={scrollToTop} className="flex items-center gap-3 shrink min-w-0 rounded-lg">
+          <img
+            alt=""
+            className="h-10 w-10 shrink-0 rounded-full object-cover"
+            src={logoHospital}
+            onError={(e) => {
+              e.currentTarget.src = '/logo.png';
+            }}
+          />
           <span className="flex flex-col justify-center min-w-0">
-            <span className="font-logo-serif text-base sm:text-lg font-extrabold text-primary tracking-wide leading-tight sm:whitespace-nowrap group-hover:text-primary-dark transition-colors">
+            <span className="text-base font-semibold text-primary leading-tight sm:whitespace-nowrap sm:truncate">
               MỸ PHÁT HOSPITAL
             </span>
-            <span className="text-xs text-slate-500 font-medium whitespace-nowrap truncate max-w-[260px] md:max-w-md hidden sm:block">
-              1170 Quang Trung, Chũ • Sáng y đức, vững chuyên môn
+            <span className="text-xs text-slate-500 whitespace-nowrap truncate max-w-[260px] md:max-w-md hidden sm:block">
+              1170 Quang Trung, Thị trấn Chũ, Lục Ngạn
             </span>
           </span>
         </a>
 
+        {/* Liên kết tới các mục trên trang (màn rộng; màn hẹp dùng menu) */}
+        <nav aria-label="Các mục trên trang" className={`${wideNavClass} items-center gap-1 mr-auto ml-6`}>
+          <a href="#departments" className={navLink}>Khoa phòng</a>
+          <a href="#doctors" className={navLink}>Bác sĩ</a>
+          <a href="#ai-triage" className={navLink}>Hỏi triệu chứng</a>
+          <a href="#hospital-map" className={navLink}>Giờ khám & liên hệ</a>
+        </nav>
+
         {/* Thao tác chính */}
         <div className="flex items-center gap-2 shrink-0">
-          <TextSizeControl className="hidden md:inline-flex" />
+          <TextSizeControl className="hidden lg:inline-flex" />
           <a
             href={`tel:${HOTLINE}`}
-            className={`${actionBtn} hidden xl:inline-flex rounded-full bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold`}
+            className={`${actionBtn} hidden 2xl:inline-flex text-slate-900 font-semibold hover:bg-slate-100`}
             aria-label={`Gọi đường dây nóng cấp cứu và tư vấn 24/7: ${HOTLINE_DISPLAY}`}
           >
             <Icon name="call" className="text-[1rem]" />
@@ -187,47 +198,22 @@ export const Navbar = ({
               type="button"
               id="headerWorkspaceBtn"
               onClick={onOpenWorkspace}
-              className={`${actionBtn} bg-primary-fixed hover:bg-primary-fixed-dim text-primary border border-primary-fixed-dim`}
+              className={`${actionBtn} border border-slate-300 bg-white hover:bg-slate-50 text-slate-800`}
               aria-label="Không gian làm việc"
               title="Mở không gian làm việc của nhân viên"
             >
               <Icon name="dashboard" className="text-[1.125rem]" />
-              <span className="hidden md:inline">Không gian làm việc</span>
+              <span className="hidden xl:inline">Không gian làm việc</span>
             </button>
           )}
 
-          {isStaff && onOpenSchedule && (
-            <button
-              type="button"
-              id="headerScheduleBtn"
-              onClick={() => onOpenSchedule()}
-              className={`${actionBtn} hidden lg:inline-flex border border-slate-200 bg-white hover:bg-slate-50 text-slate-700`}
-              title="Lịch trực bác sĩ & nhân viên y tế"
-            >
-              <Icon name="calendar_month" className="text-[1.125rem] text-primary" />
-              <span>Lịch trực</span>
-            </button>
-          )}
-
-          {!isStaff && isAuthenticated && onOpenMyAppointments && (
-            <button
-              type="button"
-              id="headerMyAppointmentsBtn"
-              onClick={onOpenMyAppointments}
-              className={`${actionBtn} hidden sm:inline-flex border border-slate-200 bg-white hover:bg-slate-50 text-slate-700`}
-            >
-              <Icon name="event_note" className="text-[1.125rem] text-primary" />
-              <span>Lịch khám của tôi</span>
-            </button>
-          )}
-
+          {/* "Lịch trực" và "Lịch khám của tôi" nằm trong menu tài khoản, không lặp lại trên thanh trên cho đỡ chật */}
           <button
             type="button"
             id="headerBookBtn"
             onClick={() => onOpenBooking()}
-            className={`${actionBtn} hidden sm:inline-flex px-3.5 bg-primary hover:bg-primary-dark text-white font-bold shadow-xs`}
+            className={`${actionBtn} hidden sm:inline-flex bg-primary hover:bg-primary-dark text-white font-semibold`}
           >
-            <Icon name="event_available" className="text-[1.125rem]" />
             <span>Đặt lịch khám</span>
           </button>
 
@@ -243,12 +229,12 @@ export const Navbar = ({
                 aria-controls={userMenuId}
                 aria-haspopup="true"
                 aria-label={`Tài khoản: ${user?.fullName || user?.username} (${roleTitle})`}
-                className="touch-target h-9 flex items-center gap-2 pl-1 pr-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
+                className="touch-target h-9 flex items-center gap-2 pl-1 pr-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <span className="avatar w-7 h-7 text-xs" aria-hidden="true">
                   {getInitials(user?.fullName || user?.username)}
                 </span>
-                <span className="hidden sm:flex flex-col text-left pr-0.5 leading-tight">
+                <span className="hidden xl:flex flex-col text-left pr-0.5 leading-tight">
                   <span className="text-xs font-bold text-slate-800 max-w-[110px] xl:max-w-[130px] truncate">
                     {user?.fullName || user?.username}
                   </span>
@@ -334,7 +320,7 @@ export const Navbar = ({
             type="button"
             ref={mobileToggleRef}
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="touch-target lg:hidden w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer border border-slate-200"
+            className={`touch-target ${narrowOnlyClass} w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer border border-slate-300`}
             aria-label={mobileMenuOpen ? 'Đóng menu' : 'Mở menu'}
             aria-expanded={mobileMenuOpen}
             aria-controls={mobileMenuId}
@@ -349,18 +335,17 @@ export const Navbar = ({
         <nav
           id={mobileMenuId}
           aria-label="Menu chính"
-          className="lg:hidden bg-white border-b border-slate-200 shadow-pop px-4 sm:px-6 py-3 space-y-1 max-h-[calc(100vh-4rem)] overflow-y-auto animate-fade-in"
+          className={`${narrowOnlyClass} bg-white border-b border-slate-200 px-4 sm:px-6 py-3 space-y-1 max-h-[calc(100vh-4rem)] overflow-y-auto`}
         >
-          <div className="md:hidden flex items-center justify-between px-3 py-2">
+          <div className="lg:hidden flex items-center justify-between px-3 py-2">
             <span className="text-sm font-semibold text-slate-700">Cỡ chữ</span>
             <TextSizeControl />
           </div>
           <button
             type="button"
             onClick={() => runFromMobile(() => onOpenBooking())}
-            className="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-semibold flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-semibold flex items-center justify-center gap-2"
           >
-            <Icon name="event_available" className="text-[1.125rem]" />
             <span>Đặt lịch khám ngay</span>
           </button>
           {!isAuthenticated && (
@@ -405,7 +390,7 @@ export const Navbar = ({
               <span>Hóa đơn của tôi</span>
             </button>
           )}
-          <a href={`tel:${HOTLINE}`} className={`${mobileLink} text-red-700 hover:text-red-800 hover:bg-red-50 font-semibold`}>
+          <a href={`tel:${HOTLINE}`} className={`${mobileLink} font-semibold`}>
             <Icon name="call" className="text-[1.25rem]" />
             <span>Đường dây nóng 24/7: {HOTLINE_DISPLAY}</span>
           </a>

@@ -713,7 +713,7 @@ export default function VisitDashboard({ isOpen, onClose }) {
               <article className="card p-6 sm:p-8 space-y-5 max-w-3xl mx-auto print:p-0 print:border-none print:shadow-none">
                 <header className="text-center border-b border-slate-200 pb-4">
                   <h4 className="text-xl font-bold text-primary">BỆNH VIỆN MỸ PHÁT</h4>
-                  <p className="text-[0.8125rem] text-slate-600">1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0789 065 493</p>
+                  <p className="text-[0.8125rem] text-slate-600">1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang · Hotline: 0386 959 342</p>
                   <h5 className="text-lg font-bold text-slate-900 mt-3">PHIẾU KHÁM BỆNH & TÓM TẮT ĐIỀU TRỊ</h5>
                   <p className="text-[0.8125rem] text-slate-600">Ca khám #{activeVisit.id} · Ngày khám: {formatDate(activeVisit.visitTime)}</p>
                 </header>

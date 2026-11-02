@@ -53,7 +53,7 @@ export default function UserProfileModal({ isOpen, onClose, onOpenAppointments, 
         <>
           <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary-fixed border border-primary-fixed-dim">
             <span
-              className="w-14 h-14 rounded-2xl bg-primary text-white flex items-center justify-center text-xl font-extrabold shrink-0"
+              className="w-14 h-14 rounded-2xl bg-primary text-white flex items-center justify-center text-xl font-bold shrink-0"
               aria-hidden="true"
             >
               {user.fullName ? user.fullName.trim().charAt(0).toUpperCase() : 'U'}
