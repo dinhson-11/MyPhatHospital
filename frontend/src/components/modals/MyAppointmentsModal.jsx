@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { appointmentService, canCancelAppointment } from '../../services/appointmentService';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
+import { useConfirm } from '../common/useConfirm';
 import Modal from '../common/Modal';
 import { APPOINTMENT_STATUS_LABELS, formatDate, labelOf } from '../../utils/format';
 
@@ -33,30 +33,42 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const [state, setState] = useState({ status: 'idle', items: [], error: '', fromDevice: false });
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  // Kết quả lần tải gần nhất kèm khóa request; "loading" được suy ra khi kết quả chưa thuộc request hiện tại
+  const [result, setResult] = useState({ forKey: null, status: 'idle', items: [], error: '', fromDevice: false });
 
-  const loadAppointments = useCallback(async () => {
-    if (!isAuthenticated) {
-      setState({ status: 'ready', items: appointmentService.getDeviceBookings(), error: '', fromDevice: true });
-      return;
-    }
-    setState((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await appointmentService.getMyAppointments();
-      setState({ status: 'ready', items, error: '', fromDevice: false });
-    } catch (err) {
-      setState({ status: 'error', items: [], error: err.message, fromDevice: false });
-    }
-  }, [isAuthenticated]);
+  const requestKey = `${isAuthenticated}#${reloadToken}`;
+  const state = result.forKey === requestKey ? result : { ...result, status: 'loading', error: '' };
+  const loadAppointments = useCallback(() => setReloadToken((t) => t + 1), []);
 
-  useEffect(() => {
+  // Mở hộp thoại (hoặc đổi trạng thái đăng nhập khi đang mở) → về danh sách và tải lại.
+  // Điều chỉnh state ngay trong lúc render thay vì trong effect.
+  const [prevInputs, setPrevInputs] = useState({ isOpen: false, isAuthenticated });
+  if (prevInputs.isOpen !== isOpen || prevInputs.isAuthenticated !== isAuthenticated) {
+    setPrevInputs({ isOpen, isAuthenticated });
     if (isOpen) {
       setSelectedTicket(null);
-      loadAppointments();
+      setReloadToken((t) => t + 1);
     }
-  }, [isOpen, loadAppointments]);
+  }
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => (isAuthenticated ? appointmentService.getMyAppointments() : appointmentService.getDeviceBookings()))
+      .then(
+        (items) => {
+          if (!cancelled) setResult({ forKey: requestKey, status: 'ready', items, error: '', fromDevice: !isAuthenticated });
+        },
+        (err) => {
+          if (!cancelled) setResult({ forKey: requestKey, status: 'error', items: [], error: err.message, fromDevice: false });
+        }
+      );
+    return () => { cancelled = true; };
+  }, [isOpen, isAuthenticated, requestKey]);
 
   const handleCancel = async (apt) => {
     if (cancellingId) return;
@@ -78,7 +90,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
       await appointmentService.cancelAppointment(apt.id);
       showToast(`Đã hủy lịch khám ${apt.ticketCode}.`, 'success');
       setSelectedTicket((prev) => (prev && prev.id === apt.id ? { ...prev, status: 'CANCELLED' } : prev));
-      await loadAppointments();
+      loadAppointments();
     } catch (err) {
       showToast(err.message || 'Hủy lịch khám không thành công', 'error');
     } finally {
@@ -125,7 +137,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
               <StatusBadge status={selectedTicket.status} />
             </div>
 
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-[13px]">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-[0.8125rem]">
               <div><dt className="text-slate-600">Bệnh nhân</dt><dd className="font-bold text-slate-900 text-sm">{selectedTicket.patientName || '—'}</dd></div>
               <div><dt className="text-slate-600">Số điện thoại</dt><dd className="font-bold text-slate-900 text-sm">{selectedTicket.patientPhone || '—'}</dd></div>
               <div><dt className="text-slate-600">Khoa khám</dt><dd className="font-bold text-primary text-sm">{selectedTicket.departmentName || '—'}</dd></div>
@@ -134,7 +146,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
               <div><dt className="text-slate-600">Khung giờ</dt><dd className="font-bold text-slate-900 text-sm">{selectedTicket.timeSlot || '—'}</dd></div>
             </dl>
 
-            <p className="text-[13px] text-slate-700">
+            <p className="text-[0.8125rem] text-slate-700">
               Vui lòng đến quầy tiếp đón tầng 1 trước giờ hẹn 15 phút và xuất trình mã phiếu khám.
             </p>
           </article>
@@ -148,7 +160,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
           </div>
         </div>
       ) : state.status === 'loading' || state.status === 'idle' ? (
-        <p className="py-12 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải lịch hẹn…</p>
+        <p className="py-12 text-center text-[0.8125rem] text-slate-600" aria-live="polite">Đang tải lịch hẹn…</p>
       ) : state.status === 'error' ? (
         <div role="alert" className="py-10 text-center space-y-3">
           <p className="text-sm text-red-800">{state.error}</p>
@@ -161,7 +173,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
         <div className="text-center py-10">
           <span className="material-symbols-outlined text-4xl text-slate-400" aria-hidden="true">event_busy</span>
           <h3 className="font-bold text-slate-900 text-base mt-2 mb-1">Chưa có lịch hẹn nào</h3>
-          <p className="text-[13px] text-slate-600 max-w-sm mx-auto mb-5">
+          <p className="text-[0.8125rem] text-slate-600 max-w-sm mx-auto mb-5">
             {state.fromDevice
               ? 'Thiết bị này chưa đặt lịch khám nào. Đăng nhập để xem toàn bộ lịch hẹn của bạn.'
               : 'Bạn chưa đặt lịch khám nào tại Bệnh viện Mỹ Phát.'}
@@ -174,7 +186,7 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
       ) : (
         <div className="space-y-3">
           {state.fromDevice && (
-            <p className="text-[13px] p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-950">
+            <p className="text-[0.8125rem] p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-950">
               Đây là các phiếu đã đặt trên thiết bị này – trạng thái có thể chưa cập nhật. Đăng nhập để xem trạng thái mới nhất và hủy lịch.
             </p>
           )}
@@ -192,14 +204,14 @@ export default function MyAppointmentsModal({ isOpen, onClose, onOpenBooking }) 
                   <p className="font-bold text-slate-900 text-sm">
                     {apt.departmentName || 'Chưa rõ khoa'} · <span className="font-medium text-slate-700">{apt.doctorName || 'Bệnh viện sẽ phân công'}</span>
                   </p>
-                  <p className="flex flex-wrap items-center gap-3 text-[13px] text-slate-600">
+                  <p className="flex flex-wrap items-center gap-3 text-[0.8125rem] text-slate-600">
                     <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">calendar_today</span>
+                      <span className="material-symbols-outlined text-[1rem] text-primary" aria-hidden="true">calendar_today</span>
                       {formatDate(apt.appointmentDate)}
                     </span>
                     {apt.timeSlot && (
                       <span className="inline-flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">schedule</span>
+                        <span className="material-symbols-outlined text-[1rem] text-primary" aria-hidden="true">schedule</span>
                         {apt.timeSlot}
                       </span>
                     )}

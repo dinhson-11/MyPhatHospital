@@ -69,7 +69,7 @@ function EmergencyBanner() {
   return (
     <div role="alert" className="rounded-xl border-2 border-red-600 bg-red-50 p-3 space-y-2.5">
       <div className="flex items-start gap-2 text-red-800">
-        <span className="material-symbols-outlined text-[22px] text-red-700 shrink-0" aria-hidden="true">
+        <span className="material-symbols-outlined text-[1.375rem] text-red-700 shrink-0" aria-hidden="true">
           emergency
         </span>
         <div className="min-w-0">
@@ -84,7 +84,7 @@ function EmergencyBanner() {
         href={`tel:${EMERGENCY_NUMBER}`}
         className="flex items-center justify-center gap-2 w-full min-h-[44px] px-3 rounded-lg bg-red-700 hover:bg-red-800 text-white text-sm font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
       >
-        <span className="material-symbols-outlined text-[20px]" aria-hidden="true">call</span>
+        <span className="material-symbols-outlined text-[1.25rem]" aria-hidden="true">call</span>
         <span>Gọi ngay</span>{' '}
         <span>Cấp cứu {EMERGENCY_NUMBER}</span>
       </a>
@@ -93,7 +93,7 @@ function EmergencyBanner() {
         href={`tel:${HOSPITAL_HOTLINE}`}
         className="flex items-center justify-center gap-2 w-full min-h-[44px] px-3 rounded-lg border border-red-300 bg-white hover:bg-red-100 text-red-800 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
       >
-        <span className="material-symbols-outlined text-[20px]" aria-hidden="true">local_hospital</span>
+        <span className="material-symbols-outlined text-[1.25rem]" aria-hidden="true">local_hospital</span>
         <span>
           Đường dây nóng bệnh viện: <strong className="whitespace-nowrap">{HOSPITAL_HOTLINE_DISPLAY}</strong>
         </span>
@@ -128,7 +128,7 @@ export default function ChatMessage({ message, onOpenBooking }) {
               : 'bg-primary-fixed text-primary border-primary-fixed-dim'
           }`}
         >
-          <span className="material-symbols-outlined text-[18px]">
+          <span className="material-symbols-outlined text-[1.125rem]">
             {isEmergency ? 'emergency' : 'smart_toy'}
           </span>
         </div>
@@ -162,7 +162,7 @@ export default function ChatMessage({ message, onOpenBooking }) {
               }`}
             >
               <div className="flex items-start gap-1.5 font-semibold text-primary min-w-0">
-                <span className="material-symbols-outlined text-[18px] shrink-0" aria-hidden="true">
+                <span className="material-symbols-outlined text-[1.125rem] shrink-0" aria-hidden="true">
                   local_hospital
                 </span>
                 <span>{hospitalDept.name}</span>
@@ -224,7 +224,7 @@ export default function ChatMessage({ message, onOpenBooking }) {
           aria-hidden="true"
           className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center shrink-0 mt-0.5"
         >
-          <span className="material-symbols-outlined text-[18px]">person</span>
+          <span className="material-symbols-outlined text-[1.125rem]">person</span>
         </div>
       )}
     </div>

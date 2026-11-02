@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Modal from '../common/Modal';
-import Avatar from '../common/Avatar';
-import AvatarUploader from '../common/AvatarUploader';
-import { useConfirm } from '../common/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../common/useConfirm';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
 import { DEPARTMENTS } from '../../services/dataService';
 import { getErrorMessage } from '../../services/apiError';
 import { ROLE_OPTIONS, roleLabel, userService } from '../../services/userService';
 import { formatDateTime } from '../../utils/format';
+import { validateUserForm } from '../../utils/userForm';
+import TableWrap from '../common/TableWrap';
 
 const PAGE_SIZE = 10;
 
@@ -60,34 +60,22 @@ function toPayload(form, isEdit) {
   return payload;
 }
 
-/** Kiểm tra phía giao diện (máy chủ vẫn kiểm tra lại). Trả về thông báo lỗi hoặc ''. */
-export function validateUserForm(form, isEdit) {
-  if (!isEdit) {
-    if (form.username.trim().length < 3) return 'Tên đăng nhập phải từ 3 ký tự.';
-    if (form.password.length < 8 || !/[a-z]/.test(form.password) || !/[A-Z]/.test(form.password) || !/\d/.test(form.password)) {
-      return 'Mật khẩu phải từ 8 ký tự, gồm chữ hoa, chữ thường và chữ số.';
-    }
-  }
-  if (!form.fullName.trim()) return 'Vui lòng nhập họ và tên.';
-  if (form.email.trim() && !/^\S+@\S+\.\S+$/.test(form.email.trim())) return 'Email không hợp lệ.';
-  if (form.phone.trim() && !/^0[0-9]{9,10}$/.test(form.phone.trim())) return 'Số điện thoại phải bắt đầu bằng 0 và có 10–11 chữ số.';
-  if (form.roleCodes.length === 0) return 'Phải chọn ít nhất một vai trò.';
-  return '';
-}
-
-function UserFormDialog({ isOpen, user, onClose, onSaved, onAvatarChanged }) {
+function UserFormDialog({ isOpen, user, onClose, onSaved }) {
   const isEdit = Boolean(user);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  // Đặt lại biểu mẫu khi hộp thoại mở (hoặc đổi tài khoản đang sửa) – điều chỉnh state ngay trong lúc render
+  const [prevInputs, setPrevInputs] = useState({ isOpen: false, user: null });
+  if (prevInputs.isOpen !== isOpen || prevInputs.user !== user) {
+    setPrevInputs({ isOpen, user });
     if (isOpen) {
       setForm(user ? toForm(user) : EMPTY_FORM);
       setError('');
       setSaving(false);
     }
-  }, [isOpen, user]);
+  }
 
   const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const toggleRole = (code) => setForm((f) => ({
@@ -126,28 +114,6 @@ function UserFormDialog({ isOpen, user, onClose, onSaved, onAvatarChanged }) {
       title={isEdit ? `Sửa tài khoản ${user.username}` : 'Thêm tài khoản'}
       subtitle={isEdit ? 'Không đổi được tên đăng nhập và mật khẩu ở đây' : 'Tài khoản nhân viên do quản trị viên cấp'}
     >
-      {isEdit && (
-        <section aria-label="Ảnh đại diện" className="mb-4 p-3 rounded-xl border border-slate-200 bg-slate-50/60">
-          <AvatarUploader
-            key={user.id}
-            name={user.fullName || user.username}
-            avatarUrl={user.avatarUrl}
-            avatarClassName="avatar w-16 h-16 rounded-2xl text-xl"
-            onUpload={async (file) => {
-              const avatarUrl = await userService.uploadUserAvatar(user.id, file);
-              onAvatarChanged?.(user, avatarUrl);
-              return avatarUrl;
-            }}
-            onRemove={async () => {
-              await userService.removeUserAvatar(user.id);
-              onAvatarChanged?.(user, null);
-            }}
-          >
-            <p className="text-sm font-semibold text-slate-800">Ảnh đại diện</p>
-            <p className="text-xs text-slate-500">Lưu ngay khi chọn ảnh, không cần bấm Lưu bên dưới.</p>
-          </AvatarUploader>
-        </section>
-      )}
       <form onSubmit={submit} noValidate className="space-y-3.5" aria-label={isEdit ? 'Sửa tài khoản' : 'Thêm tài khoản'}>
         {error && (
           <div role="alert" className="alert alert-error">
@@ -243,7 +209,7 @@ function UserFormDialog({ isOpen, user, onClose, onSaved, onAvatarChanged }) {
  * Quản trị viên không tự khóa được tài khoản của chính mình (tránh bị mất quyền quản trị).
  */
 export default function UserManagementPanel() {
-  const { user: me, updateUser } = useAuth();
+  const { user: me } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -253,30 +219,32 @@ export default function UserManagementPanel() {
   const [totalElements, setTotalElements] = useState(0);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('loading'); // loading | ready | error
-  const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [dialog, setDialog] = useState({ open: false, user: null });
+  // Kết quả lần tải gần nhất kèm khóa request; trạng thái "loading" được suy ra khi kết quả chưa thuộc request hiện tại
+  const [result, setResult] = useState({ forKey: null, status: 'loading', error: '' });
+
+  const requestKey = `${page}#${query}#${reloadKey}`;
+  const status = result.forKey === requestKey ? result.status : 'loading'; // loading | ready | error
+  const error = result.error;
 
   useEffect(() => {
     let cancelled = false;
-    setStatus('loading');
     userService.getUsers({ page, size: PAGE_SIZE, search: query }).then(
       (res) => {
         if (cancelled) return;
         setItems(res.items);
         setTotalPages(Math.max(1, res.totalPages));
         setTotalElements(res.totalElements);
-        setStatus('ready');
+        setResult({ forKey: requestKey, status: 'ready', error: '' });
       },
       (err) => {
         if (cancelled) return;
-        setError(getErrorMessage(err, 'Không tải được danh sách tài khoản.'));
-        setStatus('error');
+        setResult({ forKey: requestKey, status: 'error', error: getErrorMessage(err, 'Không tải được danh sách tài khoản.') });
       }
     );
     return () => { cancelled = true; };
-  }, [page, query, reloadKey]);
+  }, [page, query, requestKey]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
@@ -314,13 +282,6 @@ export default function UserManagementPanel() {
   };
 
   const isMe = (u) => me?.username && u.username === me.username;
-
-  const onAvatarChanged = (u, avatarUrl) => {
-    // Ảnh của chính quản trị viên → cập nhật luôn phiên đăng nhập (thanh điều hướng, hồ sơ)
-    if (isMe(u)) updateUser({ avatarUrl });
-    showToast(avatarUrl ? `Đã cập nhật ảnh đại diện của ${u.username}.` : `Đã gỡ ảnh đại diện của ${u.username}.`, 'success');
-    reload();
-  };
 
   return (
     <section aria-labelledby="admin-users-title" className="space-y-3">
@@ -366,7 +327,7 @@ export default function UserManagementPanel() {
           <p className="empty-state-text">Thử từ khóa khác hoặc thêm tài khoản mới.</p>
         </div>
       ) : (
-        <div className="table-wrap max-h-[55vh]">
+        <TableWrap label="Danh sách tài khoản" className="max-h-[55vh]">
           <table className="table">
             <caption className="sr-only">Danh sách tài khoản ({items.length} trên trang này)</caption>
             <thead>
@@ -382,13 +343,8 @@ export default function UserManagementPanel() {
               {items.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    <span className="flex items-center gap-2.5">
-                      <Avatar name={u.fullName || u.username} src={u.avatarUrl} className="avatar avatar-sm" />
-                      <span className="min-w-0">
-                        <span className="cell-primary block">{u.fullName}</span>
-                        <span className="block text-xs text-slate-500 font-mono">{u.username}</span>
-                      </span>
-                    </span>
+                    <span className="cell-primary block">{u.fullName}</span>
+                    <span className="block text-xs text-slate-500 font-mono">{u.username}</span>
                   </td>
                   <td>
                     <span className="block text-xs text-slate-700 break-all">{u.email || '—'}</span>
@@ -398,7 +354,7 @@ export default function UserManagementPanel() {
                     <span className="flex flex-wrap gap-1">
                       {(u.roles || []).map((r) => <span key={r} className="badge badge-primary">{roleLabel(r)}</span>)}
                     </span>
-                    {u.createdAt && <span className="block text-xs text-slate-400 mt-0.5">Tạo {formatDateTime(u.createdAt)}</span>}
+                    {u.createdAt && <span className="block text-xs text-slate-600 mt-0.5">Tạo {formatDateTime(u.createdAt)}</span>}
                   </td>
                   <td>
                     <span className={`badge ${u.status === 'LOCKED' ? 'badge-error' : 'badge-success'}`}>
@@ -429,7 +385,7 @@ export default function UserManagementPanel() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       )}
 
       {status === 'ready' && totalPages > 1 && (
@@ -449,7 +405,6 @@ export default function UserManagementPanel() {
         user={dialog.user}
         onClose={() => setDialog({ open: false, user: null })}
         onSaved={onSaved}
-        onAvatarChanged={onAvatarChanged}
       />
     </section>
   );

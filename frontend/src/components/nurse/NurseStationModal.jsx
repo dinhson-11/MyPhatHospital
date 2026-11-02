@@ -9,8 +9,8 @@ import {
   isHttpUrl,
   LAB_ORDER_STATUS_LABELS
 } from '../../services/visitService';
-import { useToast } from '../../context/ToastContext';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useToast } from '../../context/useToast';
+import { useConfirm } from '../common/useConfirm';
 import Modal from '../common/Modal';
 import VitalSignsForm from '../clinical/VitalSignsForm';
 import { formatDateTime, formatGender } from '../../utils/format';
@@ -34,49 +34,66 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('vitals');
   const tabRefs = useRef({});
 
-  const [queue, setQueue] = useState({ status: 'idle', items: [], error: '' });
+  // Danh sách tải từ máy chủ: trạng thái "đang tải" được suy ra từ việc kết quả có thuộc lần tải hiện tại hay không
+  const [queueToken, setQueueToken] = useState(0);
+  const [queueResult, setQueueResult] = useState({ forToken: null, failed: false, items: [], error: '' });
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [vitalsForm, setVitalsForm] = useState(createEmptyVitalsForm);
   const [vitalsBaseline, setVitalsBaseline] = useState(createEmptyVitalsForm);
   const [vitalErrors, setVitalErrors] = useState({});
   const [savingVitals, setSavingVitals] = useState(false);
 
-  const [labs, setLabs] = useState({ status: 'idle', items: [], error: '' });
+  const [labsToken, setLabsToken] = useState(0);
+  const [labsResult, setLabsResult] = useState({ forToken: null, failed: false, items: [], error: '' });
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [labForm, setLabForm] = useState(EMPTY_LAB_FORM);
   const [labErrors, setLabErrors] = useState({});
   const [savingLab, setSavingLab] = useState(false);
 
-  const loadQueue = useCallback(async () => {
-    setQueue((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await nurseService.getVitalsQueue();
-      setQueue({ status: 'ready', items, error: '' });
-    } catch (err) {
-      setQueue({ status: 'error', items: [], error: err.message });
-    }
-  }, []);
+  const reloadQueue = useCallback(() => setQueueToken((t) => t + 1), []);
+  const reloadLabs = useCallback(() => setLabsToken((t) => t + 1), []);
 
-  const loadLabs = useCallback(async () => {
-    setLabs((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await nurseService.getPendingLabOrders();
-      setLabs({ status: 'ready', items, error: '' });
-    } catch (err) {
-      setLabs({ status: 'error', items: [], error: err.message });
+  // Mỗi lần mở: đặt lại biểu mẫu và tải lại hai danh sách (điều chỉnh state ngay trong lúc render)
+  const [wasOpen, setWasOpen] = useState(false);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setSelectedVisit(null);
+      setSelectedOrder(null);
+      setVitalsForm(createEmptyVitalsForm());
+      setVitalsBaseline(createEmptyVitalsForm());
+      setLabForm(EMPTY_LAB_FORM);
+      setQueueToken((t) => t + 1);
+      setLabsToken((t) => t + 1);
     }
-  }, []);
+  }
 
   useEffect(() => {
-    if (!isOpen) return;
-    setSelectedVisit(null);
-    setSelectedOrder(null);
-    setVitalsForm(createEmptyVitalsForm());
-    setVitalsBaseline(createEmptyVitalsForm());
-    setLabForm(EMPTY_LAB_FORM);
-    loadQueue();
-    loadLabs();
-  }, [isOpen, loadQueue, loadLabs]);
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    nurseService.getVitalsQueue().then(
+      (items) => { if (!cancelled) setQueueResult({ forToken: queueToken, failed: false, items, error: '' }); },
+      (err) => { if (!cancelled) setQueueResult({ forToken: queueToken, failed: true, items: [], error: err.message }); }
+    );
+    return () => { cancelled = true; };
+  }, [isOpen, queueToken]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    nurseService.getPendingLabOrders().then(
+      (items) => { if (!cancelled) setLabsResult({ forToken: labsToken, failed: false, items, error: '' }); },
+      (err) => { if (!cancelled) setLabsResult({ forToken: labsToken, failed: true, items: [], error: err.message }); }
+    );
+    return () => { cancelled = true; };
+  }, [isOpen, labsToken]);
+
+  const toListState = (result, token) => {
+    if (result.forToken !== token) return { status: 'loading', items: result.items, error: '' };
+    return { status: result.failed ? 'error' : 'ready', items: result.items, error: result.error };
+  };
+  const queue = toListState(queueResult, queueToken);
+  const labs = toListState(labsResult, labsToken);
 
   const vitalsDirty = JSON.stringify(vitalsForm) !== JSON.stringify(vitalsBaseline);
   const labDirty = JSON.stringify(labForm) !== JSON.stringify(EMPTY_LAB_FORM);
@@ -132,7 +149,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
       setSelectedVisit(null);
       setVitalsForm(createEmptyVitalsForm());
       setVitalsBaseline(createEmptyVitalsForm());
-      loadQueue();
+      reloadQueue();
     } catch (err) {
       showToast(err.message || 'Không lưu được sinh hiệu', 'error');
     } finally {
@@ -171,7 +188,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
       showToast(`Đã lưu kết quả "${selectedOrder.testType}" cho ${selectedOrder.patientName}.`, 'success');
       setSelectedOrder(null);
       setLabForm(EMPTY_LAB_FORM);
-      loadLabs();
+      reloadLabs();
     } catch (err) {
       setLabErrors({ form: err.message });
       showToast(err.message || 'Không lưu được kết quả', 'error');
@@ -193,7 +210,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
 
   const listState = (state, retry, emptyText) => {
     if (state.status === 'loading' && state.items.length === 0) {
-      return <p className="p-6 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải…</p>;
+      return <p className="p-6 text-center text-[0.8125rem] text-slate-600" aria-live="polite">Đang tải…</p>;
     }
     if (state.status === 'error') {
       return (
@@ -206,7 +223,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
         </div>
       );
     }
-    if (state.items.length === 0) return <p className="p-6 text-center text-[13px] text-slate-600 border border-dashed border-slate-300 rounded-xl">{emptyText}</p>;
+    if (state.items.length === 0) return <p className="p-6 text-center text-[0.8125rem] text-slate-600 border border-dashed border-slate-300 rounded-xl">{emptyText}</p>;
     return null;
   };
 
@@ -238,7 +255,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
               onKeyDown={(e) => handleTabKeyDown(e, index)}
               className={`flex items-center gap-2 py-3 px-4 font-semibold text-sm border-b-2 transition-colors ${selected ? 'border-primary text-primary bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{tab.icon}</span>
+              <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">{tab.icon}</span>
               {tab.label} ({count})
             </button>
           );
@@ -256,12 +273,12 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
             <div className="lg:col-span-5 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-bold text-slate-900">Bệnh nhân đang khám</h3>
-                <button type="button" onClick={loadQueue} disabled={queue.status === 'loading'} className="btn btn-ghost btn-sm">
+                <button type="button" onClick={reloadQueue} disabled={queue.status === 'loading'} className="btn btn-ghost btn-sm">
                   <span className={`material-symbols-outlined ${queue.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
                   Làm mới
                 </button>
               </div>
-              {listState(queue, loadQueue, 'Không có bệnh nhân nào đang chờ đo sinh hiệu.') || (
+              {listState(queue, reloadQueue, 'Không có bệnh nhân nào đang chờ đo sinh hiệu.') || (
                 <ul className="space-y-2" aria-label="Bệnh nhân chờ đo sinh hiệu">
                   {queue.items.map((item) => {
                     const selected = selectedVisit?.visitId === item.visitId;
@@ -278,10 +295,10 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
                             <span className="font-bold text-sm text-slate-900">{item.fullName}</span>
                             <span className={`badge ${done ? 'badge-success' : 'badge-warning'}`}>{done ? 'Đã đo' : 'Chờ đo'}</span>
                           </span>
-                          <span className="block text-[13px] text-slate-600">
+                          <span className="block text-[0.8125rem] text-slate-600">
                             {item.patientCode || '—'} · {formatGender(item.gender)}{item.age !== null ? ` · ${item.age} tuổi` : ''}
                           </span>
-                          {item.reason && <span className="block text-[13px] text-slate-600 line-clamp-1 mt-0.5">Lý do khám: {item.reason}</span>}
+                          {item.reason && <span className="block text-[0.8125rem] text-slate-600 line-clamp-1 mt-0.5">Lý do khám: {item.reason}</span>}
                         </button>
                       </li>
                     );
@@ -293,7 +310,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
             <div className="lg:col-span-7 bg-slate-50 p-5 rounded-2xl border border-slate-200">
               <div className="mb-4 border-b border-slate-200 pb-3">
                 <h3 className="font-bold text-sm text-slate-900">Phiếu ghi nhận sinh hiệu</h3>
-                <p className="text-[13px] text-slate-600">
+                <p className="text-[0.8125rem] text-slate-600">
                   {selectedVisit
                     ? `Bệnh nhân: ${selectedVisit.fullName}${selectedVisit.patientCode ? ` (${selectedVisit.patientCode})` : ''} · Ca khám #${selectedVisit.visitId}`
                     : 'Chọn bệnh nhân ở danh sách bên trái.'}
@@ -311,9 +328,9 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
                   />
 
                   {vitalWarnings.length > 0 && (
-                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[13px]">
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[0.8125rem]">
                       <p className="font-bold flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">warning</span>
+                        <span className="material-symbols-outlined text-[1rem]" aria-hidden="true">warning</span>
                         Chỉ số bất thường – báo bác sĩ:
                       </p>
                       <ul className="list-disc pl-5 mt-1">
@@ -330,7 +347,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
                   </div>
                 </form>
               ) : (
-                <p className="text-[13px] text-slate-600">Biểu mẫu sẽ hiển thị sau khi chọn bệnh nhân.</p>
+                <p className="text-[0.8125rem] text-slate-600">Biểu mẫu sẽ hiển thị sau khi chọn bệnh nhân.</p>
               )}
             </div>
           </div>
@@ -339,12 +356,12 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
             <div className="lg:col-span-5 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-bold text-slate-900">Chỉ định cận lâm sàng</h3>
-                <button type="button" onClick={loadLabs} disabled={labs.status === 'loading'} className="btn btn-ghost btn-sm">
+                <button type="button" onClick={reloadLabs} disabled={labs.status === 'loading'} className="btn btn-ghost btn-sm">
                   <span className={`material-symbols-outlined ${labs.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
                   Làm mới
                 </button>
               </div>
-              {listState(labs, loadLabs, 'Không có chỉ định cận lâm sàng nào.') || (
+              {listState(labs, reloadLabs, 'Không có chỉ định cận lâm sàng nào.') || (
                 <ul className="space-y-2" aria-label="Chỉ định cận lâm sàng">
                   {labs.items.map((order) => {
                     const selected = selectedOrder?.id === order.id;
@@ -363,7 +380,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
                               {LAB_ORDER_STATUS_LABELS[order.status] || 'Chờ kết quả'}
                             </span>
                           </span>
-                          <span className="block text-[13px] text-slate-600">
+                          <span className="block text-[0.8125rem] text-slate-600">
                             Bệnh nhân: <span className="font-semibold text-slate-800">{order.patientName}</span>{order.patientCode ? ` (${order.patientCode})` : ''}
                           </span>
                           <span className="block text-xs text-slate-600 mt-0.5">Chỉ định lúc: {formatDateTime(order.orderedAt)}</span>
@@ -377,14 +394,14 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
 
             <div className="lg:col-span-7 bg-slate-50 p-5 rounded-2xl border border-slate-200">
               <h3 className="font-bold text-sm text-slate-900 mb-1">Nhập kết quả xét nghiệm</h3>
-              <p className="text-[13px] text-slate-600 mb-4 pb-2 border-b border-slate-200">
+              <p className="text-[0.8125rem] text-slate-600 mb-4 pb-2 border-b border-slate-200">
                 {selectedOrder ? `${selectedOrder.testType} – ${selectedOrder.patientName}` : 'Chọn chỉ định ở danh sách bên trái.'}
               </p>
 
               {selectedOrder ? (
                 <form onSubmit={handleSubmitLab} noValidate className="space-y-4">
                   {selectedOrder.results?.length > 0 && (
-                    <div className="p-3 rounded-xl bg-white border border-slate-200 text-[13px]">
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 text-[0.8125rem]">
                       <p className="font-semibold text-slate-900 mb-1">Kết quả đã có (gần nhất):</p>
                       <p className="whitespace-pre-wrap text-slate-800">{selectedOrder.results[selectedOrder.results.length - 1].resultText}</p>
                     </div>
@@ -415,7 +432,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
                         onChange={(e) => setLabField('abnormalOverride', e.target.checked)}
                         aria-describedby="lab-abnormal-hint"
                       />
-                      <label htmlFor="lab-abnormal" className="text-[13px] font-semibold text-red-800">
+                      <label htmlFor="lab-abnormal" className="text-[0.8125rem] font-semibold text-red-800">
                         Chỉ số bất thường (cảnh báo bác sĩ)
                       </label>
                     </div>
@@ -456,7 +473,7 @@ export const NurseStationModal = ({ isOpen, onClose }) => {
                   </div>
                 </form>
               ) : (
-                <p className="text-[13px] text-slate-600">Biểu mẫu sẽ hiển thị sau khi chọn chỉ định.</p>
+                <p className="text-[0.8125rem] text-slate-600">Biểu mẫu sẽ hiển thị sau khi chọn chỉ định.</p>
               )}
             </div>
           </div>

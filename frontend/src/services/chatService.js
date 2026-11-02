@@ -16,8 +16,8 @@ export const AI_DISCLAIMER_TEXT =
 
 /** Số điện thoại hiển thị trong cảnh báo cấp cứu. */
 export const EMERGENCY_NUMBER = '115';
-export const HOSPITAL_HOTLINE = '0789065493';
-export const HOSPITAL_HOTLINE_DISPLAY = '0789 065 493';
+export const HOSPITAL_HOTLINE = '0386959342';
+export const HOSPITAL_HOTLINE_DISPLAY = '0386 959 342';
 
 /**
  * Thời gian chờ phản hồi từ backend. Backend chờ AI Service tối đa 3 giây rồi tự chuyển sang

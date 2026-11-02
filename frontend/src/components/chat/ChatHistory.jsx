@@ -57,7 +57,7 @@ export default function ChatHistory({
                   >
                     <span className="flex items-center justify-between gap-2 mb-1">
                       <span className="font-semibold text-slate-900 flex items-center gap-1.5 min-w-0">
-                        <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">
+                        <span className="material-symbols-outlined text-[1rem] text-primary" aria-hidden="true">
                           chat
                         </span>
                         <span className="truncate">Phiên #{s.id}</span>

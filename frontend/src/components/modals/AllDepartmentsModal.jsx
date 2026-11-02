@@ -88,7 +88,7 @@ export default function AllDepartmentsModal({ isOpen, onClose, onSelectDepartmen
               <span className="material-symbols-outlined" aria-hidden="true">search_off</span>
             </div>
             <p className="empty-state-title">Không tìm thấy khoa phòng phù hợp</p>
-            <p className="empty-state-text">Thử từ khóa khác hoặc gọi hotline 0789 065 493 để được tư vấn chọn khoa.</p>
+            <p className="empty-state-text">Thử từ khóa khác hoặc gọi hotline 0386 959 342 để được tư vấn chọn khoa.</p>
             <button type="button" onClick={resetFilters} className="btn btn-light btn-sm mt-2">
               Xóa bộ lọc
             </button>

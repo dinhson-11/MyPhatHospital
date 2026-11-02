@@ -1,5 +1,6 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import Modal from './Modal';
+import { ConfirmContext } from './useConfirm';
 
 /**
  * Hộp thoại xác nhận dùng chung thay cho window.confirm.
@@ -11,8 +12,6 @@ import Modal from './Modal';
  * Tham số: title, message (chuỗi hoặc JSX), details (mảng dòng nhấn mạnh), confirmText, cancelText,
  * tone: 'primary' | 'danger' | 'warning', requireReason, reasonLabel, reasonPlaceholder, reasonMinLength.
  */
-const ConfirmContext = createContext(null);
-
 const TONE = {
   primary: { button: 'bg-primary hover:bg-primary-dark text-white', icon: 'help', chip: 'bg-primary-fixed text-primary' },
   warning: { button: 'bg-amber-600 hover:bg-amber-700 text-white', icon: 'warning', chip: 'bg-amber-100 text-amber-700' },
@@ -78,7 +77,7 @@ export function ConfirmProvider({ children }) {
             )}
             {state?.requireReason && (
               <div>
-                <label htmlFor="confirm-reason" className="block text-[13px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                <label htmlFor="confirm-reason" className="block text-[0.8125rem] font-semibold text-slate-700 dark:text-slate-200 mb-1">
                   {state.reasonLabel || 'Lý do'} <span className="text-red-600">*</span>
                 </label>
                 <textarea
@@ -91,7 +90,7 @@ export function ConfirmProvider({ children }) {
                   className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
                 {!reasonValid && reason.length > 0 && (
-                  <p className="text-[12px] text-red-700 mt-1">Lý do cần tối thiểu {minLength} ký tự.</p>
+                  <p className="text-[0.75rem] text-red-700 mt-1">Lý do cần tối thiểu {minLength} ký tự.</p>
                 )}
               </div>
             )}
@@ -102,22 +101,5 @@ export function ConfirmProvider({ children }) {
   );
 }
 
-/**
- * Lấy hàm confirm. Nếu component được render ngoài ConfirmProvider (VD: trong test đơn lẻ)
- * thì dùng hộp thoại mặc định của trình duyệt.
- */
-export function useConfirm() {
-  const ctx = useContext(ConfirmContext);
-  if (ctx) return ctx;
-  return async (options = {}) => {
-    const text = [options.title, typeof options.message === 'string' ? options.message : '', ...(options.details || [])]
-      .filter(Boolean).join('\n');
-    if (options.requireReason) {
-      const value = typeof window !== 'undefined' && window.prompt ? window.prompt(text) : null;
-      return value && value.trim().length >= (options.reasonMinLength ?? 5) ? value.trim() : false;
-    }
-    return typeof window !== 'undefined' && window.confirm ? window.confirm(text) : true;
-  };
-}
 
 export default ConfirmProvider;

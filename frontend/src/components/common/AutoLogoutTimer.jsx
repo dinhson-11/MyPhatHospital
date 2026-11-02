@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
 import Modal from './Modal';
 
 const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll', 'wheel'];
@@ -91,7 +91,7 @@ export default function AutoLogoutTimer({ idleTimeoutMs = 15 * 60 * 1000, warnin
           <strong className="text-slate-900">{user?.fullName || user?.username || 'của bạn'}</strong>{' '}
           sẽ tự động đăng xuất sau:
         </p>
-        <p className="text-3xl font-extrabold text-amber-700 tabular-nums">
+        <p className="text-3xl font-bold text-amber-700 tabular-nums">
           {secondsLeft} giây
         </p>
         <p className="text-xs text-slate-500">

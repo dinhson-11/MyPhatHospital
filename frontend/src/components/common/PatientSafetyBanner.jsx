@@ -31,15 +31,15 @@ export default function PatientSafetyBanner({
   return (
     <section aria-label="Cảnh báo an toàn người bệnh" className={`space-y-2 ${className}`}>
       {allergiesStatus === 'loading' && (
-        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-[13px] flex items-center gap-2">
-          <span className="material-symbols-outlined text-[18px] animate-spin" aria-hidden="true">progress_activity</span>
+        <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-[0.8125rem] flex items-center gap-2">
+          <span className="material-symbols-outlined text-[1.125rem] animate-spin" aria-hidden="true">progress_activity</span>
           Đang tải thông tin dị ứng của bệnh nhân…
         </div>
       )}
 
       {allergiesStatus === 'error' && (
-        <div role="alert" className="p-3 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-950 text-[13px] flex flex-wrap items-center gap-2">
-          <span className="material-symbols-outlined text-[18px] text-amber-700" aria-hidden="true">help</span>
+        <div role="alert" className="p-3 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-950 text-[0.8125rem] flex flex-wrap items-center gap-2">
+          <span className="material-symbols-outlined text-[1.125rem] text-amber-700" aria-hidden="true">help</span>
           <span className="font-semibold">Chưa xác định được tiền sử dị ứng</span>
           <span>– hỏi lại bệnh nhân trước khi kê đơn.</span>
           {onRetryAllergies && (
@@ -54,7 +54,7 @@ export default function PatientSafetyBanner({
       {hasAllergies && (
         <div className="p-3 rounded-xl border-2 border-red-600 bg-red-50 text-red-950 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 shrink-0 bg-red-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold">
-            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">warning</span>
+            <span className="material-symbols-outlined text-[1rem]" aria-hidden="true">warning</span>
             Dị ứng
           </span>
           <ul className="flex flex-wrap items-center gap-2" aria-label="Danh sách dị ứng">
@@ -77,16 +77,16 @@ export default function PatientSafetyBanner({
       )}
 
       {!allergyUnknown && !hasAllergies && (
-        <div className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] flex items-center gap-2">
-          <span className="material-symbols-outlined text-[18px] text-slate-500" aria-hidden="true">info</span>
+        <div className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-[0.8125rem] flex items-center gap-2">
+          <span className="material-symbols-outlined text-[1.125rem] text-slate-500" aria-hidden="true">info</span>
           Chưa ghi nhận dị ứng trong hồ sơ.
         </div>
       )}
 
       {warnings.length > 0 && (
         <div className="p-3 rounded-xl border-l-4 border-amber-500 bg-amber-50 text-amber-950 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 font-bold text-[13px] text-amber-800">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">vital_signs</span>
+          <span className="inline-flex items-center gap-1.5 font-bold text-[0.8125rem] text-amber-800">
+            <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">vital_signs</span>
             Sinh hiệu bất thường:
           </span>
           <ul className="flex flex-wrap items-center gap-2">

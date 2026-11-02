@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
 import { patientService, validatePatientProfile, insuranceStatus, BLOOD_TYPES } from '../../services/patientService';
 import Modal from '../common/Modal';
 import AllergiesSection from './AllergiesSection';
@@ -22,32 +22,46 @@ export default function PatientProfileModal({ isOpen, onClose }) {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const [state, setState] = useState({ status: 'idle', profile: null, error: '' });
+  const [reloadToken, setReloadToken] = useState(0);
+  // Kết quả lần tải gần nhất kèm khóa request; "loading" được suy ra khi kết quả chưa thuộc request hiện tại
+  const [result, setResult] = useState({ forKey: null, status: 'idle', profile: null, error: '' });
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const requestKey = `${reloadToken}`;
+  const state = result.forKey === requestKey ? result : { ...result, status: 'loading', error: '' };
   const profile = state.profile;
+  const loadProfile = useCallback(() => setReloadToken((t) => t + 1), []);
 
-  const loadProfile = useCallback(async () => {
-    setState((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const data = await patientService.getMyProfile();
-      setState({ status: 'ready', profile: data, error: '' });
-      setEditForm(data || {});
-    } catch (err) {
-      setState({ status: 'error', profile: null, error: err.message });
-    }
-  }, []);
-
-  useEffect(() => {
+  // Mở hộp thoại (hoặc đổi người dùng khi đang mở) → thoát chế độ sửa và tải lại hồ sơ.
+  // Điều chỉnh state ngay trong lúc render thay vì trong effect.
+  const [prevInputs, setPrevInputs] = useState({ isOpen: false, user: null });
+  if (prevInputs.isOpen !== isOpen || prevInputs.user !== user) {
+    setPrevInputs({ isOpen, user });
     if (isOpen && user) {
       setIsEditing(false);
       setErrors({});
-      loadProfile();
+      setReloadToken((t) => t + 1);
     }
-  }, [isOpen, user, loadProfile]);
+  }
+
+  useEffect(() => {
+    if (!isOpen || !user || reloadToken === 0) return undefined;
+    let cancelled = false;
+    patientService.getMyProfile().then(
+      (data) => {
+        if (cancelled) return;
+        setResult({ forKey: requestKey, status: 'ready', profile: data, error: '' });
+        setEditForm(data || {});
+      },
+      (err) => {
+        if (!cancelled) setResult({ forKey: requestKey, status: 'error', profile: null, error: err.message });
+      }
+    );
+    return () => { cancelled = true; };
+  }, [isOpen, user, requestKey, reloadToken]);
 
   const handleSave = async () => {
     if (saving) return;
@@ -66,7 +80,7 @@ export default function PatientProfileModal({ isOpen, onClose }) {
         bloodType: editForm.bloodType || ''
       });
       const next = updated || { ...profile, ...editForm };
-      setState({ status: 'ready', profile: next, error: '' });
+      setResult({ forKey: requestKey, status: 'ready', profile: next, error: '' });
       setEditForm(next);
       setIsEditing(false);
       showToast('Cập nhật hồ sơ thành công!', 'success');
@@ -173,13 +187,13 @@ export default function PatientProfileModal({ isOpen, onClose }) {
               </h3>
               <span className={`badge ${INSURANCE_BADGE[ins.code]}`}>{ins.label}</span>
             </div>
-            <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[13px]">
+            <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[0.8125rem]">
               <div><dt className="text-slate-600">Mã thẻ</dt><dd className="font-mono font-semibold text-slate-900">{profile.insuranceNumber || '—'}</dd></div>
               <div><dt className="text-slate-600">Hiệu lực từ</dt><dd className="font-semibold text-slate-900">{profile.insuranceValidFrom ? formatDate(profile.insuranceValidFrom) : '—'}</dd></div>
               <div><dt className="text-slate-600">Hiệu lực đến</dt><dd className="font-semibold text-slate-900">{profile.insuranceValidTo ? formatDate(profile.insuranceValidTo) : '—'}</dd></div>
             </dl>
             <p className="text-xs text-slate-600 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px]" aria-hidden="true">info</span>
+              <span className="material-symbols-outlined text-[0.875rem]" aria-hidden="true">info</span>
               Liên hệ quầy tiếp đón để cập nhật thẻ BHYT.
             </p>
           </section>
@@ -192,7 +206,7 @@ export default function PatientProfileModal({ isOpen, onClose }) {
         <div className="text-center py-8">
           <span className="material-symbols-outlined text-4xl text-slate-400" aria-hidden="true">folder_off</span>
           <p className="text-sm text-slate-700 mt-2">Chưa có hồ sơ bệnh nhân</p>
-          <p className="text-[13px] text-slate-600 mt-1">Hồ sơ sẽ được tạo khi bạn đặt lịch khám lần đầu.</p>
+          <p className="text-[0.8125rem] text-slate-600 mt-1">Hồ sơ sẽ được tạo khi bạn đặt lịch khám lần đầu.</p>
         </div>
       )}
     </Modal>

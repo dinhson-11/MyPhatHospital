@@ -11,22 +11,6 @@ import {
 const ITEM_TYPE_LABELS = { SERVICE: 'Khám bệnh', DRUG: 'Thuốc', LAB: 'Cận lâm sàng' };
 
 /**
- * In phiếu: thêm class print-receipt vào body để CSS @media print chỉ in vùng phiếu
- * (xem index.css – mục "Phiếu thu viện phí").
- */
-export function printReceipt() {
-  const body = document.body;
-  const cleanup = () => {
-    body.classList.remove('print-receipt');
-    window.removeEventListener('afterprint', cleanup);
-  };
-  body.classList.add('print-receipt');
-  window.addEventListener('afterprint', cleanup);
-  window.print();
-  cleanup();
-}
-
-/**
  * Mẫu in: PHIẾU THU (đã thu / đã hoàn tiền) hoặc BẢNG KÊ CHI PHÍ (chưa thu).
  * Luôn render ẩn trên màn hình; chỉ hiện khi in.
  */
@@ -43,7 +27,7 @@ export default function ReceiptPrint({ invoice }) {
         <div>
           <div style={{ fontWeight: 800, fontSize: '12pt' }}>BỆNH VIỆN MỸ PHÁT</div>
           <div style={{ fontSize: '9pt' }}>1170 Quang Trung, Thị trấn Chũ, Lục Ngạn, Bắc Giang</div>
-          <div style={{ fontSize: '9pt' }}>Điện thoại: 0789 065 493</div>
+          <div style={{ fontSize: '9pt' }}>Điện thoại: 0386 959 342</div>
         </div>
         <div style={{ textAlign: 'right', fontSize: '9pt' }}>
           <div>Số: <strong>{invoice.invoiceCode || invoice.id}</strong></div>

@@ -98,9 +98,9 @@ describe('ContactModal / AboutModal – hospital contact details', () => {
     render(withProviders(<Component isOpen onClose={vi.fn()} />));
     const dialog = screen.getByRole('dialog');
 
-    const hotlines = within(dialog).getAllByRole('link', { name: /0789 065 493/ });
+    const hotlines = within(dialog).getAllByRole('link', { name: /0386 959 342/ });
     expect(hotlines.length).toBeGreaterThan(0);
-    hotlines.forEach((a) => expect(a).toHaveAttribute('href', 'tel:0789065493'));
+    hotlines.forEach((a) => expect(a).toHaveAttribute('href', 'tel:0386959342'));
 
     expect(within(dialog).getAllByText(/1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang/).length).toBeGreaterThan(0);
 
@@ -168,7 +168,7 @@ describe('UserProfileModal', () => {
     const dialog = screen.getByRole('dialog', { name: 'Thông Tin Tài Khoản' });
     expect(within(dialog).getByText('Bác sĩ')).toBeInTheDocument();
     expect(within(dialog).queryByText('DOCTOR')).not.toBeInTheDocument();
-    expect(within(dialog).queryByText('0789 065 493')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('0386 959 342')).not.toBeInTheDocument();
   });
 
   it('opens the appointments list and closes itself', () => {

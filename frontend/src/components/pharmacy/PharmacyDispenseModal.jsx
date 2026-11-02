@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import pharmacyService, { STOCK_ADJUSTMENT_LABELS } from '../../services/pharmacyService';
 import { isDrugExpired } from '../../services/visitService';
-import { useToast } from '../../context/ToastContext';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useToast } from '../../context/useToast';
+import { useConfirm } from '../common/useConfirm';
 import Modal from '../common/Modal';
 import { formatDate, formatDateTime, formatVND } from '../../utils/format';
 import NewDrugDialog from './NewDrugDialog';
-import ImportDrugsDialog from './ImportDrugsDialog';
+import TableWrap from '../common/TableWrap';
 
 const TABS = [
   { id: 'dispense', label: 'Cấp phát theo đơn', icon: 'local_pharmacy' },
@@ -49,33 +49,44 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
   const [dispenseError, setDispenseError] = useState('');
 
   // Kho dược
-  const [inventory, setInventory] = useState({ status: 'idle', items: [], error: '' });
+  // Trạng thái "đang tải" suy ra từ việc kết quả có thuộc lần tải hiện tại hay không
+  const [inventoryToken, setInventoryToken] = useState(0);
+  const [inventoryResult, setInventoryResult] = useState({ forToken: null, failed: false, items: [], error: '' });
   const [inventoryFilter, setInventoryFilter] = useState('all');
   const [stockDrug, setStockDrug] = useState(null);
   const [showNewDrug, setShowNewDrug] = useState(false);
-  const [showImport, setShowImport] = useState(false);
   const [stockQty, setStockQty] = useState('');
   const [stockType, setStockType] = useState('IMPORT');
   const [stockError, setStockError] = useState('');
   const [savingStock, setSavingStock] = useState(false);
 
-  const loadInventory = useCallback(async () => {
-    setInventory((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await pharmacyService.getDrugs();
-      setInventory({ status: 'ready', items, error: '' });
-    } catch (err) {
-      setInventory({ status: 'error', items: [], error: err.message });
+  const loadInventory = useCallback(() => setInventoryToken((t) => t + 1), []);
+
+  // Mỗi lần mở: đặt lại phần tra cứu và tải lại kho (điều chỉnh state ngay trong lúc render)
+  const [wasOpen, setWasOpen] = useState(false);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setLookup({ status: 'idle', visitId: null, prescriptions: [], error: '' });
+      setSelectedId(null);
+      setVisitQuery('');
+      setInventoryToken((t) => t + 1);
     }
-  }, []);
+  }
 
   useEffect(() => {
-    if (!isOpen) return;
-    setLookup({ status: 'idle', visitId: null, prescriptions: [], error: '' });
-    setSelectedId(null);
-    setVisitQuery('');
-    loadInventory();
-  }, [isOpen, loadInventory]);
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    pharmacyService.getDrugs().then(
+      (items) => { if (!cancelled) setInventoryResult({ forToken: inventoryToken, failed: false, items, error: '' }); },
+      (err) => { if (!cancelled) setInventoryResult({ forToken: inventoryToken, failed: true, items: [], error: err.message }); }
+    );
+    return () => { cancelled = true; };
+  }, [isOpen, inventoryToken]);
+
+  const inventory = inventoryResult.forToken !== inventoryToken
+    ? { status: 'loading', items: inventoryResult.items, error: '' }
+    : { status: inventoryResult.failed ? 'error' : 'ready', items: inventoryResult.items, error: inventoryResult.error };
 
   const drugMap = useMemo(() => {
     const m = new Map();
@@ -229,7 +240,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
               onKeyDown={(e) => handleTabKeyDown(e, index)}
               className={`py-3 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${isSel ? 'border-primary text-primary bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{tab.icon}</span>
+              <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">{tab.icon}</span>
               {tab.label}
             </button>
           );
@@ -283,7 +294,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                       type="button"
                       aria-pressed={p.id === selectedId}
                       onClick={() => { setSelectedId(p.id); setDispenseError(''); }}
-                      className={`px-3 py-2 rounded-lg border text-[13px] font-semibold ${p.id === selectedId ? 'bg-primary text-white border-primary' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'}`}
+                      className={`px-3 py-2 rounded-lg border text-[0.8125rem] font-semibold ${p.id === selectedId ? 'bg-primary text-white border-primary' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'}`}
                     >
                       Đơn #{p.id} · {p.dispenseStatus === 'DISPENSED' ? 'Đã cấp phát' : p.dispenseStatus === 'UNKNOWN' ? 'Chưa rõ trạng thái' : 'Chờ cấp phát'}
                     </button>
@@ -302,17 +313,17 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                     </span>
                     {selected.overrideReason && <span className="badge badge-error">Bác sĩ kê vượt cảnh báo</span>}
                   </div>
-                  <p className="text-[13px] text-slate-600">Ca khám #{selected.visitId ?? lookup.visitId} · Kê lúc {formatDateTime(selected.createdAt)}</p>
+                  <p className="text-[0.8125rem] text-slate-600">Ca khám #{selected.visitId ?? lookup.visitId} · Kê lúc {formatDateTime(selected.createdAt)}</p>
                 </div>
 
                 {selected.overrideReason && (
-                  <p className="text-[13px] p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-900">
+                  <p className="text-[0.8125rem] p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-900">
                     <strong>Lý do bác sĩ vẫn kê đơn: </strong>{selected.overrideReason}
                   </p>
                 )}
 
-                <div className="table-wrap">
-                  <table className="w-full text-left text-[13px]">
+                <TableWrap label={`Danh sách thuốc trong đơn #${selected.id}`}>
+                  <table className="w-full text-left text-[0.8125rem]">
                     <caption className="sr-only">Danh sách thuốc trong đơn #{selected.id}</caption>
                     <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                       <tr>
@@ -346,10 +357,10 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                       })}
                     </tbody>
                   </table>
-                </div>
+                </TableWrap>
 
                 {selected.dispense && (
-                  <p role="status" className="text-[13px] p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900">
+                  <p role="status" className="text-[0.8125rem] p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900">
                     Đã cấp phát lúc {formatDateTime(selected.dispense.dispensedAt)}
                     {selected.dispense.dispensedByName ? ` bởi ${selected.dispense.dispensedByName}` : ''}.
                   </p>
@@ -370,12 +381,12 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                 )}
 
                 {blockingItems.length > 0 && selected.dispenseStatus !== 'DISPENSED' && (
-                  <p role="alert" className="text-[13px] p-3 rounded-lg bg-red-50 border border-red-200 text-red-900">
+                  <p role="alert" className="text-[0.8125rem] p-3 rounded-lg bg-red-50 border border-red-200 text-red-900">
                     Không thể cấp phát: {blockingItems.length} thuốc hết hạn hoặc không đủ tồn kho. Liên hệ bác sĩ để điều chỉnh đơn hoặc nhập kho.
                   </p>
                 )}
                 {dispenseError && (
-                  <p role="alert" className="text-[13px] p-3 rounded-lg bg-red-50 border border-red-200 text-red-900">{dispenseError}</p>
+                  <p role="alert" className="text-[0.8125rem] p-3 rounded-lg bg-red-50 border border-red-200 text-red-900">{dispenseError}</p>
                 )}
 
                 <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -416,7 +427,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                     type="button"
                     aria-pressed={inventoryFilter === f.id}
                     onClick={() => setInventoryFilter(f.id)}
-                    className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg border ${inventoryFilter === f.id ? 'bg-primary text-white border-primary' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}
+                    className={`px-3 py-1.5 text-[0.8125rem] font-semibold rounded-lg border ${inventoryFilter === f.id ? 'bg-primary text-white border-primary' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}
                   >
                     {f.label}
                   </button>
@@ -426,10 +437,6 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                 <button type="button" onClick={() => setShowNewDrug(true)} className="btn btn-secondary btn-sm">
                   <span className="material-symbols-outlined" aria-hidden="true">add</span>
                   Thêm thuốc mới
-                </button>
-                <button type="button" onClick={() => setShowImport(true)} className="btn btn-secondary btn-sm">
-                  <span className="material-symbols-outlined" aria-hidden="true">upload_file</span>
-                  Nhập từ Excel
                 </button>
                 <button type="button" onClick={loadInventory} disabled={inventory.status === 'loading'} className="btn btn-ghost btn-sm">
                   <span className={`material-symbols-outlined ${inventory.status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true">refresh</span>
@@ -444,10 +451,10 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                 <button type="button" className="btn btn-secondary btn-sm" onClick={loadInventory}>Thử lại</button>
               </div>
             ) : inventory.status === 'loading' && inventory.items.length === 0 ? (
-              <p className="p-6 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải kho dược…</p>
+              <p className="p-6 text-center text-[0.8125rem] text-slate-600" aria-live="polite">Đang tải kho dược…</p>
             ) : (
-              <div className="table-wrap">
-                <table className="w-full text-left text-[13px]">
+              <TableWrap label="Danh mục thuốc trong kho">
+                <table className="w-full text-left text-[0.8125rem]">
                   <caption className="sr-only">Danh mục thuốc trong kho</caption>
                   <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                     <tr>
@@ -461,7 +468,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredDrugs.length === 0 ? (
-                      <tr><td colSpan={6} className="py-6 text-center text-slate-600">Không có thuốc phù hợp bộ lọc.</td></tr>
+                      <tr><td colSpan={6} className="p-0 text-slate-600"><div className="sticky left-0 w-[min(100%,calc(100vw-4rem))] py-6 px-4 text-center">Không có thuốc phù hợp bộ lọc.</div></td></tr>
                     ) : filteredDrugs.map((d) => {
                       const isLow = Number(d.stockQuantity || 0) <= LOW_STOCK_THRESHOLD;
                       const days = daysUntil(d.expiryDate);
@@ -488,7 +495,7 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
                     })}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
             )}
           </div>
         )}
@@ -544,19 +551,6 @@ export default function PharmacyDispenseModal({ isOpen, onClose, onShowToast }) 
         onCreated={(drug) => {
           setShowNewDrug(false);
           notify(`Đã thêm thuốc ${drug?.name || ''} vào danh mục.`.replace('  ', ' '), 'success');
-          loadInventory();
-        }}
-      />
-      <ImportDrugsDialog
-        isOpen={showImport}
-        onClose={() => setShowImport(false)}
-        onImported={({ created, restocked, skipped }) => {
-          setShowImport(false);
-          const parts = [];
-          if (created) parts.push(`thêm ${created} thuốc mới`);
-          if (restocked) parts.push(`cập nhật tồn kho ${restocked} thuốc`);
-          const done = parts.join(', ');
-          notify(`Đã ${done}${skipped ? `; bỏ qua ${skipped} dòng` : ''}.`, 'success');
           loadInventory();
         }}
       />

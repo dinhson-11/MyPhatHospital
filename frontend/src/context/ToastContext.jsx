@@ -1,6 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-
-const ToastContext = createContext(null);
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ToastContext } from './useToast';
 
 /** Thời gian hiển thị mặc định (ms). Lỗi hiển thị lâu hơn để người dùng kịp đọc. */
 const TOAST_DURATIONS = {
@@ -122,10 +121,3 @@ export const ToastProvider = ({ children }) => {
   );
 };
 
-export const useToast = () => {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context;
-};

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Modal from '../common/Modal';
-import { useConfirm } from '../common/ConfirmDialog';
-import { useAuth } from '../../context/AuthContext';
+import { useConfirm } from '../common/useConfirm';
+import { useAuth } from '../../context/useAuth';
 import invoiceService from '../../services/invoiceService';
 import InvoiceDetail, { InvoiceStatusBadge } from './InvoiceDetail';
 import PaymentDialog from './PaymentDialog';
-import ReceiptPrint, { printReceipt } from './ReceiptPrint';
+import ReceiptPrint from './ReceiptPrint';
+import { printReceipt } from '../../utils/receipt';
 import { formatDateTime, formatVND, PAYMENT_METHOD_LABELS } from '../../utils/format';
 
 const STATUS_FILTERS = [
@@ -22,40 +23,40 @@ function ShiftSummary({ summary, loading, error, onRefresh }) {
     <section aria-label="Tổng hợp thu ngân hôm nay"
       className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 sm:px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900">
       <div>
-        <p className="text-[12px] text-slate-500">Đã thu hôm nay</p>
-        <p className="text-lg font-extrabold text-slate-900 dark:text-white tabular-nums">
+        <p className="text-[0.75rem] text-slate-500">Đã thu hôm nay</p>
+        <p className="text-lg font-bold text-slate-900 dark:text-white tabular-nums">
           {loading ? '…' : summary ? formatVND(summary.collectedAmount) : '—'}
-          {summary && <span className="ml-1 text-[12px] font-medium text-slate-500">({summary.paidCount} hóa đơn)</span>}
+          {summary && <span className="ml-1 text-[0.75rem] font-medium text-slate-500">({summary.paidCount} hóa đơn)</span>}
         </p>
       </div>
       {methods.map((m) => (
         <div key={m.method}>
-          <p className="text-[12px] text-slate-500">{PAYMENT_METHOD_LABELS[m.method]}</p>
+          <p className="text-[0.75rem] text-slate-500">{PAYMENT_METHOD_LABELS[m.method]}</p>
           <p className="text-sm font-bold tabular-nums">{formatVND(m.amount)}</p>
         </div>
       ))}
       {summary && Number(summary.insuranceAmount) > 0 && (
         <div>
-          <p className="text-[12px] text-slate-500">BHYT chi trả</p>
+          <p className="text-[0.75rem] text-slate-500">BHYT chi trả</p>
           <p className="text-sm font-bold text-emerald-700 tabular-nums">{formatVND(summary.insuranceAmount)}</p>
         </div>
       )}
       {summary && Number(summary.refundedAmount) > 0 && (
         <div>
-          <p className="text-[12px] text-slate-500">Đã hoàn ({summary.refundedCount})</p>
+          <p className="text-[0.75rem] text-slate-500">Đã hoàn ({summary.refundedCount})</p>
           <p className="text-sm font-bold text-red-700 tabular-nums">− {formatVND(summary.refundedAmount)}</p>
         </div>
       )}
       <div>
-        <p className="text-[12px] text-slate-500">Chờ thu</p>
+        <p className="text-[0.75rem] text-slate-500">Chờ thu</p>
         <p className="text-sm font-bold text-amber-700 tabular-nums">
           {summary ? `${summary.pendingCount} · ${formatVND(summary.pendingAmount)}` : '—'}
         </p>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        {error && <span className="text-[12px] text-red-700">{error}</span>}
-        <button type="button" onClick={onRefresh} className="btn btn-light inline-flex items-center gap-1 text-[13px]" aria-label="Tải lại tổng hợp thu ngân">
-          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
+        {error && <span className="text-[0.75rem] text-red-700">{error}</span>}
+        <button type="button" onClick={onRefresh} className="btn btn-light inline-flex items-center gap-1 text-[0.8125rem]" aria-label="Tải lại tổng hợp thu ngân">
+          <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">refresh</span>
           Làm mới
         </button>
       </div>
@@ -279,7 +280,7 @@ export default function InvoiceModal({ isOpen, onClose, onShowToast, defaultVisi
                 <div className="p-3 space-y-2 border-b border-slate-200 dark:border-slate-800">
                   <label htmlFor="invoice-search" className="sr-only">Tìm hóa đơn</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-2.5 top-2 text-slate-400 text-[20px]" aria-hidden="true">search</span>
+                    <span className="material-symbols-outlined absolute left-2.5 top-2 text-slate-400 text-[1.25rem]" aria-hidden="true">search</span>
                     <input
                       id="invoice-search"
                       type="search"
@@ -296,7 +297,7 @@ export default function InvoiceModal({ isOpen, onClose, onShowToast, defaultVisi
                         type="button"
                         aria-pressed={statusFilter === f.value}
                         onClick={() => setStatusFilter(f.value)}
-                        className={`px-2.5 py-1 text-[12px] font-semibold rounded-full border transition-colors ${
+                        className={`px-2.5 py-1 text-[0.75rem] font-semibold rounded-full border transition-colors ${
                           statusFilter === f.value
                             ? 'bg-primary text-white border-primary'
                             : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -337,14 +338,14 @@ export default function InvoiceModal({ isOpen, onClose, onShowToast, defaultVisi
                               <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{inv.patientName}</span>
                               <InvoiceStatusBadge status={inv.status} />
                             </div>
-                            <div className="flex items-center justify-between gap-2 mt-1 text-[12px] text-slate-500">
+                            <div className="flex items-center justify-between gap-2 mt-1 text-[0.75rem] text-slate-500">
                               <span className="font-mono">{inv.invoiceCode || `#${inv.id}`}</span>
-                              <span className="font-bold text-slate-900 dark:text-slate-100 text-[13px] tabular-nums">
+                              <span className="font-bold text-slate-900 dark:text-slate-100 text-[0.8125rem] tabular-nums">
                                 {formatVND(inv.patientAmount ?? inv.totalAmount)}
                               </span>
                             </div>
                             {Number(inv.insuranceAmount) > 0 && (
-                              <span className="inline-block mt-1 text-[12px] font-semibold text-emerald-700">
+                              <span className="inline-block mt-1 text-[0.75rem] font-semibold text-emerald-700">
                                 BHYT {Number(inv.insuranceRate)}%
                               </span>
                             )}
@@ -354,7 +355,7 @@ export default function InvoiceModal({ isOpen, onClose, onShowToast, defaultVisi
                     </ul>
                   )}
                   {list.total > list.items.length && (
-                    <p className="px-4 py-2 text-[12px] text-slate-500">
+                    <p className="px-4 py-2 text-[0.75rem] text-slate-500">
                       Hiển thị {list.items.length}/{list.total} hóa đơn mới nhất – dùng ô tìm kiếm để thu hẹp.
                     </p>
                   )}
@@ -395,14 +396,14 @@ export default function InvoiceModal({ isOpen, onClose, onShowToast, defaultVisi
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{v.patientName}</span>
                           {v.insuranceEligible && (
-                            <span className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Có BHYT</span>
+                            <span className="text-[0.75rem] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Có BHYT</span>
                           )}
                         </div>
-                        <p className="text-[12px] text-slate-500">
+                        <p className="text-[0.75rem] text-slate-500">
                           Ca #{v.visitId} · {formatDateTime(v.visitTime)} · {v.doctorName || 'Chưa rõ bác sĩ'}
                         </p>
                         {(v.diagnosisCode || v.diagnosisNote) && (
-                          <p className="text-[12px] text-slate-600 dark:text-slate-300 truncate">
+                          <p className="text-[0.75rem] text-slate-600 dark:text-slate-300 truncate">
                             {[v.diagnosisCode, v.diagnosisNote].filter(Boolean).join(' – ')}
                           </p>
                         )}
@@ -410,7 +411,7 @@ export default function InvoiceModal({ isOpen, onClose, onShowToast, defaultVisi
                           type="button"
                           onClick={() => generateForVisit(v.visitId)}
                           disabled={Boolean(busyAction)}
-                          className="mt-1 px-3 py-1.5 rounded-lg text-[13px] font-semibold border border-primary/40 text-primary hover:bg-primary-fixed disabled:opacity-50"
+                          className="mt-1 px-3 py-1.5 rounded-lg text-[0.8125rem] font-semibold border border-primary/40 text-primary hover:bg-primary-fixed disabled:opacity-50"
                         >
                           {busyAction === `generate-${v.visitId}` ? 'Đang lập…' : 'Lập hóa đơn'}
                         </button>

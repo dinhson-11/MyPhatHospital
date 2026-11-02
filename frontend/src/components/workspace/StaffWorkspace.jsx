@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useId } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/useAuth';
+import { useToast } from '../../context/useToast';
 import WorkspaceDashboard from './WorkspaceDashboard';
 import logoHospital from '../../assets/logo.png';
 import GlobalPatientSearch from '../common/GlobalPatientSearch';
+import TextSizeControl from '../common/TextSizeControl';
 import { hoursCompact } from '../../services/hospitalHours';
 import { formatDate } from '../../utils/format';
 import Avatar from '../common/Avatar';
@@ -179,7 +180,7 @@ export default function StaffWorkspace({
         <button
           type="button"
           aria-label="Đóng menu điều hướng"
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-30 lg:hidden cursor-default"
+          className="fixed inset-0 bg-slate-900/50 z-30 lg:hidden cursor-default"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
@@ -213,21 +214,21 @@ export default function StaffWorkspace({
           <button
             type="button"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="hidden lg:flex w-8 h-8 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 items-center justify-center cursor-pointer transition-colors"
+            className="touch-target hidden lg:flex w-8 h-8 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 items-center justify-center cursor-pointer transition-colors"
             aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
             aria-expanded={!sidebarCollapsed}
             aria-controls={sidebarId}
             title={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
           >
-            <Icon name={sidebarCollapsed ? 'chevron_right' : 'chevron_left'} className="text-[18px]" />
+            <Icon name={sidebarCollapsed ? 'chevron_right' : 'chevron_left'} className="text-[1.125rem]" />
           </button>
           <button
             type="button"
             onClick={() => setMobileSidebarOpen(false)}
-            className="lg:hidden w-8 h-8 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center"
+            className="touch-target lg:hidden w-8 h-8 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center"
             aria-label="Đóng menu điều hướng"
           >
-            <Icon name="close" className="text-[20px]" />
+            <Icon name="close" className="text-[1.25rem]" />
           </button>
         </div>
 
@@ -288,7 +289,7 @@ export default function StaffWorkspace({
             aria-label={sidebarCollapsed ? 'Xem cổng thông tin bệnh viện' : undefined}
             title="Chuyển sang cổng thông tin & website bệnh viện"
           >
-            <Icon name="public" className="text-primary text-[18px]" />
+            <Icon name="public" className="text-primary text-[1.125rem]" />
             {!sidebarCollapsed && <span>Xem cổng thông tin</span>}
           </button>
 
@@ -305,11 +306,11 @@ export default function StaffWorkspace({
             <button
               type="button"
               onClick={handleLogout}
-              className="w-8 h-8 shrink-0 rounded-lg text-slate-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center transition-colors cursor-pointer"
+              className="touch-target w-8 h-8 shrink-0 rounded-lg text-slate-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center transition-colors cursor-pointer"
               aria-label="Đăng xuất"
               title="Đăng xuất"
             >
-              <Icon name="logout" className="text-[18px]" />
+              <Icon name="logout" className="text-[1.125rem]" />
             </button>
           </div>
         </div>
@@ -322,7 +323,7 @@ export default function StaffWorkspace({
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden w-9 h-9 shrink-0 rounded-xl border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 cursor-pointer"
+              className="touch-target lg:hidden w-9 h-9 shrink-0 rounded-xl border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 cursor-pointer"
               aria-label="Mở menu điều hướng"
               aria-expanded={mobileSidebarOpen}
               aria-controls={sidebarId}
@@ -332,7 +333,7 @@ export default function StaffWorkspace({
 
             <nav aria-label="Vị trí hiện tại" className="hidden sm:flex items-center gap-2 text-xs text-slate-500 min-w-0">
               <span className="font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
-                <Icon name="local_hospital" className="text-primary text-[18px]" />
+                <Icon name="local_hospital" className="text-primary text-[1.125rem]" />
                 Không gian làm việc
               </span>
               <span aria-hidden="true">/</span>
@@ -345,7 +346,7 @@ export default function StaffWorkspace({
                 className="flex items-center gap-2 min-w-0 pl-2.5 pr-1 py-1 rounded-full bg-primary-fixed border border-primary-fixed-dim text-xs text-primary"
                 data-testid="selected-patient-chip"
               >
-                <Icon name="person" className="text-[16px]" />
+                <Icon name="person" className="text-[1rem]" />
                 <span className="truncate max-w-[140px] sm:max-w-[220px]">
                   <span className="sr-only">Bệnh nhân đang chọn: </span>
                   <strong className="font-semibold">{selectedPatient.fullName}</strong>
@@ -357,7 +358,7 @@ export default function StaffWorkspace({
                   className="w-6 h-6 rounded-full hover:bg-primary-fixed-dim flex items-center justify-center"
                   aria-label={`Bỏ chọn bệnh nhân ${selectedPatient.fullName}`}
                 >
-                  <Icon name="close" className="text-[14px]" />
+                  <Icon name="close" className="text-[0.875rem]" />
                 </button>
               </div>
             )}
@@ -367,30 +368,30 @@ export default function StaffWorkspace({
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 h-9 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 hover:text-slate-900 hover:border-primary transition-colors cursor-pointer"
+              className="touch-target flex items-center gap-2 h-9 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 hover:text-slate-900 hover:border-primary transition-colors cursor-pointer"
               aria-label="Tìm bệnh nhân (Ctrl + K)"
               aria-keyshortcuts="Control+K F2"
               title="Tìm kiếm bệnh nhân nhanh (Ctrl + K hoặc F2)"
             >
-              <Icon name="search" className="text-primary text-[18px]" />
-              <span className="hidden lg:inline font-medium">Tìm bệnh nhân (tên, SĐT, CCCD)…</span>
+              <Icon name="search" className="text-primary text-[1.125rem]" />
+              <span className="hidden xl:inline font-medium">Tìm bệnh nhân (tên, SĐT, CCCD)…</span>
               <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded-lg bg-white text-xs font-mono text-slate-500 border border-slate-200">
                 Ctrl K
               </kbd>
             </button>
 
-            {/* Giờ khám của bệnh viện hôm nay (theo mùa) */}
+            {/* Giờ khám của bệnh viện hôm nay (theo mùa). Chỉ từ 2xl: ở 1280px chip này làm topbar tràn khỏi màn hình */}
             <div
-              className="hidden xl:flex items-center gap-2 h-9 px-3 rounded-full bg-slate-100 text-slate-700 text-xs font-medium whitespace-nowrap"
+              className="hidden 2xl:flex items-center gap-2 h-9 px-3 rounded-full bg-slate-100 text-slate-700 text-xs font-medium whitespace-nowrap"
               title="Giờ khám bệnh theo mùa – cấp cứu hoạt động 24/24"
             >
-              <Icon name="schedule" className="text-[16px] text-slate-500" />
+              <Icon name="schedule" className="text-[1rem] text-slate-500" />
               <span>
                 {formatDate(new Date())} · Giờ khám: <strong>{hoursCompact()}</strong>
               </span>
             </div>
 
-            <button type="button" onClick={onSwitchToPortal} className="btn btn-sm btn-secondary hidden md:inline-flex">
+            <button type="button" onClick={onSwitchToPortal} className="btn btn-sm btn-secondary hidden 2xl:inline-flex">
               <Icon name="open_in_new" className="text-primary" />
               <span>Cổng thông tin</span>
             </button>
@@ -411,7 +412,7 @@ export default function StaffWorkspace({
                 <span className="hidden sm:inline text-xs font-bold text-slate-800">
                   {user?.fullName?.split(' ').slice(-1)[0] || user?.username}
                 </span>
-                <Icon name={userDropdownOpen ? 'expand_less' : 'expand_more'} className="text-slate-500 text-[18px]" />
+                <Icon name={userDropdownOpen ? 'expand_less' : 'expand_more'} className="text-slate-500 text-[1.125rem]" />
               </button>
 
               {userDropdownOpen && (
@@ -458,6 +459,10 @@ export default function StaffWorkspace({
                     <Icon name="public" />
                     <span>Cổng thông tin công khai</span>
                   </button>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span className="text-xs font-semibold text-slate-600">Cỡ chữ</span>
+                    <TextSizeControl />
+                  </div>
                   <div className="dropdown-divider" />
                   <button type="button" onClick={handleLogout} className="dropdown-item is-danger">
                     <Icon name="logout" />

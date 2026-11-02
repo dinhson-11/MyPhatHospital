@@ -1,9 +1,9 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import HeroSection from '../components/home/HeroSection';
 
-describe('HeroSection – bộ ảnh bên phải', () => {
+describe('HeroSection – nội dung', () => {
   const renderHero = () => render(<HeroSection onOpenBooking={() => {}} onScrollToAI={() => {}} />);
 
   it('không còn tab "Bác Sĩ & AI"', () => {
@@ -12,15 +12,16 @@ describe('HeroSection – bộ ảnh bên phải', () => {
     expect(screen.queryByText(/Hội chẩn số AI/i)).not.toBeInTheDocument();
   });
 
-  it('chú thích ảnh Chủ tịch nước là "Nguyên Chủ tịch nước trao bằng khen"', () => {
+  it('ảnh hero là ảnh mặt tiền thật, không còn chú thích "Diện kiến"', () => {
     renderHero();
-    expect(screen.getAllByText(/Nguyên Chủ tịch nước trao bằng khen/i).length).toBeGreaterThan(0);
+    expect(screen.getByAltText(/Mặt tiền Phòng khám đa khoa Mỹ Phát/)).toBeInTheDocument();
     expect(screen.queryByText(/Diện kiến/i)).not.toBeInTheDocument();
   });
 
-  it('chuyển sang tab Cơ sở Bệnh viện hiển thị ảnh banner', () => {
-    renderHero();
-    fireEvent.click(screen.getByText('Cơ sở Bệnh viện'));
-    expect(screen.getByAltText('Mỹ Phát Hospital')).toBeInTheDocument();
+  it('không dùng banner có số hotline cũ (khác số hotline của hệ thống)', () => {
+    const { container } = renderHero();
+    const sources = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src') || '');
+    expect(sources.some((src) => /banner/i.test(src))).toBe(false);
+    expect(screen.queryByText(/038 6959342|097 5977222/)).not.toBeInTheDocument();
   });
 });

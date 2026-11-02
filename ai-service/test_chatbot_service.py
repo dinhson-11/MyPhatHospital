@@ -213,7 +213,7 @@ class TestChatbotEmergencyRedFlags:
         result = ChatbotService.process_message(message)
         assert result.intent == "EMERGENCY", message
         assert "115" in result.reply
-        assert "0789 065 493" in result.reply
+        assert "0386 959 342" in result.reply
         assert result.suggested_department is None
 
     @pytest.mark.parametrize("message", [
@@ -233,7 +233,7 @@ class TestChatbotEmergencyRedFlags:
         reply = ChatbotService.process_message("tôi muốn chết").reply
         assert "115" in reply
         assert "Hỗ trợ tâm lý" in reply
-        assert "0789 065 493" in reply
+        assert "0386 959 342" in reply
 
     @pytest.mark.parametrize("message", [
         "tôi đang mang thai bị ra máu",
@@ -314,6 +314,11 @@ class TestChatbotMatchingFixes:
 
 class TestMlTriageThreshold:
     """C2: Mô hình ML chỉ được dùng khi đủ tự tin và bỏ xa nhãn thứ hai."""
+
+    def test_trained_model_is_loaded(self):
+        # Không có test này thì test "bị từ chối" bên dưới vẫn pass khi thiếu mô hình (None vì không có mô hình)
+        from services.ml_triage_service import load_trained_model
+        assert load_trained_model() is not None
 
     def test_low_confidence_prediction_rejected(self):
         from services.ml_triage_service import predict_department

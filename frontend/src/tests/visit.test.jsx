@@ -6,7 +6,7 @@ vi.mock('../services/api', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
   BASE_URL: ''
 }));
-vi.mock('../context/AuthContext', () => ({
+vi.mock('../context/useAuth', () => ({
   useAuth: () => ({ user: { fullName: 'BS. Nguyễn Văn Hùng' }, isDoctor: true })
 }));
 

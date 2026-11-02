@@ -233,7 +233,7 @@ describe('Sprint 7 – AI Chatbot Suite (FR-10 & NFR-8)', () => {
 
       const alert = await screen.findByRole('alert');
       expect(within(alert).getByRole('link', { name: /Gọi ngay/i })).toHaveAttribute('href', 'tel:115');
-      expect(within(alert).getByRole('link', { name: /0789 065 493/ })).toHaveAttribute('href', 'tel:0789065493');
+      expect(within(alert).getByRole('link', { name: /0386 959 342/ })).toHaveAttribute('href', 'tel:0386959342');
     });
   });
 
@@ -259,8 +259,8 @@ describe('Sprint 7 – AI Chatbot Suite (FR-10 & NFR-8)', () => {
       expect(alert.className).toMatch(/red/);
       expect(within(alert).getByText(/Cấp cứu 115/i)).toBeInTheDocument();
       expect(within(alert).getByRole('link', { name: /Gọi ngay/i })).toHaveAttribute('href', 'tel:115');
-      const hotline = within(alert).getByRole('link', { name: /0789 065 493/ });
-      expect(hotline).toHaveAttribute('href', 'tel:0789065493');
+      const hotline = within(alert).getByRole('link', { name: /0386 959 342/ });
+      expect(hotline).toHaveAttribute('href', 'tel:0386959342');
     });
 
     it('keeps booking as a secondary action below the emergency banner', () => {

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useToast } from '../../context/ToastContext';
-import { useAuth } from '../../context/AuthContext';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useToast } from '../../context/useToast';
+import { useAuth } from '../../context/useAuth';
+import { useConfirm } from '../common/useConfirm';
 import { patientService } from '../../services/patientService';
 
 /**
@@ -23,27 +23,32 @@ export default function AllergiesSection({ patientId, canDelete }) {
   // Mặc định theo vai trò đăng nhập; có thể ép bằng prop canDelete (dùng trong kiểm thử)
   const deletable = canDelete ?? (typeof hasAnyRole === 'function' && hasAnyRole('DOCTOR', 'NURSE'));
   const confirm = useConfirm();
-  const [state, setState] = useState({ status: 'idle', items: [], error: '' });
+  // Kết quả lần tải gần nhất kèm khóa request; "loading" được suy ra khi kết quả chưa thuộc request hiện tại
+  const [result, setResult] = useState({ forKey: null, status: 'idle', items: [], error: '' });
+  const [reloadToken, setReloadToken] = useState(0);
+  const requestKey = `${patientId}#${reloadToken}`;
+  const state = result.forKey === requestKey ? result : { ...result, status: 'loading', error: '' };
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAllergy, setNewAllergy] = useState({ allergen: '', severity: 'MILD', note: '' });
   const [addError, setAddError] = useState('');
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const loadAllergies = useCallback(async () => {
-    if (!patientId) return;
-    setState((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await patientService.getAllergies(patientId);
-      setState({ status: 'ready', items, error: '' });
-    } catch (err) {
-      setState({ status: 'error', items: [], error: err.message });
-    }
-  }, [patientId]);
+  const loadAllergies = useCallback(() => setReloadToken((t) => t + 1), []);
 
   useEffect(() => {
-    loadAllergies();
-  }, [loadAllergies]);
+    if (!patientId) return undefined;
+    let cancelled = false;
+    patientService.getAllergies(patientId).then(
+      (items) => {
+        if (!cancelled) setResult({ forKey: requestKey, status: 'ready', items, error: '' });
+      },
+      (err) => {
+        if (!cancelled) setResult({ forKey: requestKey, status: 'error', items: [], error: err.message });
+      }
+    );
+    return () => { cancelled = true; };
+  }, [patientId, requestKey]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -56,7 +61,7 @@ export default function AllergiesSection({ patientId, canDelete }) {
     setAddError('');
     try {
       const added = await patientService.addAllergy(patientId, newAllergy);
-      setState((prev) => ({ ...prev, items: [...prev.items, added] }));
+      setResult((prev) => ({ ...prev, items: [...prev.items, added] }));
       setNewAllergy({ allergen: '', severity: 'MILD', note: '' });
       setShowAddForm(false);
       showToast(`Đã thêm dị ứng "${added?.allergen || newAllergy.allergen}".`, 'success');
@@ -80,7 +85,7 @@ export default function AllergiesSection({ patientId, canDelete }) {
     setDeletingId(allergy.id);
     try {
       await patientService.deleteAllergy(patientId, allergy.id);
-      setState((prev) => ({ ...prev, items: prev.items.filter((a) => a.id !== allergy.id) }));
+      setResult((prev) => ({ ...prev, items: prev.items.filter((a) => a.id !== allergy.id) }));
       showToast(`Đã xóa dị ứng "${allergy.allergen}".`, 'success');
     } catch (err) {
       showToast(err.message || 'Không xóa được dị ứng', 'error');
@@ -161,9 +166,9 @@ export default function AllergiesSection({ patientId, canDelete }) {
       )}
 
       {state.status === 'loading' || state.status === 'idle' ? (
-        <p className="py-6 text-center text-[13px] text-slate-600" aria-live="polite">Đang tải thông tin dị ứng…</p>
+        <p className="py-6 text-center text-[0.8125rem] text-slate-600" aria-live="polite">Đang tải thông tin dị ứng…</p>
       ) : state.status === 'error' ? (
-        <div role="alert" className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-[13px] space-y-2">
+        <div role="alert" className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-[0.8125rem] space-y-2">
           <p>{state.error || 'Không tải được thông tin dị ứng.'}</p>
           <button type="button" onClick={loadAllergies} className="btn btn-secondary btn-sm">
             <span className="material-symbols-outlined" aria-hidden="true">refresh</span>
@@ -171,7 +176,7 @@ export default function AllergiesSection({ patientId, canDelete }) {
           </button>
         </div>
       ) : items.length === 0 ? (
-        <p className="text-center py-5 bg-slate-50 rounded-2xl text-[13px] text-slate-600">Chưa ghi nhận dị ứng nào.</p>
+        <p className="text-center py-5 bg-slate-50 rounded-2xl text-[0.8125rem] text-slate-600">Chưa ghi nhận dị ứng nào.</p>
       ) : (
         <ul className="space-y-2">
           {items.map((allergy) => {
@@ -205,7 +210,7 @@ export default function AllergiesSection({ patientId, canDelete }) {
       )}
 
       <p className="text-xs text-slate-600 flex items-start gap-1 pt-1">
-        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">info</span>
+        <span className="material-symbols-outlined text-[0.875rem]" aria-hidden="true">info</span>
         Thông tin dị ứng được dùng để cảnh báo bác sĩ khi kê đơn thuốc.
       </p>
     </section>

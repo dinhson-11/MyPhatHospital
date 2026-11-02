@@ -1,6 +1,6 @@
 import React, { useId, useMemo, useState } from 'react';
 import Modal from '../common/Modal';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import {
   reportService,
   getReportRange,
@@ -12,6 +12,7 @@ import {
 import { formatVND, formatDate } from '../../utils/format';
 import { useAsyncData } from './useAsyncData';
 import { Icon, ErrorPanel, EmptyPanel, KpiCard, KpiSkeleton, BlockSkeleton } from './ReportStates';
+import TableWrap from '../common/TableWrap';
 
 const RANGE_OPTIONS = [
   { value: '7days', label: '7 ngày qua' },
@@ -151,7 +152,7 @@ function DiagnosisList({ diagnoses }) {
             </span>
           </div>
           <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden" aria-hidden="true">
-            <div className="h-full rounded-full bg-secondary" style={{ width: `${Math.round((d.count / max) * 100)}%` }} />
+            <div className="h-full rounded-full bg-teal-600" style={{ width: `${Math.round((d.count / max) * 100)}%` }} />
           </div>
         </li>
       ))}
@@ -237,7 +238,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
       footer={(
         <>
           <p className="mr-auto text-xs text-slate-500 flex items-center gap-1.5">
-            <Icon name="info" className="text-[16px]" />
+            <Icon name="info" className="text-[1rem]" />
             Doanh thu ghi nhận theo ngày thu tiền; hóa đơn đã hoàn tiền không được tính.
           </p>
           <button type="button" className="btn btn-secondary" onClick={handlePrint}>
@@ -374,7 +375,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
                   {v.dailyStats.length === 0 ? (
                     <EmptyPanel icon="bar_chart" title="Chưa có lượt khám" />
                   ) : (
-                    <div className="table-wrap">
+                    <TableWrap label="Số lượt khám và tỷ lệ hoàn thành theo ngày">
                       <table className="table table-compact">
                         <caption className="sr-only">Số lượt khám và tỷ lệ hoàn thành theo ngày</caption>
                         <thead>
@@ -396,7 +397,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </TableWrap>
                   )}
                 </Section>
               </>
@@ -446,7 +447,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
                   {r.dailyRevenues.length === 0 ? (
                     <EmptyPanel icon="receipt_long" title="Chưa có doanh thu trong kỳ" />
                   ) : (
-                    <div className="table-wrap">
+                    <TableWrap label="Doanh thu và số hóa đơn đã thu theo ngày">
                       <table className="table table-compact">
                         <caption className="sr-only">Doanh thu và số hóa đơn đã thu theo ngày</caption>
                         <thead>
@@ -468,7 +469,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </TableWrap>
                   )}
                 </Section>
               </>
@@ -484,7 +485,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
                 list.length === 0 ? (
                   <EmptyPanel icon="monitoring" title="Chưa có dữ liệu chẩn đoán" text="Số liệu xuất hiện khi bác sĩ hoàn tất khám và ghi mã ICD-10." />
                 ) : (
-                  <div className="table-wrap">
+                  <TableWrap label="Mã bệnh ICD-10, số ca và tỷ lệ">
                     <table className="table table-compact">
                       <caption className="sr-only">Mã bệnh ICD-10, số ca và tỷ lệ</caption>
                       <thead>
@@ -506,7 +507,7 @@ export default function StatisticsDashboardModal({ isOpen, onClose }) {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </TableWrap>
                 )
               }
             </Loadable>

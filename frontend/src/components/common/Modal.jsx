@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 
@@ -30,6 +30,8 @@ const FOCUSABLE = [
 ].join(',');
 
 let openCount = 0;
+// Giá trị nền; effect nâng z-index theo thứ tự mở (style tĩnh nên React không ghi đè giá trị đã nâng)
+const BASE_OVERLAY_STYLE = { zIndex: 1000 };
 
 export default function Modal({
   isOpen,
@@ -47,7 +49,7 @@ export default function Modal({
 }) {
   const titleId = useId();
   const dialogRef = useRef(null);
-  const [zIndex, setZIndex] = useState(1000);
+  const overlayRef = useRef(null);
 
   useEscapeKey(isOpen, onClose);
 
@@ -55,7 +57,8 @@ export default function Modal({
   useEffect(() => {
     if (!isOpen) return undefined;
     openCount += 1;
-    setZIndex(1000 + openCount * 10);
+    // Ghi thẳng vào DOM (không setState trong effect): modal mở sau có z-index cao hơn
+    if (overlayRef.current) overlayRef.current.style.zIndex = String(1000 + openCount * 10);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
@@ -101,8 +104,9 @@ export default function Modal({
 
   const content = (
     <div
-      className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
-      style={{ zIndex }}
+      ref={overlayRef}
+      className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 animate-fade-in"
+      style={BASE_OVERLAY_STYLE}
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose?.();
       }}
@@ -121,7 +125,7 @@ export default function Modal({
             <div className="flex items-start gap-3 min-w-0">
               {icon && (
                 <span className="w-10 h-10 shrink-0 rounded-xl bg-primary-fixed text-primary flex items-center justify-center dark:bg-slate-800 dark:text-sky-300">
-                  <span className="material-symbols-outlined text-[22px]" aria-hidden="true">{icon}</span>
+                  <span className="material-symbols-outlined text-[1.375rem]" aria-hidden="true">{icon}</span>
                 </span>
               )}
               <div className="min-w-0">
@@ -130,7 +134,7 @@ export default function Modal({
                     {title}
                   </h2>
                 )}
-                {subtitle && <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
+                {subtitle && <p className="text-[0.8125rem] text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
               </div>
             </div>
             {onClose && (
@@ -139,9 +143,9 @@ export default function Modal({
                 onClick={onClose}
                 aria-label="Đóng"
                 title="Đóng (Esc)"
-                className="w-9 h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-white flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="touch-target w-9 h-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-white flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
-                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
+                <span className="material-symbols-outlined text-[1.375rem]" aria-hidden="true">close</span>
               </button>
             )}
           </div>

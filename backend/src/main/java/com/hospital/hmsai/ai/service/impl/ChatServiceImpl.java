@@ -110,13 +110,13 @@ public class ChatServiceImpl implements ChatService {
     private static final String EMERGENCY_REPLY = "⚠️ **TÌNH HUỐNG KHẨN CẤP / CẦN XỬ TRÍ NGAY LẬP TỨC**\n\n"
             + "Các dấu hiệu bạn mô tả có thể là tình trạng cấp cứu nguy hiểm đến tính mạng.\n"
             + "• Vui lòng gọi ngay **115** hoặc di chuyển ngay đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n"
-            + "• Hotline cấp cứu 24/7: **0789 065 493**.\n"
+            + "• Hotline cấp cứu 24/7: **0386 959 342**.\n"
             + "• Không tự ý uống thuốc hoặc chờ đợi tại nhà!";
 
     private static final String SUICIDE_REPLY = "⚠️ **Bạn không đơn độc – hãy tìm trợ giúp ngay bây giờ**\n\n"
             + "Nếu bạn đang có ý định làm hại bản thân hoặc đang gặp nguy hiểm, vui lòng gọi ngay **115** "
             + "hoặc đến **Khoa Cấp cứu Mỹ Phát Hospital** (1170 Quang Trung, Chũ, Lục Ngạn).\n"
-            + "• Hỗ trợ tâm lý khẩn cấp 24/7: Hotline Mỹ Phát Hospital **0789 065 493** – nhân viên y tế sẽ lắng nghe và kết nối bạn với bác sĩ.\n"
+            + "• Hỗ trợ tâm lý khẩn cấp 24/7: Hotline Mỹ Phát Hospital **0386 959 342** – nhân viên y tế sẽ lắng nghe và kết nối bạn với bác sĩ.\n"
             + "• Nếu bạn là trẻ em (dưới 16 tuổi): Tổng đài quốc gia bảo vệ trẻ em **111** (miễn phí, 24/7).\n"
             + "• Hãy ở cạnh hoặc gọi ngay cho người thân, bạn bè mà bạn tin tưởng; cất xa thuốc và vật sắc nhọn.";
 

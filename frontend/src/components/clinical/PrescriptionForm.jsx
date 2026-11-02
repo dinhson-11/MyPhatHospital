@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { visitService, isDrugExpired } from '../../services/visitService';
 import { aiAlertService, getBlockingFindings } from '../../services/aiAlertService';
-import { useToast } from '../../context/ToastContext';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useToast } from '../../context/useToast';
+import { useConfirm } from '../common/useConfirm';
 import { formatDate, formatDateTime, formatVND } from '../../utils/format';
 import DrugInteractionAlert from './DrugInteractionAlert';
 
@@ -32,7 +32,9 @@ export default function PrescriptionForm({
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const [catalog, setCatalog] = useState({ status: 'loading', items: [], error: '' });
+  // Danh mục thuốc: trạng thái "đang tải" được suy ra từ việc kết quả có thuộc lần yêu cầu hiện tại hay không
+  const [catalogReq, setCatalogReq] = useState({ id: 0, force: false });
+  const [catalogResult, setCatalogResult] = useState({ forId: null, items: [], error: '' });
   const [rows, setRows] = useState(() => [newRow()]);
   const [rowErrors, setRowErrors] = useState({});
   const [drugFilter, setDrugFilter] = useState('');
@@ -40,22 +42,42 @@ export default function PrescriptionForm({
   const [submitError, setSubmitError] = useState('');
 
   const [safetyAnalysis, setSafetyAnalysis] = useState(null);
-  const [isCheckingSafety, setIsCheckingSafety] = useState(false);
+  const [safetySettledKey, setSafetySettledKey] = useState(null);
+  const [isManualChecking, setIsManualChecking] = useState(false);
   const [hasManualChecked, setHasManualChecked] = useState(false);
 
-  const loadCatalog = useCallback(async (force = false) => {
-    setCatalog((prev) => ({ ...prev, status: 'loading', error: '' }));
-    try {
-      const items = await visitService.getDrugCatalog({ force });
-      setCatalog({ status: 'ready', items, error: '' });
-    } catch (err) {
-      setCatalog({ status: 'error', items: [], error: err.message });
-    }
-  }, []);
+  // Chuyển từ chỉ-xem sang soạn đơn: tải lại danh mục (điều chỉnh state ngay trong lúc render)
+  const [prevReadOnly, setPrevReadOnly] = useState(readOnly);
+  if (prevReadOnly !== readOnly) {
+    setPrevReadOnly(readOnly);
+    if (!readOnly) setCatalogReq((r) => ({ id: r.id + 1, force: false }));
+  }
 
   useEffect(() => {
-    if (!readOnly) loadCatalog();
-  }, [readOnly, loadCatalog]);
+    if (readOnly) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await visitService.getDrugCatalog({ force: catalogReq.force });
+        if (!cancelled) setCatalogResult({ forId: catalogReq.id, items, error: '' });
+      } catch (err) {
+        if (!cancelled) setCatalogResult({ forId: catalogReq.id, items: [], error: err.message });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [readOnly, catalogReq]);
+
+  const loadCatalog = useCallback((force = false) => {
+    setCatalogReq((r) => ({ id: r.id + 1, force }));
+  }, []);
+
+  let catalogStatus = 'loading';
+  if (catalogResult.forId === catalogReq.id) catalogStatus = catalogResult.error ? 'error' : 'ready';
+  const catalog = {
+    status: catalogStatus,
+    items: catalogResult.items,
+    error: catalogStatus === 'error' ? catalogResult.error : ''
+  };
 
   const drugById = useMemo(() => {
     const map = new Map();
@@ -77,14 +99,21 @@ export default function PrescriptionForm({
   useEffect(() => { allergiesRef.current = allergies; }, [allergies]);
   const allergyKey = (Array.isArray(allergies) ? allergies : []).map((a) => `${a?.allergen || a}:${a?.severity || ''}`).join('|');
 
+  // Khóa kiểm tra tự động: đổi thuốc/ca khám/dị ứng → khóa đổi → "đang kiểm tra" được suy ra (không set trong effect)
+  const safetyKey = readOnly || selectedDrugs.length === 0
+    ? null
+    : JSON.stringify([visit?.id ?? null, selectedDrugs, allergyKey]);
+  const isCheckingSafety = isManualChecking || (safetyKey !== null && safetySettledKey !== safetyKey);
+
+  // Không còn thuốc nào (hoặc chỉ-xem): bỏ kết quả kiểm tra cũ
+  if (safetyKey === null && (safetyAnalysis !== null || safetySettledKey !== null)) {
+    setSafetyAnalysis(null);
+    setSafetySettledKey(null);
+  }
+
   useEffect(() => {
-    if (readOnly || selectedDrugs.length === 0) {
-      setSafetyAnalysis(null);
-      setIsCheckingSafety(false);
-      return undefined;
-    }
+    if (safetyKey === null) return undefined;
     let cancelled = false;
-    setIsCheckingSafety(true);
     const timer = setTimeout(async () => {
       try {
         const result = await aiAlertService.checkPrescriptionSafety(visit?.id, selectedDrugs, allergiesRef.current);
@@ -92,14 +121,14 @@ export default function PrescriptionForm({
       } catch {
         if (!cancelled) setSafetyAnalysis(null);
       } finally {
-        if (!cancelled) setIsCheckingSafety(false);
+        if (!cancelled) setSafetySettledKey(safetyKey);
       }
     }, 350);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [selectedDrugs, visit?.id, allergyKey, readOnly]);
+  }, [safetyKey, selectedDrugs, visit?.id]);
 
   const estimatedTotal = useMemo(() => rows.reduce((sum, r) => {
     const d = drugById.get(String(r.drugId));
@@ -112,7 +141,7 @@ export default function PrescriptionForm({
       showToast('Vui lòng chọn ít nhất 1 thuốc để kiểm tra an toàn', 'warning');
       return;
     }
-    setIsCheckingSafety(true);
+    setIsManualChecking(true);
     setHasManualChecked(true);
     try {
       const result = await aiAlertService.checkPrescriptionSafety(visit?.id, selectedDrugs, allergies);
@@ -125,7 +154,7 @@ export default function PrescriptionForm({
     } catch (err) {
       showToast(`Không kiểm tra được an toàn đơn thuốc: ${err.message}`, 'error');
     } finally {
-      setIsCheckingSafety(false);
+      setIsManualChecking(false);
     }
   };
 
@@ -274,7 +303,7 @@ export default function PrescriptionForm({
         <section className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4" aria-labelledby="rx-existing-title">
           <div className="flex items-center justify-between">
             <h4 id="rx-existing-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">prescriptions</span>
+              <span className="material-symbols-outlined text-primary text-[1.25rem]" aria-hidden="true">prescriptions</span>
               Đơn thuốc đã kê ({prescriptions.length})
             </h4>
           </div>
@@ -282,12 +311,12 @@ export default function PrescriptionForm({
           <ul className="space-y-3">
             {prescriptions.map((pres, pIdx) => (
               <li key={pres.id || pIdx} className="bg-white rounded-xl p-4 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between text-[13px] text-slate-600 border-b border-slate-100 pb-2 flex-wrap gap-2">
+                <div className="flex items-center justify-between text-[0.8125rem] text-slate-600 border-b border-slate-100 pb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-primary">Đơn #{pres.id || pIdx + 1}</span>
                     {pres.overrideReason && (
                       <span className="badge badge-error">
-                        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">gpp_maybe</span>
+                        <span className="material-symbols-outlined text-[0.875rem]" aria-hidden="true">gpp_maybe</span>
                         Kê vượt cảnh báo
                       </span>
                     )}
@@ -303,7 +332,7 @@ export default function PrescriptionForm({
                           <span>{iIdx + 1}. {it.drugName}</span>
                           <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-700">{it.dosage}</span>
                         </div>
-                        {it.instruction && <div className="text-[13px] text-slate-600 mt-0.5">Cách dùng: {it.instruction}</div>}
+                        {it.instruction && <div className="text-[0.8125rem] text-slate-600 mt-0.5">Cách dùng: {it.instruction}</div>}
                       </div>
                       <div className="text-right shrink-0">
                         <span className="font-bold text-primary">{it.quantity} {it.unit || ''}</span>
@@ -316,7 +345,7 @@ export default function PrescriptionForm({
                 </ol>
 
                 {pres.overrideReason && (
-                  <p className="text-[13px] p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-900">
+                  <p className="text-[0.8125rem] p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-900">
                     <strong>Lý do vẫn kê đơn: </strong>{pres.overrideReason}
                   </p>
                 )}
@@ -330,7 +359,7 @@ export default function PrescriptionForm({
                 )}
 
                 {Number(pres.estimatedTotalAmount) > 0 && (
-                  <div className="text-right pt-2 border-t border-slate-100 text-[13px]">
+                  <div className="text-right pt-2 border-t border-slate-100 text-[0.8125rem]">
                     <span className="text-slate-600">Tổng tiền thuốc: </span>
                     <span className="font-bold text-primary text-sm">{formatVND(pres.estimatedTotalAmount)}</span>
                   </div>
@@ -349,7 +378,7 @@ export default function PrescriptionForm({
         <form onSubmit={handleSubmit} noValidate className="bg-white rounded-2xl p-6 border border-slate-200 space-y-5" aria-labelledby="rx-form-title">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <h4 id="rx-form-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[22px]" aria-hidden="true">medication</span>
+              <span className="material-symbols-outlined text-primary text-[1.375rem]" aria-hidden="true">medication</span>
               Kê đơn thuốc điện tử
             </h4>
             <div className="flex items-center gap-2 flex-wrap">
@@ -372,7 +401,7 @@ export default function PrescriptionForm({
           </div>
 
           {allergiesStatus === 'error' && (
-            <p role="alert" className="text-[13px] p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950">
+            <p role="alert" className="text-[0.8125rem] p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950">
               Chưa tải được tiền sử dị ứng của bệnh nhân – kết quả kiểm tra dị ứng có thể chưa đầy đủ.
             </p>
           )}
@@ -415,7 +444,7 @@ export default function PrescriptionForm({
               const p = row.key;
               return (
                 <li key={row.key} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between text-[13px] font-semibold text-slate-700">
+                  <div className="flex items-center justify-between text-[0.8125rem] font-semibold text-slate-700">
                     <span>Thuốc #{index + 1}</span>
                     {rows.length > 1 && (
                       <button
@@ -521,12 +550,12 @@ export default function PrescriptionForm({
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-slate-200">
             <div>
-              <span className="text-[13px] text-slate-600">Tổng tiền thuốc ước tính</span>
+              <span className="text-[0.8125rem] text-slate-600">Tổng tiền thuốc ước tính</span>
               <div className="text-lg font-bold text-primary">{formatVND(estimatedTotal)}</div>
             </div>
             <div className="flex items-center gap-3">
               {isCheckingSafety && (
-                <span className="text-[13px] text-slate-600" aria-live="polite">Đang kiểm tra an toàn đơn thuốc…</span>
+                <span className="text-[0.8125rem] text-slate-600" aria-live="polite">Đang kiểm tra an toàn đơn thuốc…</span>
               )}
               <button
                 type="submit"

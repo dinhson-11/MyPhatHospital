@@ -1,36 +1,27 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Modal from '../common/Modal';
 import invoiceService from '../../services/invoiceService';
-import ReceiptPrint, { printReceipt } from './ReceiptPrint';
+import ReceiptPrint from './ReceiptPrint';
+import { printReceipt } from '../../utils/receipt';
 import { InvoiceStatusBadge } from './InvoiceDetail';
 import { formatDateTime, formatVND, PAYMENT_METHOD_LABELS } from '../../utils/format';
+import { useAsyncData } from '../reporting/useAsyncData';
+
+const loadMyInvoices = () => invoiceService.getMyInvoices();
 
 /**
  * Bệnh nhân xem hóa đơn viện phí của chính mình (GET /invoices/me) và in lại phiếu thu.
  */
 export default function MyInvoicesModal({ isOpen, onClose }) {
-  const [state, setState] = useState({ loading: false, error: '', items: [] });
   const [expandedId, setExpandedId] = useState(null);
-  const [printing, setPrinting] = useState(null);
 
-  const load = useCallback(async () => {
-    setState((s) => ({ ...s, loading: true, error: '' }));
-    try {
-      setState({ loading: false, error: '', items: await invoiceService.getMyInvoices() });
-    } catch (err) {
-      setState({ loading: false, error: err.message, items: [] });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) load();
-  }, [isOpen, load]);
-
-  useEffect(() => {
-    if (!printing) return;
-    printReceipt();
-    setPrinting(null);
-  }, [printing]);
+  // Mỗi lần mở hộp thoại là một lần tải mới (đổi khóa), "Thử lại" tải lại cùng khóa
+  const [session, setSession] = useState({ open: isOpen, count: isOpen ? 1 : 0 });
+  if (session.open !== isOpen) {
+    setSession({ open: isOpen, count: isOpen ? session.count + 1 : session.count });
+  }
+  const { status, data, error, reload } = useAsyncData(loadMyInvoices, { enabled: isOpen, key: session.count });
+  const state = { loading: status === 'loading', error: error || '', items: data || [] };
 
   const pending = state.items.filter((i) => i.status === 'PENDING');
   const pendingTotal = pending.reduce((s, i) => s + Number(i.patientAmount || 0), 0);
@@ -42,7 +33,7 @@ export default function MyInvoicesModal({ isOpen, onClose }) {
         {state.error && (
           <div className="rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-center justify-between gap-3" role="alert">
             <span>{state.error}</span>
-            <button type="button" onClick={load} className="btn btn-light">Thử lại</button>
+            <button type="button" onClick={reload} className="btn btn-light">Thử lại</button>
           </div>
         )}
         {!state.loading && !state.error && state.items.length === 0 && (
@@ -69,7 +60,7 @@ export default function MyInvoicesModal({ isOpen, onClose }) {
                 >
                   <span>
                     <span className="block font-mono text-sm font-semibold">{inv.invoiceCode}</span>
-                    <span className="block text-[12px] text-slate-500">
+                    <span className="block text-[0.75rem] text-slate-500">
                       Khám {formatDateTime(inv.visitTime)} · {inv.doctorName || '—'}
                     </span>
                   </span>
@@ -98,13 +89,13 @@ export default function MyInvoicesModal({ isOpen, onClose }) {
                       </div>
                     )}
                     {inv.status === 'PAID' && (
-                      <p className="text-[13px] text-slate-500">
+                      <p className="text-[0.8125rem] text-slate-500">
                         Đã thanh toán {formatDateTime(inv.paidAt)} bằng {PAYMENT_METHOD_LABELS[inv.paymentMethod] || inv.paymentMethod}
                       </p>
                     )}
                     {(inv.status === 'PAID' || inv.status === 'PENDING') && (
-                      <button type="button" onClick={() => setPrinting(inv)} className="btn btn-light inline-flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">print</span>
+                      <button type="button" onClick={() => printReceipt()} className="btn btn-light inline-flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">print</span>
                         {inv.status === 'PAID' ? 'In phiếu thu' : 'In bảng kê'}
                       </button>
                     )}
@@ -115,7 +106,7 @@ export default function MyInvoicesModal({ isOpen, onClose }) {
           })}
         </ul>
       </Modal>
-      <ReceiptPrint invoice={printing || state.items.find((i) => i.id === expandedId)} />
+      <ReceiptPrint invoice={state.items.find((i) => i.id === expandedId)} />
     </>
   );
 }

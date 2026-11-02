@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import Modal from '../common/Modal';
-import { useConfirm } from '../common/ConfirmDialog';
+import { useConfirm } from '../common/useConfirm';
 import scheduleService, { SHIFT_ORDER, getShiftInfo } from '../../services/scheduleService';
 import { getErrorMessage } from '../../services/apiError';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { formatDate, todayISO } from '../../utils/format';
 
 const DEPARTMENTS_LIST = [
@@ -60,7 +60,7 @@ function ShiftItem({ item, dayName, canDelete, onDelete }) {
     <li className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-xs">
       <div className="flex items-start justify-between gap-1.5">
         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${style.badge}`}>
-          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">{style.icon}</span>
+          <span className="material-symbols-outlined text-[0.875rem]" aria-hidden="true">{style.icon}</span>
           {info.label}
         </span>
         {canDelete && (
@@ -71,7 +71,7 @@ function ShiftItem({ item, dayName, canDelete, onDelete }) {
             title="Xóa ca trực"
             className="-mt-1 -mr-1 w-8 h-8 shrink-0 rounded-lg text-slate-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/40"
           >
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
+            <span className="material-symbols-outlined text-[1.125rem]" aria-hidden="true">delete</span>
           </button>
         )}
       </div>
@@ -81,7 +81,7 @@ function ShiftItem({ item, dayName, canDelete, onDelete }) {
         <p className="text-slate-600 line-clamp-2" title={department}>{department}</p>
       )}
       <p className="mt-1.5 flex items-start gap-1 text-slate-600">
-        <span className="material-symbols-outlined text-[14px] text-slate-400 mt-px" aria-hidden="true">meeting_room</span>
+        <span className="material-symbols-outlined text-[0.875rem] text-slate-400 mt-px" aria-hidden="true">meeting_room</span>
         <span className="break-words min-w-0">{item.roomNo || 'Phòng trực'}</span>
       </p>
       {item.note && (
@@ -328,8 +328,8 @@ export default function StaffScheduleModal({
         subtitle={(
           <>
             Phân công trực bác sĩ chuyên khoa &amp; điều dưỡng · Cấp cứu 24/24:{' '}
-            <a href="tel:0789065493" className="font-semibold text-primary hover:underline whitespace-nowrap">
-              0789 065 493
+            <a href="tel:0386959342" className="font-semibold text-primary hover:underline whitespace-nowrap">
+              0386 959 342
             </a>
           </>
         )}
@@ -349,7 +349,7 @@ export default function StaffScheduleModal({
                   title="Tuần trước"
                   className="w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
-                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">chevron_left</span>
+                  <span className="material-symbols-outlined text-[1.25rem]" aria-hidden="true">chevron_left</span>
                 </button>
                 <button
                   type="button"
@@ -368,7 +368,7 @@ export default function StaffScheduleModal({
                   title="Tuần sau"
                   className="w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
-                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">chevron_right</span>
+                  <span className="material-symbols-outlined text-[1.25rem]" aria-hidden="true">chevron_right</span>
                 </button>
               </div>
 
@@ -533,7 +533,7 @@ export default function StaffScheduleModal({
                     </ul>
                   ) : (
                     <p className="flex-1 flex items-center justify-center gap-1.5 px-3 py-4 lg:py-8 text-xs text-slate-500">
-                      <span className="material-symbols-outlined text-[18px] text-slate-400" aria-hidden="true">event_busy</span>
+                      <span className="material-symbols-outlined text-[1.125rem] text-slate-400" aria-hidden="true">event_busy</span>
                       <span>Không có ca trực</span>
                     </p>
                   )}

@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import Modal from '../common/Modal';
 import { HOURS_TEXT } from '../../services/hospitalHours';
 
-const HOTLINE_TEL = 'tel:0789065493';
-const HOTLINE_TEXT = '0789 065 493';
+const HOTLINE_TEL = 'tel:0386959342';
+const HOTLINE_TEXT = '0386 959 342';
 const ADDRESS = '1170 Quang Trung, Thị Trấn Chũ, Lục Ngạn, Bắc Giang';
 const MAPS_URL = 'https://maps.app.goo.gl/2vAWcXFcfgSGPS7H6';
 const EMAIL = 'myphathospital@gmail.com';
@@ -86,7 +86,7 @@ export default function ContactModal({ isOpen, onClose }) {
             <span className="material-symbols-outlined text-red-700 text-2xl shrink-0" aria-hidden="true">emergency</span>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-red-900">Hotline cấp cứu & tư vấn 24/7</p>
-              <a href={HOTLINE_TEL} className="text-xl font-extrabold text-red-700 hover:underline">
+              <a href={HOTLINE_TEL} className="text-xl font-bold text-red-700 hover:underline">
                 {HOTLINE_TEXT}
               </a>
               <p className="text-xs text-red-800 mt-0.5">
