@@ -3,20 +3,10 @@ import { useAuth } from '../../context/useAuth';
 import { useToast } from '../../context/useToast';
 import logoHospital from '../../assets/logo.png';
 import TextSizeControl from '../common/TextSizeControl';
+import Avatar from '../common/Avatar';
 
 const HOTLINE = '0386959342';
 const HOTLINE_DISPLAY = '0386 959 342';
-
-const getInitials = (name) => {
-  if (!name) return 'U';
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .slice(-2)
-    .join('')
-    .toUpperCase();
-};
 
 const Icon = ({ name, className = '' }) => (
   <span className={`material-symbols-outlined ${className}`} aria-hidden="true">{name}</span>
@@ -153,24 +143,21 @@ export const Navbar = ({
   return (
     <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white border-b border-slate-200">
       <div className="h-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
-        {/* Logo & tên bệnh viện */}
-        <a href="#top" onClick={scrollToTop} className="flex items-center gap-3 shrink min-w-0 rounded-lg">
+        {/* Chỉ hiển thị logo; tên đọc cho trình đọc màn hình qua aria-label (ảnh là trang trí nên alt rỗng) */}
+        <a
+          href="#top"
+          onClick={scrollToTop}
+          aria-label="Mỹ Phát Hospital – về đầu trang"
+          className="shrink-0 rounded-full"
+        >
           <img
             alt=""
-            className="h-10 w-10 shrink-0 rounded-full object-cover"
+            className="h-12 w-12 rounded-full object-cover"
             src={logoHospital}
             onError={(e) => {
               e.currentTarget.src = '/logo.png';
             }}
           />
-          <span className="flex flex-col justify-center min-w-0">
-            <span className="text-base font-semibold text-primary leading-tight sm:whitespace-nowrap sm:truncate">
-              MỸ PHÁT HOSPITAL
-            </span>
-            <span className="text-xs text-slate-500 whitespace-nowrap truncate max-w-[260px] md:max-w-md hidden sm:block">
-              1170 Quang Trung, Thị trấn Chũ, Lục Ngạn
-            </span>
-          </span>
         </a>
 
         {/* Liên kết tới các mục trên trang (màn rộng; màn hẹp dùng menu) */}
@@ -231,9 +218,7 @@ export const Navbar = ({
                 aria-label={`Tài khoản: ${user?.fullName || user?.username} (${roleTitle})`}
                 className="touch-target h-9 flex items-center gap-2 pl-1 pr-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
               >
-                <span className="avatar w-7 h-7 text-xs" aria-hidden="true">
-                  {getInitials(user?.fullName || user?.username)}
-                </span>
+                <Avatar name={user?.fullName || user?.username} src={user?.avatarUrl} className="avatar w-7 h-7 text-xs" />
                 <span className="hidden xl:flex flex-col text-left pr-0.5 leading-tight">
                   <span className="text-xs font-bold text-slate-800 max-w-[110px] xl:max-w-[130px] truncate">
                     {user?.fullName || user?.username}

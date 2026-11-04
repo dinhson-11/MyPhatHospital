@@ -32,7 +32,7 @@ describe('TableWrap – bảng cuộn ngang dùng được bằng bàn phím', (
 
   it('mọi chỗ gọi <TableWrap> đều có label không rỗng', () => {
     const calls = componentFiles.flatMap((f) => (readFileSync(f, 'utf8').match(/<TableWrap\b[^>]*>/g) || []).map((c) => `${f.replace(SRC, '')}: ${c}`));
-    expect(calls.length).toBe(9);
+    expect(calls.length).toBe(10); // 9 bảng cũ + bảng xem trước khi nhập thuốc từ Excel
     expect(calls.filter((c) => !/\blabel=("[^"]+"|\{[^}]+\})/.test(c))).toEqual([]);
   });
 

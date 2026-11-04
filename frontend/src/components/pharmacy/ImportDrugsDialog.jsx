@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from '../common/Modal';
+import TableWrap from '../common/TableWrap';
 import { pharmacyService } from '../../services/pharmacyService';
 import { formatDate, formatNumber, formatVND } from '../../utils/format';
 
@@ -221,7 +222,7 @@ export default function ImportDrugsDialog({ isOpen, onClose, onImported }) {
             {rows.length === 0 ? (
               <p className="text-[13px] text-slate-500">File không có dòng dữ liệu nào.</p>
             ) : (
-              <div className="table-wrap max-h-[55vh] overflow-auto">
+              <TableWrap label="Xem trước dữ liệu nhập thuốc từ Excel" className="max-h-[55vh] overflow-auto">
                 <table className="w-full text-left text-[13px]" aria-label="Xem trước dữ liệu nhập">
                   <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 sticky top-0">
                     <tr>
@@ -283,7 +284,7 @@ export default function ImportDrugsDialog({ isOpen, onClose, onImported }) {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
             )}
           </>
         )}

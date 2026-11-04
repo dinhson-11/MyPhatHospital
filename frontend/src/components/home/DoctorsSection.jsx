@@ -1,18 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { DOCTORS } from '../../services/dataService';
-
-/** Chữ cái đầu của họ và tên, bỏ học hàm/học vị ("TS.BS", "BSCKII.", "ThS.DS"…). Dùng thay ảnh chân dung. */
-const initialsOf = (fullName = '') => {
-  const words = fullName.split(' ').filter(Boolean);
-  while (words.length > 1 && words[0].includes('.')) words.shift();
-  if (words.length === 0) return '';
-  const first = words[0][0];
-  const last = words.length > 1 ? words[words.length - 1][0] : '';
-  return `${first}${last}`.toUpperCase();
-};
+import React, { useState, useMemo, useSyncExternalStore } from 'react';
+import { DOCTORS, getCatalogVersion, subscribeCatalog } from '../../services/dataService';
+import Avatar from '../common/Avatar';
 
 export default function DoctorsSection({ onOpenBooking }) {
   const [selectedDeptId, setSelectedDeptId] = useState(0); // 0 = Tất cả
+  // Vẽ lại khi đồng bộ xong với máy chủ (ảnh đại diện, mã bác sĩ thật)
+  useSyncExternalStore(subscribeCatalog, getCatalogVersion, getCatalogVersion);
 
   // Danh sách khoa có trong danh sách bác sĩ
   const filterOptions = useMemo(() => {
@@ -68,12 +61,12 @@ export default function DoctorsSection({ onOpenBooking }) {
               className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_7.5rem] gap-x-8 gap-y-2 py-4 border-b border-slate-300 items-start"
             >
               <div className="flex items-start gap-4">
-                <span
-                  aria-hidden="true"
+                <Avatar
+                  name={doc.name}
+                  src={doc.avatarUrl}
+                  alt={doc.name}
                   className="shrink-0 w-12 h-12 rounded-full bg-primary-fixed-dim text-primary font-semibold flex items-center justify-center"
-                >
-                  {initialsOf(doc.name)}
-                </span>
+                />
                 <div className="min-w-0">
                   <h3 className="font-semibold text-slate-900 text-lg leading-snug">{doc.name}</h3>
                   <p className="text-sm text-slate-600">{doc.title}</p>

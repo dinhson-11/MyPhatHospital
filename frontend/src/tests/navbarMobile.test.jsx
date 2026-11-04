@@ -29,12 +29,26 @@ describe('Navbar – header điện thoại không tràn', () => {
     expect(document.getElementById('headerAuthBtn').className).toMatch(/\bhidden\b.*\bsm:inline-flex\b/);
   });
 
-  it('tên bệnh viện được phép xuống dòng trên màn nhỏ để nhường chỗ cho nút menu', () => {
+  it('khu vực thương hiệu chỉ hiển thị logo: không có chữ, liên kết vẫn có tên truy cập và đưa về đầu trang', () => {
     renderNavbar();
-    const brand = screen.getByText('MỸ PHÁT HOSPITAL');
-    expect(brand.className).not.toMatch(/(^|\s)whitespace-nowrap/);
-    expect(brand.className).toMatch(/sm:whitespace-nowrap/);
-    expect(brand.closest('a').className).not.toMatch(/\bshrink-0\b/);
+    const logoLink = screen.getByRole('link', { name: /Mỹ Phát Hospital – về đầu trang/ });
+    expect(logoLink).toHaveAttribute('href', '#top');
+    // Chỉ chứa một ảnh trang trí (alt rỗng), không có chữ hiển thị
+    expect(logoLink.textContent.trim()).toBe('');
+    const img = logoLink.querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img).toHaveAttribute('alt', '');
+    expect(screen.queryByText('MỸ PHÁT HOSPITAL')).not.toBeInTheDocument();
+    expect(screen.queryByText(/1170 Quang Trung/)).not.toBeInTheDocument();
+
+    fireEvent.click(logoLink);
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+  });
+
+  it('trên điện thoại header chỉ còn logo và nút menu (không còn tên bị cắt chữ)', () => {
+    renderNavbar();
+    expect(screen.getByRole('link', { name: /về đầu trang/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mở menu' })).toBeInTheDocument();
   });
 
   it('đã đăng nhập: thanh trên không lặp "Lịch trực"/"Lịch khám của tôi" (đã có trong menu tài khoản) và chỉ hiện link mục từ 2xl', () => {
